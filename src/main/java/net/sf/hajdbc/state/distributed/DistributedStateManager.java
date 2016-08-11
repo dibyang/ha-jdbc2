@@ -31,10 +31,8 @@ import java.util.concurrent.ConcurrentMap;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
-import net.sf.hajdbc.distributed.CommandResponse;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Remote;
@@ -50,7 +48,7 @@ import net.sf.hajdbc.state.StateManager;
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful, Remote
+public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
@@ -64,12 +62,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-	}
-
-	@Override
-	public Member getMember()
-	{
-		return this.dispatcher.getLocal();
 	}
 
 	/**
@@ -100,7 +92,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void activated(DatabaseEvent event)
 	{
 		this.stateManager.activated(event);
-		this.execute(new ActivationCommand<Z, D>(event));
+		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
 
 	/**
@@ -111,9 +103,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void deactivated(DatabaseEvent event)
 	{
 		this.stateManager.deactivated(event);
-		this.execute(new DeactivationCommand<Z, D>(event));
+		this.dispatcher.executeAll(new DeactivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
-	
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.durability.DurabilityListener#afterInvocation(net.sf.hajdbc.durability.InvocationEvent)
@@ -121,8 +113,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void afterInvocation(InvocationEvent event)
 	{
-		this.stateManager.afterInvocation(event);
-		this.execute(new PostInvocationCommand<Z, D>(this.getRemoteDescriptor(event)));
+		this.dispatcher.executeAll(new PostInvocationCommand<Z, D>(this.getRemoteDescriptor(event)));
 	}
 
 	/**
@@ -132,8 +123,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void afterInvoker(InvokerEvent event)
 	{
-		this.stateManager.afterInvoker(event);
-		this.execute(new InvokerCommand<Z, D>(this.getRemoteDescriptor(event)));
+		this.dispatcher.executeAll(new InvokerCommand<Z, D>(this.getRemoteDescriptor(event)));
 	}
 
 	/**
@@ -143,8 +133,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void beforeInvocation(InvocationEvent event)
 	{
-		this.stateManager.beforeInvocation(event);
-		this.execute(new PreInvocationCommand<Z, D>(this.getRemoteDescriptor(event)));
+		this.dispatcher.executeAll(new PreInvocationCommand<Z, D>(this.getRemoteDescriptor(event)));
 	}
 
 	/**
@@ -154,33 +143,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void beforeInvoker(InvokerEvent event)
 	{
-		this.stateManager.beforeInvoker(event);
-		this.execute(new InvokerCommand<Z, D>(this.getRemoteDescriptor(event)));
-	}
-
-	private <R> void execute(Command<R, StateCommandContext<Z, D>> command)
-	{
-		try
-		{
-			Map<Member, CommandResponse<R>> responses = this.dispatcher.executeAll(command, this.dispatcher.getLocal());
-			
-			for (Map.Entry<Member, CommandResponse<R>> entry: responses.entrySet())
-			{
-				Member member = entry.getKey();
-				try
-				{
-					entry.getValue().get();
-				}
-				catch (Exception e)
-				{
-					this.logger.log(Level.WARN, e, "Failed to execute {0} on {1}", command, member);
-				}
-			}
-		}
-		catch (Exception e)
-		{
-			this.logger.log(Level.WARN, e, "Failed to send {0} to cluster", command);
-		}
+		this.dispatcher.executeAll(new InvokerCommand<Z, D>(this.getRemoteDescriptor(event)));
 	}
 
 	private RemoteInvocationDescriptor getRemoteDescriptor(InvocationEvent event)

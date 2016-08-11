@@ -255,7 +255,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 				
 				this.databaseSet = removeSet;
 				
-				for (D database: retainSet)
+				for (D database: removeSet)
 				{
 					this.removed(database);
 				}

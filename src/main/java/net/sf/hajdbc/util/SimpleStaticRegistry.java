@@ -29,13 +29,13 @@ public class SimpleStaticRegistry<K, V> implements StaticRegistry<K, V>
 	
 	public SimpleStaticRegistry(Map<K, V> map)
 	{
-		this(map, null);
+		this(null, map);
 	}
 	
-	public SimpleStaticRegistry(Map<K, V> map, ExceptionMessageFactory<K> factory)
+	public SimpleStaticRegistry(ExceptionMessageFactory<K> factory, Map<K, V> map)
 	{
-		this.map = map;
 		this.factory = factory;
+		this.map = map;
 	}
 
 	/**

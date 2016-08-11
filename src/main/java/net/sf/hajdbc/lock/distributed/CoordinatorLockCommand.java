@@ -15,50 +15,38 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package net.sf.hajdbc.state.distributed;
+package net.sf.hajdbc.lock.distributed;
 
-import java.util.Map;
+import java.util.concurrent.locks.Lock;
 
-import net.sf.hajdbc.Database;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.durability.InvocationEvent;
-import net.sf.hajdbc.durability.InvokerEvent;
 
-public class InvokerCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
+/**
+ * A lock command to be executed on the group coordinator.
+ * @author Paul Ferraro
+ */
+public abstract class CoordinatorLockCommand<R> implements Command<R, LockCommandContext>
 {
-	private static final long serialVersionUID = 5093904550015002207L;
+	private static final long serialVersionUID = 5921849426289256348L;
 	
-	private final RemoteInvokerDescriptor descriptor;
-	
-	protected InvokerCommand(RemoteInvokerDescriptor descriptor)
+	private final RemoteLockDescriptor descriptor;
+
+	protected CoordinatorLockCommand(RemoteLockDescriptor descriptor)
 	{
 		this.descriptor = descriptor;
 	}
-
+	
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.Command#execute(java.lang.Object)
 	 */
 	@Override
-	public Void execute(StateCommandContext<Z, D> context)
+	public R execute(LockCommandContext context)
 	{
-		Map<InvocationEvent, Map<String, InvokerEvent>> invokers = context.getRemoteInvokers(this.descriptor);
-
-		InvokerEvent event = this.descriptor.getEvent();
-		String databaseId = event.getDatabaseId();
-		
-		synchronized (invokers)
-		{
-			Map<String, InvokerEvent> map = invokers.get(event);
-			
-			if (map != null)
-			{
-				map.put(databaseId, event);
-			}
-		}
-		
-		return null;
+		return this.execute(context.getDistibutedLock(this.descriptor));
 	}
+	
+	protected abstract R execute(Lock lock);
 
 	/**
 	 * {@inheritDoc}

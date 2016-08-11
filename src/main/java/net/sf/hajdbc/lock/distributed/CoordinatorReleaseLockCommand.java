@@ -1,6 +1,6 @@
 /*
  * HA-JDBC: High-Availability JDBC
- * Copyright (C) 2015  Paul Ferraro
+ * Copyright (C) 2012  Paul Ferraro
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
@@ -15,12 +15,32 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package net.sf.hajdbc.util;
+package net.sf.hajdbc.lock.distributed;
+
+import java.util.concurrent.locks.Lock;
 
 /**
+ * Release lock command for execution on group coordinator.
  * @author Paul Ferraro
  */
-public interface Builder<T>
+public class CoordinatorReleaseLockCommand extends CoordinatorLockCommand<Void>
 {
-	T build();
+	private static final long serialVersionUID = -925862880236957178L;
+	
+	public CoordinatorReleaseLockCommand(RemoteLockDescriptor descriptor)
+	{
+		super(descriptor);
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see net.sf.hajdbc.lock.distributed.CoordinatorLockCommand#execute(java.util.concurrent.locks.Lock)
+	 */
+	@Override
+	protected Void execute(Lock lock)
+	{
+		lock.unlock();
+		
+		return null;
+	}
 }

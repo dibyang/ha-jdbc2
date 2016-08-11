@@ -27,7 +27,6 @@ import java.util.Arrays;
 
 import net.sf.hajdbc.cache.simple.SimpleDatabaseMetaDataCacheFactory;
 import net.sf.hajdbc.dialect.hsqldb.HSQLDBDialectFactory;
-import net.sf.hajdbc.distributed.jgroups.JGroupsCommandDispatcherFactory;
 import net.sf.hajdbc.durability.fine.FineDurabilityFactory;
 import net.sf.hajdbc.sql.DataSource;
 import net.sf.hajdbc.sql.DataSourceDatabase;
@@ -127,9 +126,7 @@ public class SimpleTest
 		config.setDialectFactory(new HSQLDBDialectFactory());
 		config.setDatabaseMetaDataCacheFactory(new SimpleDatabaseMetaDataCacheFactory());
 		config.setStateManagerFactory(factory);
-//		JGroupsCommandDispatcherFactory dispatcherFactory = new JGroupsCommandDispatcherFactory();
-//		dispatcherFactory.setStack("fast-local.xml");
-//		config.setDispatcherFactory(dispatcherFactory);
+//		config.setDispatcherFactory(new JGroupsCommandDispatcherFactory());
 		config.setDurabilityFactory(new FineDurabilityFactory());
 
 		DataSource ds = new DataSource();

@@ -222,7 +222,7 @@ public class DifferentialSynchronizationStrategy implements SynchronizationStrat
 				if (!versionColumns.isEmpty())
 				{
 					logger.log(Level.DEBUG, selectAllSQL);
-					selectAllStatement = sourceConnection.prepareStatement(selectAllSQL);
+					selectAllStatement = targetConnection.prepareStatement(selectAllSQL);
 				}
 				
 				try
@@ -320,7 +320,7 @@ public class DifferentialSynchronizationStrategy implements SynchronizationStrat
 											for (int i = primaryKeyColumns.size() + 1; i <= allColumns.size(); ++i)
 											{
 												int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));
-												
+						
 												Object object = context.getSynchronizationSupport().getObject(sourceResultSet, i, type);
 												
 												if (sourceResultSet.wasNull())
@@ -335,33 +335,33 @@ public class DifferentialSynchronizationStrategy implements SynchronizationStrat
 										}
 										else
 										{
-											selectAllStatement.clearParameters();
-											
-											for (int i = 1; i <= primaryKeyColumns.size(); ++i)
+											if (selectAllStatement != null)
 											{
-												int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));
+												selectAllStatement.clearParameters();
 												
-												selectAllStatement.setObject(i, sourceResultSet.getObject(i), type);
-											}
-											
-											ResultSet selectAllResultSet = selectAllStatement.executeQuery();
-											if (!selectAllResultSet.next())
-											{
-												throw new IllegalStateException();
-											}
-											for (int i = primaryKeyColumns.size() + 1; i <= allColumns.size(); ++i)
-											{
-												int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));
-												
-												Object object = context.getSynchronizationSupport().getObject(selectAllResultSet, i - primaryKeyColumns.size(), type);
-												
-												if (selectAllResultSet.wasNull())
+												for (int i = 1; i <= primaryKeyColumns.size(); ++i)
 												{
-													insertStatement.setNull(i, type);
+													int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));
+													
+													selectAllStatement.setObject(i, sourceResultSet.getObject(i), type);
 												}
-												else
+												
+												ResultSet selectAllResultSet = selectAllStatement.executeQuery();
+						
+												for (int i = primaryKeyColumns.size() + 1; i <= allColumns.size(); ++i)
 												{
-													insertStatement.setObject(i, object, type);
+													int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));
+													
+													Object object = context.getSynchronizationSupport().getObject(selectAllResultSet, i - primaryKeyColumns.size(), type);
+													
+													if (selectAllResultSet.wasNull())
+													{
+														insertStatement.setNull(i, type);
+													}
+													else
+													{
+														insertStatement.setObject(i, object, type);
+													}
 												}
 											}
 										}
@@ -420,10 +420,7 @@ public class DifferentialSynchronizationStrategy implements SynchronizationStrat
 												}
 												
 												ResultSet selectAllResultSet = selectAllStatement.executeQuery();
-												if (!selectAllResultSet.next())
-												{
-													throw new IllegalStateException();
-												}
+						
 												for (int i = primaryKeyColumns.size() + 1; i <= allColumns.size(); ++i)
 												{
 													int type = context.getDialect().getColumnType(table.getColumnProperties(allColumns.get(i - 1)));

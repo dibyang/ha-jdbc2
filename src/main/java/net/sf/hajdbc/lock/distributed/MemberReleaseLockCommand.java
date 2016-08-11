@@ -15,22 +15,24 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package net.sf.hajdbc.state.distributed;
+package net.sf.hajdbc.lock.distributed;
 
 import java.util.Map;
+import java.util.concurrent.locks.Lock;
 
-import net.sf.hajdbc.Database;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.durability.InvocationEvent;
-import net.sf.hajdbc.durability.InvokerEvent;
 
-public class InvokerCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
+/**
+ * Release lock command for execution on group member.
+ * @author Paul Ferraro
+ */
+public class MemberReleaseLockCommand implements Command<Void, LockCommandContext>
 {
-	private static final long serialVersionUID = 5093904550015002207L;
+	private static final long serialVersionUID = -4088487420468046409L;
+
+	private final RemoteLockDescriptor descriptor;
 	
-	private final RemoteInvokerDescriptor descriptor;
-	
-	protected InvokerCommand(RemoteInvokerDescriptor descriptor)
+	public MemberReleaseLockCommand(RemoteLockDescriptor descriptor)
 	{
 		this.descriptor = descriptor;
 	}
@@ -40,23 +42,25 @@ public class InvokerCommand<Z, D extends Database<Z>> implements Command<Void, S
 	 * @see net.sf.hajdbc.distributed.Command#execute(java.lang.Object)
 	 */
 	@Override
-	public Void execute(StateCommandContext<Z, D> context)
+	public Void execute(LockCommandContext context)
 	{
-		Map<InvocationEvent, Map<String, InvokerEvent>> invokers = context.getRemoteInvokers(this.descriptor);
-
-		InvokerEvent event = this.descriptor.getEvent();
-		String databaseId = event.getDatabaseId();
+		Map<LockDescriptor, Lock> locks = context.getRemoteLocks(this.descriptor);
 		
-		synchronized (invokers)
+		if (locks != null)
 		{
-			Map<String, InvokerEvent> map = invokers.get(event);
+			Lock lock = null;
 			
-			if (map != null)
+			synchronized (locks)
 			{
-				map.put(databaseId, event);
+				lock = locks.remove(this.descriptor);
+			}
+			
+			if (lock != null)
+			{
+				lock.unlock();
 			}
 		}
-		
+
 		return null;
 	}
 

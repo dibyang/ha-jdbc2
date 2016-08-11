@@ -23,16 +23,16 @@ import java.util.concurrent.locks.Lock;
 import net.sf.hajdbc.distributed.Command;
 
 /**
- * Release lock command for execution on group member.
  * @author Paul Ferraro
+ *
  */
-public class ReleaseLockCommand implements Command<Void, LockCommandContext>
+public class MemberAcquireLockCommand implements Command<Boolean, LockCommandContext>
 {
-	private static final long serialVersionUID = -4088487420468046409L;
+	private static final long serialVersionUID = 673191217118566395L;
 
 	private final RemoteLockDescriptor descriptor;
 	
-	public ReleaseLockCommand(RemoteLockDescriptor descriptor)
+	public MemberAcquireLockCommand(RemoteLockDescriptor descriptor)
 	{
 		this.descriptor = descriptor;
 	}
@@ -42,26 +42,23 @@ public class ReleaseLockCommand implements Command<Void, LockCommandContext>
 	 * @see net.sf.hajdbc.distributed.Command#execute(java.lang.Object)
 	 */
 	@Override
-	public Void execute(LockCommandContext context)
+	public Boolean execute(LockCommandContext context)
 	{
-		Map<LockDescriptor, Lock> locks = context.getRemoteLocks(this.descriptor);
+		Lock lock = context.getLock(this.descriptor);
 		
-		if (locks != null)
+		boolean locked = lock.tryLock();
+		
+		if (locked)
 		{
-			Lock lock = null;
+			Map<LockDescriptor, Lock> lockMap = context.getRemoteLocks(this.descriptor);
 			
-			synchronized (locks)
+			synchronized (lockMap)
 			{
-				lock = locks.remove(this.descriptor);
-			}
-			
-			if (lock != null)
-			{
-				lock.unlock();
+				lockMap.put(this.descriptor, lock);
 			}
 		}
-
-		return null;
+		
+		return locked;
 	}
 
 	/**
