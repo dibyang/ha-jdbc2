@@ -98,6 +98,11 @@ public final class Driver extends AbstractDriver
 	{
 		registry.remove(id);
 	}
+	
+	public static DatabaseCluster<java.sql.Driver, DriverDatabase> get(String id) throws SQLException
+	{
+		return registry.get(id);
+	}
 
 	public static void setFactory(DatabaseClusterFactory<java.sql.Driver, DriverDatabase> databaseClusterFactory)
 	{

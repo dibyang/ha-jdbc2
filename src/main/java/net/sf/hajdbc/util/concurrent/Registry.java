@@ -29,6 +29,8 @@ import net.sf.hajdbc.util.TimePeriod;
 public interface Registry<K, V, C, E extends Exception>
 {
 	V get(K key, C context) throws E;
+	
+	V get(K key) throws E;
 
 	void remove(K key) throws E;
 	

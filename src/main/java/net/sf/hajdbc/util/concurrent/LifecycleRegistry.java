@@ -53,16 +53,15 @@ public class LifecycleRegistry<K, V extends Lifecycle, C, E extends Exception> i
 	@Override
 	public V get(K key, C context) throws E
 	{
-		RegistryEntry entry = this.store.get(key);
+		V value = this.get(key);
 		
-		if (entry != null)
+		if (value != null)
 		{
-			return entry.getValue();
+			return value;
 		}
-
-		V value = this.factory.create(key, context);
+		value = this.factory.create(key, context);
 		
-		entry = new RegistryEntry(value);
+		RegistryEntry entry = new RegistryEntry(value);
 
 		RegistryEntry existing = this.store.setIfAbsent(key, entry);
 		
@@ -154,5 +153,15 @@ public class LifecycleRegistry<K, V extends Lifecycle, C, E extends Exception> i
 				latch.countDown();
 			}
 		}
+	}
+
+	@Override
+	public V get(K key) throws E {
+		RegistryEntry entry = this.store.get(key);		
+		if (entry != null)
+		{
+			return entry.getValue();
+		}
+		return null;
 	}
 }
