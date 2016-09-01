@@ -18,17 +18,28 @@
 package net.sf.hajdbc.sql;
 
 import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterConfigurationFactory;
 import net.sf.hajdbc.DatabaseClusterFactory;
+import net.sf.hajdbc.DatabaseClusterListener;
+import net.sf.hajdbc.SynchronizationListener;
 
 /**
  * @author Paul Ferraro
  */
 public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements DatabaseClusterFactory<Z, D>
 {
+	Map<String, Set<DatabaseClusterListener>> databaseClusterListeners = new HashMap<String, Set<DatabaseClusterListener>>();
+	
+	Map<String, Set<SynchronizationListener>> synchronizationListeners = new HashMap<String, Set<SynchronizationListener>>();
+	
+	
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseClusterFactory#createDatabaseCluster(java.lang.String, net.sf.hajdbc.DatabaseClusterConfigurationFactory)
@@ -36,6 +47,83 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 	@Override
 	public DatabaseCluster<Z, D> createDatabaseCluster(String id, DatabaseClusterConfigurationFactory<Z, D> factory) throws SQLException
 	{
-		return new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
+		DatabaseCluster<Z, D> databaseCluster = new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
+		addDatabaseClusterListeners(id, databaseCluster);
+		addSynchronizationListeners(id, databaseCluster);
+		return databaseCluster;
+	}
+
+	private void addDatabaseClusterListeners(String id,
+			DatabaseCluster<Z, D> databaseCluster) {
+		Set<DatabaseClusterListener> listeners = databaseClusterListeners.get(id);
+		if(listeners!=null){
+			for(DatabaseClusterListener listener:listeners){
+				databaseCluster.addListener(listener);
+			}
+		}
+	}
+	
+	private void addSynchronizationListeners(String id,
+			DatabaseCluster<Z, D> databaseCluster) {
+		Set<SynchronizationListener> listeners = synchronizationListeners.get(id);
+		if(listeners!=null){
+			for(SynchronizationListener listener:listeners){
+				databaseCluster.addSynchronizationListener(listener);
+			}
+		}
+	}
+
+	@Override
+	public void addListener(String id, DatabaseClusterListener listener) {
+		Set<DatabaseClusterListener> listeners = databaseClusterListeners.get(id);
+		if(listeners==null){
+			listeners = new LinkedHashSet<DatabaseClusterListener>();
+		}
+		if(listener!=null){
+			listeners.add(listener);
+			databaseClusterListeners.put(id, listeners);
+		}
+		
+	}
+
+	@Override
+	public void removeListener(String id, DatabaseClusterListener listener) {
+		Set<DatabaseClusterListener> listeners = databaseClusterListeners.get(id);
+		if(listeners!=null){
+			if(listener!=null){
+				listeners.remove(listener);
+			}
+			if(listeners.isEmpty()){
+				databaseClusterListeners.remove(id);
+			}
+		}		
+	}
+
+	@Override
+	public void addSynchronizationListener(String id,
+			SynchronizationListener listener) {
+		Set<SynchronizationListener> listeners = synchronizationListeners.get(id);
+		if(listeners==null){
+			listeners = new LinkedHashSet<SynchronizationListener>();
+		}
+		if(listener!=null){
+			listeners.add(listener);
+			synchronizationListeners.put(id, listeners);
+		}
+		
+	}
+
+	@Override
+	public void removeSynchronizationListener(String id,
+			SynchronizationListener listener) {
+		Set<SynchronizationListener> listeners = synchronizationListeners.get(id);
+		if(listeners!=null){
+			if(listener!=null){
+				listeners.remove(listener);
+			}
+			if(listeners.isEmpty()){
+				synchronizationListeners.remove(id);
+			}
+		}		
 	}
 }

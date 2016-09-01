@@ -21,29 +21,22 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
 import java.sql.SQLException;
-import java.util.Map;
 import java.util.Properties;
 import java.util.SortedMap;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import net.sf.hajdbc.AbstractDriver;
+import net.sf.hajdbc.DatabaseClusterRegistry;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterConfigurationFactory;
 import net.sf.hajdbc.DatabaseClusterFactory;
-import net.sf.hajdbc.ExceptionType;
 import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.invocation.InvocationStrategies;
 import net.sf.hajdbc.invocation.Invoker;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.util.TimePeriod;
-import net.sf.hajdbc.util.concurrent.MapRegistryStoreFactory;
-import net.sf.hajdbc.util.concurrent.LifecycleRegistry;
-import net.sf.hajdbc.util.concurrent.Registry;
-import net.sf.hajdbc.xml.XMLDatabaseClusterConfigurationFactory;
 
 /**
  * @author  Paul Ferraro
@@ -51,37 +44,9 @@ import net.sf.hajdbc.xml.XMLDatabaseClusterConfigurationFactory;
 public final class Driver extends AbstractDriver
 {
 	private static final Pattern URL_PATTERN = Pattern.compile("jdbc:ha-jdbc:(?://)?([^/]+)(?:/.+)?");
-	private static final String CONFIG = "config";
 	private static final Logger logger = LoggerFactory.getLogger(Driver.class);
 
-	static volatile TimePeriod timeout = new TimePeriod(10, TimeUnit.SECONDS);
-	static volatile DatabaseClusterFactory<java.sql.Driver, DriverDatabase> factory = new DatabaseClusterFactoryImpl<java.sql.Driver, DriverDatabase>();
 	
-	static final Map<String, DatabaseClusterConfigurationFactory<java.sql.Driver, DriverDatabase>> configurationFactories = new ConcurrentHashMap<String, DatabaseClusterConfigurationFactory<java.sql.Driver, DriverDatabase>>();
-	private static final Registry.Factory<String, DatabaseCluster<java.sql.Driver, DriverDatabase>, Properties, SQLException> registryFactory = new Registry.Factory<String, DatabaseCluster<java.sql.Driver, DriverDatabase>, Properties, SQLException>()
-	{
-		@Override
-		public DatabaseCluster<java.sql.Driver, DriverDatabase> create(String id, Properties properties) throws SQLException
-		{
-			DatabaseClusterConfigurationFactory<java.sql.Driver, DriverDatabase> configurationFactory = configurationFactories.get(id);
-			
-			if (configurationFactory == null)
-			{
-				String config = (properties != null) ? properties.getProperty(CONFIG) : null;
-				configurationFactory = new XMLDatabaseClusterConfigurationFactory<java.sql.Driver, DriverDatabase>(DriverDatabaseClusterConfiguration.class, id, config);
-			}
-			
-			return factory.createDatabaseCluster(id, configurationFactory);
-		}
-
-		@Override
-		public TimePeriod getTimeout()
-		{
-			return timeout;
-		}
-	};
-	private static final Registry<String, DatabaseCluster<java.sql.Driver, DriverDatabase>, Properties, SQLException> registry = new LifecycleRegistry<String, DatabaseCluster<java.sql.Driver, DriverDatabase>, Properties, SQLException>(registryFactory, new MapRegistryStoreFactory<String>(), ExceptionType.SQL.<SQLException>getExceptionFactory());
-
 	static
 	{
 		try
@@ -94,29 +59,69 @@ public final class Driver extends AbstractDriver
 		}
 	}
 	
+	
+	/**
+	 * 
+	 * @deprecated
+	 * @see DatabaseClusterRegistry#stop(String)
+	 * 
+	 * @param id
+	 * @throws SQLException
+	 */
 	public static void stop(String id) throws SQLException
 	{
-		registry.remove(id);
+		DatabaseClusterRegistry.registry.stop(id);
 	}
 	
+	/**
+	 * 
+	 * @deprecated
+	 * @see DatabaseClusterRegistry#get(String)
+	 * 
+	 * @param id
+	 * @return
+	 * @throws SQLException
+	 */
 	public static DatabaseCluster<java.sql.Driver, DriverDatabase> get(String id) throws SQLException
 	{
-		return registry.get(id);
+		return DatabaseClusterRegistry.registry.get(id);
 	}
 
+	/**
+	 * @deprecated
+	 * @see DatabaseClusterRegistry#setFactory(DatabaseClusterFactory)
+	 * 
+	 * @param databaseClusterFactory
+	 */
 	public static void setFactory(DatabaseClusterFactory<java.sql.Driver, DriverDatabase> databaseClusterFactory)
 	{
-		factory = databaseClusterFactory;
+		DatabaseClusterRegistry.registry.setFactory(databaseClusterFactory);
 	}
 
+	/**
+	 * 
+	 * @deprecated
+	 * @see DatabaseClusterRegistry#setConfigurationFactory(String, DatabaseClusterConfigurationFactory)
+	 * 
+	 * @param id
+	 * @param configurationFactory
+	 */
 	public static void setConfigurationFactory(String id, DatabaseClusterConfigurationFactory<java.sql.Driver, DriverDatabase> configurationFactory)
 	{
-		configurationFactories.put(id,  configurationFactory);
+		DatabaseClusterRegistry.registry.setConfigurationFactory(id,  configurationFactory);
 	}
 	
+	/**
+	 * 
+	 * @deprecated
+	 * @see DatabaseClusterRegistry#setTimeout(long, TimeUnit)
+	 * 
+	 * @param value
+	 * @param unit
+	 */
 	public static void setTimeout(long value, TimeUnit unit)
 	{
-		timeout = new TimePeriod(value, unit);
+		DatabaseClusterRegistry.registry.setTimeout(value, unit);
 	}
 	
 	/**
@@ -141,7 +146,7 @@ public final class Driver extends AbstractDriver
 		// JDBC spec compliance
 		if (id == null) return null;
 		
-		DatabaseCluster<java.sql.Driver, DriverDatabase> cluster = registry.get(id, properties);
+		DatabaseCluster<java.sql.Driver, DriverDatabase> cluster = DatabaseClusterRegistry.registry.get(id, properties);
 		DriverProxyFactory driverFactory = new DriverProxyFactory(cluster);
 		java.sql.Driver driver = driverFactory.createProxy();
 		TransactionContext<java.sql.Driver, DriverDatabase> context = new LocalTransactionContext<java.sql.Driver, DriverDatabase>(cluster);
@@ -171,7 +176,7 @@ public final class Driver extends AbstractDriver
 		// JDBC spec compliance
 		if (id == null) return null;
 		
-		DatabaseCluster<java.sql.Driver, DriverDatabase> cluster = registry.get(id, properties);
+		DatabaseCluster<java.sql.Driver, DriverDatabase> cluster = DatabaseClusterRegistry.registry.get(id, properties);
 		DriverProxyFactory map = new DriverProxyFactory(cluster);
 		
 		DriverInvoker<DriverPropertyInfo[]> invoker = new DriverInvoker<DriverPropertyInfo[]>()

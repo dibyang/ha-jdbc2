@@ -26,4 +26,12 @@ import java.sql.SQLException;
 public interface DatabaseClusterFactory<Z, D extends Database<Z>>
 {
 	DatabaseCluster<Z, D> createDatabaseCluster(String id, DatabaseClusterConfigurationFactory<Z, D> factory) throws SQLException;
+	
+    void addListener(String id, DatabaseClusterListener listener);
+	
+	void removeListener(String id, DatabaseClusterListener listener);
+	
+	void addSynchronizationListener(String id, SynchronizationListener listener);
+	
+	void removeSynchronizationListener(String id, SynchronizationListener listener);
 }
