@@ -372,6 +372,7 @@ public class BerkeleyDBStateManager extends CloseablePoolProvider<Environment, D
 		return true;
 	}
 
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.pool.PoolProvider#create()

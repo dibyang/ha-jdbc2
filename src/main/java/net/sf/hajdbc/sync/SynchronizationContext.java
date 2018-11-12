@@ -26,6 +26,7 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseProperties;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.Dialect;
+import net.sf.hajdbc.state.distributed.DBCManager;
 
 
 /**
@@ -93,4 +94,5 @@ public interface SynchronizationContext<Z, D extends Database<Z>>
 	 * Closes any open database connections and shuts down the executor service. 
 	 */
 	void close();
+
 }

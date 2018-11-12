@@ -103,4 +103,5 @@ public class SimpleStateManager implements StateManager
 	public void stop()
 	{
 	}
+
 }

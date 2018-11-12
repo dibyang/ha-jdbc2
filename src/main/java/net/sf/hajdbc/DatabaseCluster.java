@@ -28,6 +28,7 @@ import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.io.InputSinkStrategy;
 import net.sf.hajdbc.lock.LockManager;
 import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.distributed.DBCManager;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
 /**
@@ -42,6 +43,16 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	 * @return an identifier
 	 */
 	String getId();
+
+	void addDatabase(D database);
+	void removeDatabase(String databaseId);
+	D getLocalDatabase();
+
+	void deactivate(String databaseId);
+
+	void activate(String databaseId);
+
+	void detectActivation();
 	
 	/**
 	 * Activates the specified database
@@ -164,4 +175,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	TransactionIdentifierFactory<? extends Object> getTransactionIdentifierFactory();
 
 	InputSinkStrategy<? extends Object> getInputSinkStrategy();
+
+	DBCManager getDBCManager();
 }

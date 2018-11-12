@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.io.Serializable;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,6 +30,7 @@ import javax.xml.bind.annotation.XmlType;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.management.Description;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
@@ -39,10 +41,12 @@ import net.sf.hajdbc.sql.AbstractDatabaseClusterConfiguration.Property;
  * @param <Z>
  */
 @XmlType(propOrder = { "user", "password", "xmlProperties" })
-public abstract class AbstractDatabase<Z> implements Database<Z>
+public abstract class AbstractDatabase<Z> implements Database<Z>,Serializable
 {
 	@XmlAttribute(name = "id", required = true)
 	private String id;
+	@XmlAttribute(name = "ip", required = true)
+	private String ip;
 	@XmlAttribute(name = "location", required = true)
 	private String location;
 	@XmlElement(name = "user")
@@ -55,11 +59,13 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@XmlAttribute(name = "local")
 	private Boolean local = false;
 
+
+
 	private Map<String, String> properties = new HashMap<String, String>();
 	private boolean dirty = false;
 	private volatile boolean active = false;
-	
-	@XmlElement(name = "property")
+
+  @XmlElement(name = "property")
 	private Property[] getXmlProperties()
 	{
 		List<Property> properties = new ArrayList<Property>(this.properties.size());
@@ -104,7 +110,16 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 		}
 		this.id = id;
 	}
-	
+
+	public String getIp() {
+		return ip;
+	}
+
+	public void setIp(String ip) {
+		this.checkDirty(this.ip, ip);
+		this.ip = ip;
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.Database#getLocation()
@@ -114,7 +129,9 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@Override
 	public String getLocation()
 	{
-		return this.location;
+		String v = this.location;
+		v = v.replace("${ip}",this.isLocal()?"localhost":ip);
+		return v;
 	}
 
 	@ManagedAttribute
@@ -266,7 +283,7 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@ManagedAttribute
 	public void setLocal(boolean local)
 	{
-		this.assertInactive();
+		//this.assertInactive();
 		this.checkDirty(this.local, local);
 		this.local = local;
 	}

@@ -21,41 +21,35 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.distributed.CommandDispatcher;
-import net.sf.hajdbc.distributed.CommandDispatcherFactory;
-import net.sf.hajdbc.distributed.Member;
-import net.sf.hajdbc.distributed.MembershipListener;
-import net.sf.hajdbc.distributed.Remote;
-import net.sf.hajdbc.distributed.Stateful;
+import net.sf.hajdbc.distributed.*;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
+import net.sf.hajdbc.sql.AbstractDatabase;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.StateManager;
 
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
+public class DistributedStateManager<Z, D extends Database<Z>> implements DBCManager<Z, D>,StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
 	private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
-	
+	private final Set<Member> members = Collections.synchronizedSet(new HashSet());
+
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
 		this.cluster = cluster;
@@ -94,6 +88,59 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager.activated(event);
 		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
+
+	private Set<String> getIps() {
+		Set<String> ips  = new HashSet<>();
+		for(Member m: this.members){
+			ips.add(m.toString());
+		}
+		return ips;
+	}
+
+	@Override
+	public boolean isValid(String dbId) {
+		return this.getIps().contains(dbId);
+	}
+
+	@Override
+	public Member getMember(String ip) {
+		Member find = null;
+		Iterator<Member> iterator = this.members.iterator();
+		while(iterator.hasNext()){
+			Member m = iterator.next();
+			if(m!=null&&m.toString().equals(ip)){
+				find = m;
+				break;
+			}
+		}
+		return find;
+	}
+
+
+	public Member getLocal() {
+		return dispatcher.getLocal();
+	}
+
+	@Override
+	public CommandDispatcher<?> getDispatcher() {
+		return dispatcher;
+	}
+
+
+
+	@Override
+	public void syncDbCfg() {
+		SyncDBCfgCommand<Z,D> cmd = new SyncDBCfgCommand<Z,D>();
+		cmd.setDb(this.getDatabaseCluster().getLocalDatabase());
+		Map<Member, D> map = this.dispatcher.executeAll(cmd, this.getLocal());
+		for(D d : map.values()){
+			if(d!=null){
+				((AbstractDatabase)d).setLocal(false);
+				this.cluster.addDatabase(d);
+			}
+		}
+	}
+
 
 	/**
 	 * {@inheritDoc}
@@ -165,6 +212,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.stateManager.start();
 		this.dispatcher.start();
+
+
+
 	}
 
 	/**
@@ -183,6 +233,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		return this.stateManager.isEnabled() && this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator());
 	}
+
 
 	/**
 	 * {@inheritDoc}
@@ -262,6 +313,8 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void added(Member member)
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
+		members.add(member);
+
 	}
 
 	/**
@@ -271,6 +324,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void removed(Member member)
 	{
+		members.remove(member);
+		if(!this.getLocal().equals(member)) {
+			this.cluster.removeDatabase(member.toString());
+		}
 		if (this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator()))
 		{
 			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.remoteInvokerMap.remove(member);

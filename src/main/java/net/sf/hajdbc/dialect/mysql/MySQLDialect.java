@@ -31,6 +31,7 @@ import net.sf.hajdbc.DumpRestoreSupport;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.ConnectionProperties;
 import net.sf.hajdbc.dialect.StandardDialect;
+import net.sf.hajdbc.state.distributed.DBCManager;
 import net.sf.hajdbc.util.Processes;
 import net.sf.hajdbc.util.Strings;
 
@@ -206,8 +207,10 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 		return this;
 	}
 
+
+
 	@Override
-	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception
+	public <Z, D extends Database<Z>> void dump(D database,  Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
 		ProcessBuilder builder = new ProcessBuilder("mysqldump");
@@ -216,14 +219,18 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 		args.add("--port=" + properties.getPort());
 		args.add("--user=" + properties.getUser());
 		args.add("--result-file=" + file.getPath());
-		args.add("--compress");
+		//args.add("--compress");
 		if (dataOnly)
 		{
 			args.add("--no-create-info");
 			args.add("--skip-triggers");
 		}
+		String password = properties.getPassword();
+		if (password != null){
+		args.add("--password="+password);
+	  }
 		args.add(properties.getDatabase());
-		Processes.run(setPassword(builder, properties));
+		Processes.run(builder);
 	}
 
 	@Override
@@ -235,9 +242,15 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 		args.add("--host=" + properties.getHost());
 		args.add("--port=" + properties.getPort());
 		args.add("--user=" + properties.getUser());
+		String password = properties.getPassword();
+		if (password != null){
+			args.add("--password="+password);
+		}
 		args.add(properties.getDatabase());
-		Processes.run(setPassword(builder, properties), file);
+		Processes.run(builder, file);
 	}
+
+
 	
 	private static ProcessBuilder setPassword(final ProcessBuilder builder, final ConnectionProperties properties)
 	{

@@ -574,6 +574,7 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 		return true;
 	}
 
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.Lifecycle#start()

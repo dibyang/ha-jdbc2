@@ -41,4 +41,6 @@ public interface StateManager extends DatabaseClusterListener, DurabilityListene
 	Map<InvocationEvent, Map<String, InvokerEvent>> recover();
 	
 	boolean isEnabled();
+
+
 }

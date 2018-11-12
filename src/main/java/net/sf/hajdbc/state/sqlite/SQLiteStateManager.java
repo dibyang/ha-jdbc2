@@ -659,4 +659,6 @@ public class SQLiteStateManager<Z, D extends Database<Z>> implements StateManage
 	{
 		void execute(SqlJetDb database) throws SqlJetException;
 	}
+
+
 }

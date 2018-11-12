@@ -21,6 +21,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.distributed.Member;
 
 /**
  * @author  Paul Ferraro
@@ -37,7 +38,13 @@ public interface Database<Z> extends Comparable<Database<Z>>
 	 * @return a unique identifier
 	 */
 	String getId();
-	
+
+	/**
+	 * Database ip
+	 * @return ip
+	 */
+	String getIp();
+
 	/**
 	 * Returns the location of this database
 	 * @return a location
