@@ -35,7 +35,10 @@ public class JGroupsCommandDispatcherFactory implements CommandDispatcherFactory
 	private static final long serialVersionUID = 5135621114239237376L;
 	
 	public static final long DEFAULT_TIMEOUT = 60000;
-	public static final String DEFAULT_STACK = "udp.xml";
+
+	public static final String TCP_STACK = "tcp.xml";
+	public static final String UDP_STACK = "udp.xml";
+	public static final String DEFAULT_STACK = UDP_STACK;
 	
 	private String stack = DEFAULT_STACK;
 	private long timeout = DEFAULT_TIMEOUT;

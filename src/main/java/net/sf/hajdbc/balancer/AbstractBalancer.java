@@ -50,13 +50,13 @@ public abstract class AbstractBalancer<Z, D extends Database<Z>> implements Bala
 		
 		if (!databases.hasNext() || ((databases.next() != null) && !databases.hasNext())) return Collections.emptySet();
 		
-		D database = databases.next();
+		D primary = databases.next();
 		
-		if (!databases.hasNext()) return Collections.singleton(database);
+		if (!databases.hasNext()) return Collections.emptySet();
 		
 		SortedSet<D> backups = new TreeSet<D>();
 		
-		backups.add(database);
+		//backups.add(primary);
 		
 		do
 		{

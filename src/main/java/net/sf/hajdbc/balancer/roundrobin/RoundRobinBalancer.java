@@ -23,6 +23,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractSetBalancer;
+import net.sf.hajdbc.balancer.DatabaseChecker;
 
 /**
  * Balancer implementation whose {@link #next()} implementation uses a circular FIFO queue.
@@ -38,9 +39,9 @@ public class RoundRobinBalancer<P, D extends Database<P>> extends AbstractSetBal
 	 * Constructs a new RoundRobinBalancer
 	 * @param databases
 	 */
-	public RoundRobinBalancer(Set<D> databases)
+	public RoundRobinBalancer(Set<D> databases, DatabaseChecker checker)
 	{
-		super(databases);
+		super(databases,checker);
 		
 		for (D database: databases)
 		{

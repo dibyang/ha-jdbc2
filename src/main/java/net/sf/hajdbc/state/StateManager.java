@@ -32,7 +32,7 @@ import net.sf.hajdbc.durability.InvokerEvent;
  */
 public interface StateManager extends DatabaseClusterListener, DurabilityListener, Lifecycle
 {
-	public static final String CLEAR_LOCAL_STATE = "ha-jdbc.state.clear";
+	String CLEAR_LOCAL_STATE = "ha-jdbc.state.clear";
 	
 	Set<String> getActiveDatabases();
 	

@@ -21,22 +21,22 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.net.InetAddress;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
+import net.sf.hajdbc.balancer.DatabaseChecker;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Remote;
 import net.sf.hajdbc.distributed.Stateful;
+import net.sf.hajdbc.distributed.jgroups.AddressMember;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.logging.Level;
@@ -44,18 +44,21 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.StateManager;
+import org.jgroups.Address;
+import org.jgroups.stack.IpAddress;
 
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
+public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful, DatabaseChecker
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
 	private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
-	
+	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
+
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
 		this.cluster = cluster;
@@ -261,6 +264,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void added(Member member)
 	{
+		members.add(member);
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 	}
 
@@ -280,6 +284,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 				this.cluster.getDurability().recover(invokers);
 			}
 		}
+		members.remove(member);
 	}
 	
 	/**
@@ -290,6 +295,28 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public Map<InvocationEvent, Map<String, InvokerEvent>> recover()
 	{
 		return this.stateManager.recover();
+	}
+
+	@Override
+	public boolean isValid(Database<?> database) {
+		Set<InetAddress> ips = getIps();
+		if(ips.contains(database.getIp())){
+			return true;
+		}
+		return false;
+	}
+
+	private Set<InetAddress> getIps() {
+		Set<InetAddress> ips = new HashSet<>();
+		for(Member m:this.members){
+			if(m instanceof AddressMember){
+				Address address = ((AddressMember) m).getAddress();
+				if(address instanceof IpAddress){
+					ips.add(((IpAddress)address).getIpAddress());
+				}
+			}
+		}
+		return ips;
 	}
 
 	private static class RemoteDescriptor implements Remote, Serializable

@@ -42,6 +42,7 @@ import net.sf.hajdbc.SynchronizationStrategy;
 import net.sf.hajdbc.TransactionMode;
 import net.sf.hajdbc.Version;
 import net.sf.hajdbc.balancer.Balancer;
+import net.sf.hajdbc.balancer.DatabaseChecker;
 import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.Dialect;
@@ -680,7 +681,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			this.stateManager = new DistributedStateManager<Z, D>(this, dispatcherFactory);
 		}
 		
-		this.balancer = this.configuration.getBalancerFactory().createBalancer(new TreeSet<D>());
+		this.balancer = this.configuration.getBalancerFactory().createBalancer(new TreeSet<D>(),(DatabaseChecker)this.stateManager);
 		this.dialect = this.configuration.getDialectFactory().createDialect();
 		this.durability = this.configuration.getDurabilityFactory().createDurability(this);
 		this.executor = this.configuration.getExecutorProvider().getExecutor(this.configuration.getThreadFactory());

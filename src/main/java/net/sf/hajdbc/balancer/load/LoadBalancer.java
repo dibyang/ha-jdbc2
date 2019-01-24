@@ -17,19 +17,14 @@
  */
 package net.sf.hajdbc.balancer.load;
 
-import java.util.Collection;
-import java.util.Comparator;
-import java.util.Map;
-import java.util.NoSuchElementException;
-import java.util.Set;
-import java.util.SortedMap;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractBalancer;
+import net.sf.hajdbc.balancer.DatabaseChecker;
 import net.sf.hajdbc.invocation.Invoker;
 import net.sf.hajdbc.util.Collections;
 
@@ -44,6 +39,7 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	private final Lock lock = new ReentrantLock();
 	
 	private volatile SortedMap<D, AtomicInteger> databaseMap = Collections.emptySortedMap();
+	private final DatabaseChecker checker;
 	
 	private Comparator<Map.Entry<D, AtomicInteger>> comparator = new Comparator<Map.Entry<D, AtomicInteger>>()
 	{
@@ -76,8 +72,9 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	 * Constructs a new LoadBalancer
 	 * @param databases
 	 */
-	public LoadBalancer(Set<D> databases)
+	public LoadBalancer(Set<D> databases, DatabaseChecker checker)
 	{
+		this.checker = checker;
 		if (databases.isEmpty())
 		{
 			this.databaseMap = Collections.emptySortedMap();

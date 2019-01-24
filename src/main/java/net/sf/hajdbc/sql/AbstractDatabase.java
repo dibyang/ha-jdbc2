@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.net.InetAddress;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,6 +30,7 @@ import javax.xml.bind.annotation.XmlType;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.management.Description;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
@@ -58,6 +60,9 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	private Map<String, String> properties = new HashMap<String, String>();
 	private boolean dirty = false;
 	private volatile boolean active = false;
+	private volatile long tver = 0;
+	private volatile boolean primary = false;
+	private volatile InetAddress ip=null;
 	
 	@XmlElement(name = "property")
 	private Property[] getXmlProperties()
@@ -323,6 +328,47 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	public void setActive(boolean active)
 	{
 		this.active = active;
+	}
+
+	@Override
+	public long getTver() {
+		return tver;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 * @see Database#isPrimary()
+	 */
+	@ManagedAttribute
+	@Description("Indicates whether or not this database is primary")
+	@Override
+	public boolean isPrimary() {
+		if(!isActive()&&primary){
+			primary = false;
+		}
+		return primary;
+	}
+
+	/**
+	 *
+	 * {@inheritDoc}
+	 * @see net.sf.hajdbc.Database#setPrimary(boolean,long)
+	 */
+	@Override
+	public void setPrimary(boolean primary, long tver) {
+		if(tver>=this.tver) {
+			this.tver = tver;
+			this.primary = primary;
+		}
+	}
+
+	@Override
+	public InetAddress getIp() {
+		return ip;
+	}
+
+	public void setIp(InetAddress ip) {
+		this.ip = ip;
 	}
 
 	/**

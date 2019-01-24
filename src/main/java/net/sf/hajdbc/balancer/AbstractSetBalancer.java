@@ -38,9 +38,11 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	private final Lock lock = new ReentrantLock();
 
 	private volatile SortedSet<D> databaseSet;
+	private final DatabaseChecker checker;
 
-	protected AbstractSetBalancer(Set<D> databases)
+	protected AbstractSetBalancer(Set<D> databases,DatabaseChecker checker)
 	{
+		this.checker = checker;
 		if (databases.isEmpty())
 		{
 			this.databaseSet = Collections.emptySortedSet();
@@ -86,7 +88,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	{
 		try
 		{
-			return this.databaseSet.first();
+			return this.getDatabases().iterator().next();
 		}
 		catch (NoSuchElementException e)
 		{
@@ -101,6 +103,25 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	@Override
 	protected Set<D> getDatabases()
 	{
+		this.lock.lock();
+		try {
+			SortedSet<D> removeSet = new TreeSet<D>();
+			for(D d : this.databaseSet){
+				if(!checker.isValid(d)){
+					removeSet.add(d);
+				}
+			}
+			databaseSet.removeAll(removeSet);
+			for (D database: removeSet)
+			{
+				this.removed(database);
+			}
+		}
+		finally
+		{
+			this.lock.unlock();
+		}
+
 		return this.databaseSet;
 	}
 	
@@ -329,6 +350,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 			this.lock.unlock();
 		}
 	}
+
 	
 	/**
 	 * Called when the set was cleared.

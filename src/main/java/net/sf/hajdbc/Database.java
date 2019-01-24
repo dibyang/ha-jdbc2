@@ -17,10 +17,12 @@
  */
 package net.sf.hajdbc;
 
+import java.net.InetAddress;
 import java.sql.Connection;
 import java.sql.SQLException;
 
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.distributed.Member;
 
 /**
  * @author  Paul Ferraro
@@ -30,7 +32,7 @@ import net.sf.hajdbc.codec.Decoder;
  */
 public interface Database<Z> extends Comparable<Database<Z>>
 {
-	static final int ID_MAX_SIZE = 64;
+	int ID_MAX_SIZE = 64;
 	
 	/**
 	 * Returns the unique idenfier for this database
@@ -84,4 +86,13 @@ public interface Database<Z> extends Comparable<Database<Z>>
 	boolean isActive();
 	
 	void setActive(boolean active);
+
+	long getTver();
+
+	boolean isPrimary();
+
+	void setPrimary(boolean primary,long tver);
+
+	InetAddress getIp();
+
 }

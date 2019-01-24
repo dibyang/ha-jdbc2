@@ -22,6 +22,7 @@ import java.util.Set;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.balancer.BalancerFactory;
+import net.sf.hajdbc.balancer.DatabaseChecker;
 
 /**
  * Factory for creating a {@link LoadBalancer}
@@ -39,11 +40,11 @@ public class LoadBalancerFactory implements BalancerFactory
 
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(java.util.Set)
+	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, DatabaseChecker)
 	 */
 	@Override
-	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases)
+	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases,DatabaseChecker checker)
 	{
-		return new LoadBalancer<Z, D>(databases);
+		return new LoadBalancer<Z, D>(databases,checker);
 	}
 }
