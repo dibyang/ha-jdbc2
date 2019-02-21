@@ -22,6 +22,7 @@ import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -29,7 +30,6 @@ import java.util.concurrent.ConcurrentMap;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.balancer.DatabaseChecker;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
@@ -43,6 +43,8 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.LeaderManager;
+import net.sf.hajdbc.state.LeaderToken;
 import net.sf.hajdbc.state.StateManager;
 import org.jgroups.Address;
 import org.jgroups.stack.IpAddress;
@@ -50,12 +52,19 @@ import org.jgroups.stack.IpAddress;
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful, DatabaseChecker
+public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
-	private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
+  private final LeaderManager leaderManager;
+  private volatile boolean election = false;
+
+  public CommandDispatcher<StateCommandContext<Z, D>> getDispatcher() {
+    return dispatcher;
+  }
+
+  private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
 
@@ -65,6 +74,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
+    Member local = dispatcher.getLocal();
+    InetAddress address = ((IpAddress) ((AddressMember) local).getAddress()).getIpAddress();
+    NetworkInterface nic = NetworkInterface.getByInetAddress(address);
+    this.leaderManager = new LeaderManager(dispatcher.getLocal(),nic);
 	}
 
 	/**
@@ -181,13 +194,19 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager.stop();
 	}
 
+  @Override
+	public boolean isLeader(){
+	  return !election&& leaderManager.isLeader(this.dispatcher.getLocal());
+  }
+
 	@Override
 	public boolean isEnabled()
 	{
 		return this.stateManager.isEnabled() && this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator());
 	}
 
-	/**
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.distributed.StateCommandContext#getDatabaseCluster()
 	 */
@@ -238,7 +257,17 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			this.logger.log(Level.INFO, Messages.INITIAL_CLUSTER_STATE_REMOTE.getMessage(databases, this.dispatcher.getCoordinator()));
 			
 			this.stateManager.setActiveDatabases(databases);
-		}
+
+      try {
+        LeaderToken ld = (LeaderToken)input.readObject();
+        if(ld!=null){
+          leaderManager.getToken().update(ld);
+        }
+      } catch (ClassNotFoundException e) {
+        e.printStackTrace();
+      }
+
+    }
 	}
 
 	/**
@@ -255,6 +284,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		{
 			output.writeUTF(database.getId());
 		}
+    output.writeObject(leaderManager.getToken());
 	}
 
 	/**
@@ -266,7 +296,52 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		members.add(member);
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
+		if(this.isEnabled()){
+		  this.elect(false);
+    }
 	}
+
+	private void elect(boolean recover){
+    election = true;
+    InquireCommand cmd = new InquireCommand();
+    Member member = null;
+    LeaderToken token = null;
+    LeaderToken ltoken = leaderManager.getToken();
+    LeaderToken rtoken = null;
+    Iterator<Member> iterator = members.iterator();
+    while(iterator.hasNext()){
+      member = iterator.next();
+      if(!dispatcher.getLocal().equals(member)){
+        rtoken = (LeaderToken)dispatcher.execute(cmd, member);
+        break;
+      }
+    }
+    if(rtoken!=null){
+      if(ltoken.hasLeader()){
+        if(rtoken.hasLeader()&&rtoken.getTver()>ltoken.getTver()){
+          token = rtoken;
+        }else{
+          token = ltoken;
+        }
+      }else{
+        token = rtoken;
+      }
+    }else{
+      if(ltoken.hasLeader()){
+        token = ltoken;
+      }
+    }
+    if(token!=null){
+      //
+      if(recover){
+        token.setTver(token.getTver()+1000);
+      }else{
+        token.setTver(token.getTver()+1);
+      }
+      LeaderCommand cmdLeader = new LeaderCommand(token);
+      dispatcher.executeAll(cmdLeader);
+    }
+  }
 
 	/**
 	 * {@inheritDoc}
@@ -283,8 +358,13 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			{
 				this.cluster.getDurability().recover(invokers);
 			}
+
+			leaderManager.removed(member);
 		}
 		members.remove(member);
+    if(this.isEnabled()){
+      this.elect(true);
+    }
 	}
 	
 	/**
@@ -319,7 +399,19 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		return ips;
 	}
 
-	private static class RemoteDescriptor implements Remote, Serializable
+  @Override
+  public LeaderManager getLeaderManager() {
+    return leaderManager;
+  }
+
+  @Override
+  public boolean leader(Member leader, long tver) {
+    leaderManager.leader(leader,tver);
+    election = !leaderManager.hasLeader();
+    return true;
+  }
+
+  private static class RemoteDescriptor implements Remote, Serializable
 	{
 		private static final long serialVersionUID = 3717630867671175936L;
 		

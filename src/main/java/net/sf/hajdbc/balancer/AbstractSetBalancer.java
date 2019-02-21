@@ -27,6 +27,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.invocation.Invoker;
+import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.util.Collections;
 
 /**
@@ -38,11 +39,11 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	private final Lock lock = new ReentrantLock();
 
 	private volatile SortedSet<D> databaseSet;
-	private final DatabaseChecker checker;
+	private final StateManager stateManager;
 
-	protected AbstractSetBalancer(Set<D> databases,DatabaseChecker checker)
+	protected AbstractSetBalancer(Set<D> databases, StateManager stateManager)
 	{
-		this.checker = checker;
+		this.stateManager = stateManager;
 		if (databases.isEmpty())
 		{
 			this.databaseSet = Collections.emptySortedSet();
@@ -103,15 +104,19 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	@Override
 	protected Set<D> getDatabases()
 	{
+
 		this.lock.lock();
 		try {
 			SortedSet<D> removeSet = new TreeSet<D>();
+			SortedSet<D> newSet = new TreeSet<D>();
 			for(D d : this.databaseSet){
-				if(!checker.isValid(d)){
+				if(!stateManager.isValid(d)){
 					removeSet.add(d);
+				}else{
+					newSet.add(d);
 				}
 			}
-			databaseSet.removeAll(removeSet);
+			databaseSet = newSet;
 			for (D database: removeSet)
 			{
 				this.removed(database);

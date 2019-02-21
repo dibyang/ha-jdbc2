@@ -20,6 +20,7 @@ package net.sf.hajdbc.state;
 import java.util.Map;
 import java.util.Set;
 
+import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.Lifecycle;
 import net.sf.hajdbc.durability.DurabilityListener;
@@ -41,4 +42,8 @@ public interface StateManager extends DatabaseClusterListener, DurabilityListene
 	Map<InvocationEvent, Map<String, InvokerEvent>> recover();
 	
 	boolean isEnabled();
+
+	boolean isValid(Database<?> database);
+
+  boolean isLeader();
 }

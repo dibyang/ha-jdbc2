@@ -22,7 +22,7 @@ import java.util.Set;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.balancer.BalancerFactory;
-import net.sf.hajdbc.balancer.DatabaseChecker;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Factory for creating a {@link RoundRobinBalancer}.
@@ -40,11 +40,11 @@ public class RoundRobinBalancerFactory implements BalancerFactory
 
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, DatabaseChecker)
+	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, StateManager)
 	 */
 	@Override
-	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases,DatabaseChecker checker)
+	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases, StateManager stateManager)
 	{
-		return new RoundRobinBalancer<Z, D>(databases,checker);
+		return new RoundRobinBalancer<Z, D>(databases,stateManager);
 	}
 }

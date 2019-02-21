@@ -23,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
 
+import net.sf.hajdbc.Database;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.state.DatabaseEvent;
@@ -32,6 +33,7 @@ public class SimpleStateManager implements StateManager
 {
 	private final Map<InvocationEvent, Map<String, InvokerEvent>> invocations = new ConcurrentHashMap<InvocationEvent, Map<String, InvokerEvent>>();
 	private final Set<String> activeDatabases = new CopyOnWriteArraySet<String>();
+
 
 	@Override
 	public Set<String> getActiveDatabases()
@@ -92,6 +94,16 @@ public class SimpleStateManager implements StateManager
 	public boolean isEnabled()
 	{
 		return true;
+	}
+
+	@Override
+	public boolean isValid(Database<?> database) {
+		return activeDatabases.contains(database.getId());
+	}
+
+	@Override
+	public boolean isLeader() {
+		return false;
 	}
 
 	@Override

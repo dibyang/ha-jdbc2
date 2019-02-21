@@ -66,6 +66,12 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	 * @throws IllegalArgumentException if no database exists with the specified identifier
 	 */
 	D getDatabase(String id);
+
+	/**
+	 * Returns the local database.
+	 * @return local database
+	 */
+	D getLocalDatabase();
 	
 	/**
 	 * Returns the Balancer implementation used by this database cluster.

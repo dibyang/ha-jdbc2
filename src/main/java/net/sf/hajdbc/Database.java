@@ -87,12 +87,6 @@ public interface Database<Z> extends Comparable<Database<Z>>
 	
 	void setActive(boolean active);
 
-	long getTver();
-
-	boolean isPrimary();
-
-	void setPrimary(boolean primary,long tver);
-
 	InetAddress getIp();
 
 }

@@ -23,7 +23,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractSetBalancer;
-import net.sf.hajdbc.balancer.DatabaseChecker;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Trivial balancer implementation whose {@link #next} implementation always returns the database with the highest weight.
@@ -48,9 +48,9 @@ public class SimpleBalancer<Z, D extends Database<Z>> extends AbstractSetBalance
 	 * Constructs a new SimpleBalancer
 	 * @param databases
 	 */
-	public SimpleBalancer(Set<D> databases, DatabaseChecker checker)
+	public SimpleBalancer(Set<D> databases, StateManager stateManager)
 	{
-		super(databases,checker);
+		super(databases,stateManager);
 		
 		this.reset();
 	}

@@ -25,7 +25,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractSetBalancer;
-import net.sf.hajdbc.balancer.DatabaseChecker;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Balancer implementation whose {@link #next()} implementation returns a random database.
@@ -44,9 +44,9 @@ public class RandomBalancer<P, D extends Database<P>> extends AbstractSetBalance
 	 * Constructs a new RandomBalancer
 	 * @param databases
 	 */
-	public RandomBalancer(Set<D> databases, DatabaseChecker checker)
+	public RandomBalancer(Set<D> databases, StateManager stateManager)
 	{
-		super(databases,checker);
+		super(databases,stateManager);
 		
 		int total = 0;
 		

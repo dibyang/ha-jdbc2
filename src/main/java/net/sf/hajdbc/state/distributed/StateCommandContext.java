@@ -21,9 +21,11 @@ import java.util.Map;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.Remote;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
+import net.sf.hajdbc.state.LeaderManager;
 import net.sf.hajdbc.state.StateManager;
 
 /**
@@ -37,4 +39,9 @@ public interface StateCommandContext<Z, D extends Database<Z>>
 	StateManager getLocalStateManager();
 	
 	Map<InvocationEvent, Map<String, InvokerEvent>> getRemoteInvokers(Remote remote);
+
+	LeaderManager getLeaderManager();
+
+	boolean leader(Member leader, long tver);
+
 }

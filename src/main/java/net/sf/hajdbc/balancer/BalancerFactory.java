@@ -22,6 +22,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.Identifiable;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Factory for creating balancers.
@@ -36,5 +37,5 @@ public interface BalancerFactory extends Identifiable, Serializable
 	 * @param databases set of initial databases
 	 * @return a new balancer.
 	 */
-	<Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases,DatabaseChecker checker);
+	<Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases, StateManager stateManager);
 }

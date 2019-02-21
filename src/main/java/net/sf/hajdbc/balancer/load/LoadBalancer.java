@@ -24,8 +24,8 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractBalancer;
-import net.sf.hajdbc.balancer.DatabaseChecker;
 import net.sf.hajdbc.invocation.Invoker;
+import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.util.Collections;
 
 /**
@@ -39,7 +39,7 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	private final Lock lock = new ReentrantLock();
 	
 	private volatile SortedMap<D, AtomicInteger> databaseMap = Collections.emptySortedMap();
-	private final DatabaseChecker checker;
+	private final StateManager stateManager;
 	
 	private Comparator<Map.Entry<D, AtomicInteger>> comparator = new Comparator<Map.Entry<D, AtomicInteger>>()
 	{
@@ -72,9 +72,9 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	 * Constructs a new LoadBalancer
 	 * @param databases
 	 */
-	public LoadBalancer(Set<D> databases, DatabaseChecker checker)
+	public LoadBalancer(Set<D> databases, StateManager stateManager)
 	{
-		this.checker = checker;
+		this.stateManager = stateManager;
 		if (databases.isEmpty())
 		{
 			this.databaseMap = Collections.emptySortedMap();
