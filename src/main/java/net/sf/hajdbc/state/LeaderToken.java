@@ -45,4 +45,10 @@ public class LeaderToken implements Serializable {
     return false;
   }
 
+  public LeaderToken copy(){
+    LeaderToken copy = new LeaderToken();
+    copy.update(this);
+    return copy;
+  }
+
 }

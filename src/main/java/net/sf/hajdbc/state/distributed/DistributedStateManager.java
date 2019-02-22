@@ -26,9 +26,11 @@ import java.net.NetworkInterface;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.LeaderListener;
 import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
@@ -42,10 +44,7 @@ import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.LeaderManager;
-import net.sf.hajdbc.state.LeaderToken;
-import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.*;
 import org.jgroups.Address;
 import org.jgroups.stack.IpAddress;
 
@@ -57,6 +56,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
+	private final List<LeaderListener> leaderListeners = new CopyOnWriteArrayList<LeaderListener>();
   private final LeaderManager leaderManager;
   private volatile boolean election = false;
 
@@ -258,14 +258,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			
 			this.stateManager.setActiveDatabases(databases);
 
-      try {
-        LeaderToken ld = (LeaderToken)input.readObject();
-        if(ld!=null){
-          leaderManager.getToken().update(ld);
-        }
-      } catch (ClassNotFoundException e) {
-        e.printStackTrace();
-      }
 
     }
 	}
@@ -284,7 +276,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		{
 			output.writeUTF(database.getId());
 		}
-    output.writeObject(leaderManager.getToken());
 	}
 
 	/**
@@ -338,9 +329,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
       }else{
         token.setTver(token.getTver()+1);
       }
-      LeaderCommand cmdLeader = new LeaderCommand(token);
-      dispatcher.executeAll(cmdLeader);
     }
+		LeaderCommand cmdLeader = new LeaderCommand(token);
+		dispatcher.executeAll(cmdLeader);
   }
 
 	/**
@@ -408,10 +399,18 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
   public boolean leader(Member leader, long tver) {
     leaderManager.leader(leader,tver);
     election = !leaderManager.hasLeader();
-    return true;
+		Iterator<LeaderListener> iterator = leaderListeners.iterator();
+		while(iterator.hasNext()){
+			iterator.next().leader(new LeaderEvent(leaderManager.getToken()));
+		}
+		return true;
   }
 
-  private static class RemoteDescriptor implements Remote, Serializable
+	public void addListener(LeaderListener listener) {
+		leaderListeners.add(listener);
+	}
+
+	private static class RemoteDescriptor implements Remote, Serializable
 	{
 		private static final long serialVersionUID = 3717630867671175936L;
 		

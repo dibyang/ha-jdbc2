@@ -39,8 +39,7 @@ public class LeaderManager implements LeaderService {
   public LeaderToken getToken() {
     LeaderToken token = leaderTokenStore.getToken();
     if(isUp()){
-      if(!token.hasLeader()){
-        token.setTver(1);
+      if(!token.hasLeader()&&token.getTver()<1){
         token.setLeader(local);
       }
     }else{
@@ -66,10 +65,12 @@ public class LeaderManager implements LeaderService {
 
   public void removed(Member member)
   {
-    Member leader = leaderTokenStore.getToken().getLeader();
+    LeaderToken token = leaderTokenStore.getToken();
+    Member leader = token.getLeader();
     if(leader!=null) {
       if(leader.equals(member)){
-        leaderTokenStore.getToken().setLeader(null);
+        token.setLeader(null);
+        leaderTokenStore.update(token);
         leaderTokenStore.save();
       }
     }
@@ -77,9 +78,13 @@ public class LeaderManager implements LeaderService {
 
   @Override
   public void leader(Member leader, long tver) {
-    if(leader!=null&&tver>leaderTokenStore.getToken().getTver()){
-      leaderTokenStore.getToken().setTver(tver);
-      leaderTokenStore.getToken().setLeader(leader);
+    LeaderToken token = leaderTokenStore.getToken();
+    if(leader!=null&&tver> token.getTver()){
+      token.setLeader(leader);
+      if(leader!=null){
+        token.setTver(tver);
+      }
+      leaderTokenStore.update(token);
       leaderTokenStore.save();
     }
   }

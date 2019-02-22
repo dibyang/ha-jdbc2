@@ -38,10 +38,15 @@ public class LeaderTokenStore {
     }
   }
 
+  public void update(LeaderToken token){
+    token.update(token);
+  }
+
   public LeaderToken getToken() {
     reload();
-    return token;
+    return token.copy();
   }
+
   private void reload() {
     if(path.toFile().lastModified()!=lastModified) {
       lastModified = path.toFile().lastModified();

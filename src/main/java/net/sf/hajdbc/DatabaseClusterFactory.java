@@ -34,4 +34,9 @@ public interface DatabaseClusterFactory<Z, D extends Database<Z>>
 	void addSynchronizationListener(String id, SynchronizationListener listener);
 	
 	void removeSynchronizationListener(String id, SynchronizationListener listener);
+
+	void addListener(String id, LeaderListener listener);
+
+	void removeListener(String id, LeaderListener listener);
+
 }

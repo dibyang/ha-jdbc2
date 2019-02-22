@@ -23,12 +23,9 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.DatabaseCluster;
-import net.sf.hajdbc.DatabaseClusterConfigurationFactory;
-import net.sf.hajdbc.DatabaseClusterFactory;
-import net.sf.hajdbc.DatabaseClusterListener;
-import net.sf.hajdbc.SynchronizationListener;
+import net.sf.hajdbc.*;
+import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.distributed.DistributedStateManager;
 
 /**
  * @author Paul Ferraro
@@ -36,6 +33,8 @@ import net.sf.hajdbc.SynchronizationListener;
 public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements DatabaseClusterFactory<Z, D>
 {
 	Map<String, Set<DatabaseClusterListener>> databaseClusterListeners = new HashMap<String, Set<DatabaseClusterListener>>();
+
+	Map<String, Set<LeaderListener>> leaderListeners = new HashMap<String, Set<LeaderListener>>();
 	
 	Map<String, Set<SynchronizationListener>> synchronizationListeners = new HashMap<String, Set<SynchronizationListener>>();
 	
@@ -50,7 +49,21 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		DatabaseCluster<Z, D> databaseCluster = new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
 		addDatabaseClusterListeners(id, databaseCluster);
 		addSynchronizationListeners(id, databaseCluster);
+		StateManager stateManager = databaseCluster.getStateManager();
+		if(stateManager instanceof DistributedStateManager){
+			DistributedStateManager sdm = (DistributedStateManager)stateManager;
+			addLeaderListeners(id, sdm);
+		}
 		return databaseCluster;
+	}
+
+	private void addLeaderListeners(String id, DistributedStateManager sdm) {
+		Set<LeaderListener> listeners = leaderListeners.get(id);
+		if(listeners!=null){
+			for(LeaderListener listener:listeners){
+				sdm.addListener(listener);
+			}
+		}
 	}
 
 	private void addDatabaseClusterListeners(String id,
@@ -125,5 +138,30 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 				synchronizationListeners.remove(id);
 			}
 		}		
+	}
+
+	@Override
+	public void addListener(String id, LeaderListener listener) {
+		Set<LeaderListener> listeners = leaderListeners.get(id);
+		if(listeners==null){
+			listeners = new LinkedHashSet<LeaderListener>();
+		}
+		if(listener!=null){
+			listeners.add(listener);
+			leaderListeners.put(id, listeners);
+		}
+	}
+
+	@Override
+	public void removeListener(String id, LeaderListener listener) {
+		Set<LeaderListener> listeners = leaderListeners.get(id);
+		if(listeners!=null){
+			if(listener!=null){
+				listeners.remove(listener);
+			}
+			if(listeners.isEmpty()){
+				leaderListeners.remove(id);
+			}
+		}
 	}
 }

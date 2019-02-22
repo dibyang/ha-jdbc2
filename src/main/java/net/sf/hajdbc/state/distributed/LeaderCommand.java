@@ -16,7 +16,8 @@ public class LeaderCommand<Z, D extends Database<Z>> implements Command<Boolean,
   public Boolean execute(StateCommandContext<Z, D> context) {
     if(token!=null){
       return context.leader(token.getLeader(),token.getTver());
+    }else{
+      return context.leader(null,0);
     }
-    return false;
   }
 }
