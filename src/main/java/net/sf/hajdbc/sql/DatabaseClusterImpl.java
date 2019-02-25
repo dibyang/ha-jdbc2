@@ -32,6 +32,7 @@ import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterConfiguration;
 import net.sf.hajdbc.DatabaseClusterConfigurationListener;
 import net.sf.hajdbc.DatabaseClusterListener;
+import net.sf.hajdbc.LeaderListener;
 import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.SynchronizationListener;
 import net.sf.hajdbc.SynchronizationStrategy;
@@ -57,6 +58,8 @@ import net.sf.hajdbc.management.MBeanRegistrar;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.LeaderEvent;
+import net.sf.hajdbc.state.LeaderToken;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.sync.SynchronizationContext;
@@ -95,7 +98,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private final List<DatabaseClusterConfigurationListener<Z, D>> configurationListeners = new CopyOnWriteArrayList<DatabaseClusterConfigurationListener<Z, D>>();	
 	private final List<DatabaseClusterListener> clusterListeners = new CopyOnWriteArrayList<DatabaseClusterListener>();
 	private final List<SynchronizationListener> synchronizationListeners = new CopyOnWriteArrayList<SynchronizationListener>();
-	
+	private final List<LeaderListener> leaderListeners = new CopyOnWriteArrayList<>();
+
 	public DatabaseClusterImpl(String id, DatabaseClusterConfiguration<Z, D> configuration, DatabaseClusterConfigurationListener<Z, D> listener)
 	{
 		this.id = id;
@@ -412,7 +416,29 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	{
 		this.synchronizationListeners.remove(listener);
 	}
-	
+
+	@Override
+	public void addLeaderListener(LeaderListener listener) {
+		leaderListeners.add(listener);
+	}
+
+	@Override
+	public void removeLeaderListener(LeaderListener listener) {
+		leaderListeners.remove(listener);
+	}
+
+	final LeaderToken token = new LeaderToken();
+
+	@Override
+	public void leader(LeaderToken token) {
+		this.token.update(token);
+		Iterator<LeaderListener> iterator = leaderListeners.iterator();
+		while(iterator.hasNext()){
+			iterator.next().leader(new LeaderEvent(this.token.copy()));
+		}
+	}
+
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseCluster#activate(net.sf.hajdbc.Database, net.sf.hajdbc.state.StateManager)
@@ -718,36 +744,22 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	 * Recover all active databases.
 	 */
 	private void recoverDatabase() {
-		if(this.stateManager.isLeader()){
+		if(token.hasLeader()){
 			Set<String> databases = this.stateManager.getActiveDatabases();
 
-			if (!databases.isEmpty())
+			for (D database: this.configuration.getDatabaseMap().values())
 			{
-				for (String databaseId: databases)
-				{
-					D database = this.getDatabase(databaseId);
-					if (database != null)
-					{
+				if(token.getLeader().equals(database.getIp())) {
+					if(databases.contains(database.getId())){
 						this.balancer.add(database);
 						database.setActive(true);
-					}
-					else
-					{
-						logger.log(Level.WARN, Messages.DATABASE_IGNORED.getMessage(), this, databaseId);
-					}
-				}
-			}
-			else
-			{
-				for (D database: this.configuration.getDatabaseMap().values())
-				{
-					if (this.isAlive(database, Level.WARN))
-					{
-						this.activate(database, this.stateManager);
+					}else {
+						if (this.isAlive(database, Level.WARN)) {
+							this.activate(database, this.stateManager);
+						}
 					}
 				}
 			}
-
 			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.stateManager.recover();
 			if (!invokers.isEmpty())
 			{
@@ -763,6 +775,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				// Ignore - cache will initialize lazily.
 			}
 		}
+
+
 
 	}
 

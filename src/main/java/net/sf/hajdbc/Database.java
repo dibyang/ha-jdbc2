@@ -87,6 +87,6 @@ public interface Database<Z> extends Comparable<Database<Z>>
 	
 	void setActive(boolean active);
 
-	InetAddress getIp();
+	String getIp();
 
 }

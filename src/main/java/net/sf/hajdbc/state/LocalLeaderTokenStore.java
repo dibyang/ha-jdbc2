@@ -12,10 +12,5 @@ public class LocalLeaderTokenStore extends LeaderTokenStore {
     super(Paths.get(System.getProperty("user.dir"),"leader.token"));
   }
 
-  public static void main(String[] args) {
-    LocalLeaderTokenStore store = new LocalLeaderTokenStore();
-    LeaderToken token = store.getToken();
 
-    System.out.println("token = " + token);
-  }
 }

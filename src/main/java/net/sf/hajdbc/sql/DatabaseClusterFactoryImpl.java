@@ -49,19 +49,15 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		DatabaseCluster<Z, D> databaseCluster = new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
 		addDatabaseClusterListeners(id, databaseCluster);
 		addSynchronizationListeners(id, databaseCluster);
-		StateManager stateManager = databaseCluster.getStateManager();
-		if(stateManager instanceof DistributedStateManager){
-			DistributedStateManager sdm = (DistributedStateManager)stateManager;
-			addLeaderListeners(id, sdm);
-		}
+		addLeaderListeners(id, databaseCluster);
 		return databaseCluster;
 	}
 
-	private void addLeaderListeners(String id, DistributedStateManager sdm) {
+	private void addLeaderListeners(String id, DatabaseCluster<Z, D> databaseCluster) {
 		Set<LeaderListener> listeners = leaderListeners.get(id);
 		if(listeners!=null){
 			for(LeaderListener listener:listeners){
-				sdm.addListener(listener);
+				databaseCluster.addLeaderListener(listener);
 			}
 		}
 	}

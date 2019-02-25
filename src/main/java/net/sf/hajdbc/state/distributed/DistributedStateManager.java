@@ -56,7 +56,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
-	private final List<LeaderListener> leaderListeners = new CopyOnWriteArrayList<LeaderListener>();
+
   private LeaderManager leaderManager;
   private volatile boolean election = false;
 
@@ -417,16 +417,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
   public boolean leader(String leader, long tver) {
 		this.getLeaderManager().leader(leader,tver);
-		Iterator<LeaderListener> iterator = leaderListeners.iterator();
-		while(iterator.hasNext()){
-			iterator.next().leader(new LeaderEvent(this.getLeaderManager().getToken()));
-		}
+		this.cluster.leader(this.getLeaderManager().getToken());
 		return true;
   }
-
-	public void addListener(LeaderListener listener) {
-		leaderListeners.add(listener);
-	}
 
 	private static class RemoteDescriptor implements Remote, Serializable
 	{

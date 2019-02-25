@@ -27,6 +27,7 @@ import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.io.InputSinkStrategy;
 import net.sf.hajdbc.lock.LockManager;
+import net.sf.hajdbc.state.LeaderToken;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
@@ -156,11 +157,18 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	void addSynchronizationListener(SynchronizationListener listener);
 	
 	void removeSynchronizationListener(SynchronizationListener listener);
-	
+
+	void addLeaderListener(LeaderListener listener);
+
+	void removeLeaderListener(LeaderListener listener);
+
+	void leader(LeaderToken token);
+
 	void addConfigurationListener(DatabaseClusterConfigurationListener<Z, D> listener);
 	
 	void removeConfigurationListener(DatabaseClusterConfigurationListener<Z, D> listener);
-	
+
+
 	Durability<Z, D> getDurability();
 	
 	ThreadFactory getThreadFactory();

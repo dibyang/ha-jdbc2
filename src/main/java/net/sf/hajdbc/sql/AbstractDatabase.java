@@ -60,7 +60,7 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	private Map<String, String> properties = new HashMap<String, String>();
 	private boolean dirty = false;
 	private volatile boolean active = false;
-	private volatile InetAddress ip=null;
+	private volatile String ip=null;
 	
 	@XmlElement(name = "property")
 	private Property[] getXmlProperties()
@@ -331,11 +331,11 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	}
 
 	@Override
-	public InetAddress getIp() {
+	public String getIp() {
 		return ip;
 	}
 
-	public void setIp(InetAddress ip) {
+	public void setIp(String ip) {
 		this.ip = ip;
 	}
 
