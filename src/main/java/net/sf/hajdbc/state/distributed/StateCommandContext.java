@@ -42,6 +42,6 @@ public interface StateCommandContext<Z, D extends Database<Z>>
 
 	LeaderManager getLeaderManager();
 
-	boolean leader(Member leader, long tver);
+	boolean leader(String leader, long tver);
 
 }

@@ -57,7 +57,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
 	private final List<LeaderListener> leaderListeners = new CopyOnWriteArrayList<LeaderListener>();
-  private final LeaderManager leaderManager;
+  private LeaderManager leaderManager;
   private volatile boolean election = false;
 
   public CommandDispatcher<StateCommandContext<Z, D>> getDispatcher() {
@@ -74,10 +74,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-    Member local = dispatcher.getLocal();
-    InetAddress address = ((IpAddress) ((AddressMember) local).getAddress()).getIpAddress();
-    NetworkInterface nic = NetworkInterface.getByInetAddress(address);
-    this.leaderManager = new LeaderManager(dispatcher.getLocal(),nic);
+		this.leaderManager = new LeaderManager();
 	}
 
 	/**
@@ -181,6 +178,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.stateManager.start();
 		this.dispatcher.start();
+
 	}
 
 	/**
@@ -196,7 +194,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 
   @Override
 	public boolean isLeader(){
-	  return !election&& leaderManager.isLeader(this.dispatcher.getLocal());
+	  return !election&& this.getLeaderManager().isLeader(getIp(this.dispatcher.getLocal()));
   }
 
 	@Override
@@ -292,12 +290,14 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
     }
 	}
 
+
+
 	private void elect(boolean recover){
     election = true;
     InquireCommand cmd = new InquireCommand();
     Member member = null;
     LeaderToken token = null;
-    LeaderToken ltoken = leaderManager.getToken();
+    LeaderToken ltoken = this.getLeaderManager().getToken();
     LeaderToken rtoken = null;
     Iterator<Member> iterator = members.iterator();
     while(iterator.hasNext()){
@@ -331,7 +331,11 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
       }
     }
 		LeaderCommand cmdLeader = new LeaderCommand(token);
-		dispatcher.executeAll(cmdLeader);
+    this.leader(token.getLeader(),token.getTver());
+		if(members.size()>1){
+			dispatcher.executeAll(cmdLeader,this.dispatcher.getLocal());
+		}
+		election = false;
   }
 
 	/**
@@ -350,7 +354,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 				this.cluster.getDurability().recover(invokers);
 			}
 
-			leaderManager.removed(member);
+			this.getLeaderManager().removed(getIp(member));
 		}
 		members.remove(member);
     if(this.isEnabled()){
@@ -392,16 +396,30 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 
   @Override
   public LeaderManager getLeaderManager() {
+		if(!leaderManager.isInited()){
+			try {
+				Member local = dispatcher.getLocal();
+				String ip = getIp(local);
+				InetAddress address = InetAddress.getByName(ip);
+				NetworkInterface nic = NetworkInterface.getByInetAddress(address);
+				leaderManager.init(ip, nic);
+			}catch (Exception ex){
+				ex.printStackTrace();
+			}
+		}
     return leaderManager;
   }
 
-  @Override
-  public boolean leader(Member leader, long tver) {
-    leaderManager.leader(leader,tver);
-    election = !leaderManager.hasLeader();
+	private String getIp(Member local) {
+		return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
+	}
+
+	@Override
+  public boolean leader(String leader, long tver) {
+		this.getLeaderManager().leader(leader,tver);
 		Iterator<LeaderListener> iterator = leaderListeners.iterator();
 		while(iterator.hasNext()){
-			iterator.next().leader(new LeaderEvent(leaderManager.getToken()));
+			iterator.next().leader(new LeaderEvent(this.getLeaderManager().getToken()));
 		}
 		return true;
   }

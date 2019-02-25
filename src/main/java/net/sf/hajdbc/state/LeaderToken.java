@@ -12,15 +12,15 @@ public class LeaderToken implements Serializable {
 
   private static final long serialVersionUID = -83397110197926495L;
 
-  private volatile Member leader = null;
+  private volatile String leader = null;
   private volatile long tver = 0;
 
 
-  public Member getLeader() {
-    return leader;
+  public String getLeader() {
+    return leader!=null?leader:"";
   }
 
-  public void setLeader(Member leader) {
+  public void setLeader(String leader) {
     this.leader = leader;
   }
 

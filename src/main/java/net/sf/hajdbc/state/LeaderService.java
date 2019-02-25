@@ -10,9 +10,9 @@ import net.sf.hajdbc.distributed.Member;
  * @author dib
  */
 public interface LeaderService {
-  boolean isLeader(Member member);
-  void removed(Member member);
-  void leader(Member leader,long tver);
+  boolean isLeader(String member);
+  void removed(String member);
+  void leader(String leader,long tver);
   LeaderToken getToken();
   boolean hasLeader();
   //long getTver();

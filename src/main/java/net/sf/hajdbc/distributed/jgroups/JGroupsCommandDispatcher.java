@@ -84,7 +84,6 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		this.context = context;
 		this.stateful = stateful;
 		this.membershipListener = membershipListener;
-		
 		this.dispatcher = new MessageDispatcher(channel, this, this, this);
 		this.timeout = timeout;
 	}
@@ -165,7 +164,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.distributed.CommandDispatcher#executeCoordinator(net.sf.hajdbc.distributed.Command)
+	 * @see net.sf.hajdbc.distributed.CommandDispatcher#execute(Command, Member)
 	 */
 	@Override
 	public <R> R execute(Command<R, C> command, Member member)

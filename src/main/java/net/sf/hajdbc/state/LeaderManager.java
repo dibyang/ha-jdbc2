@@ -11,11 +11,19 @@ import java.net.SocketException;
  */
 public class LeaderManager implements LeaderService {
 
-  private final NetworkInterface nic;
-  private final Member local;
+  private NetworkInterface nic;
+  private String local;
   private LeaderTokenStore leaderTokenStore = new LocalLeaderTokenStore();
 
-  public LeaderManager(Member local, NetworkInterface nic) {
+  public LeaderManager() {
+
+  }
+
+  public boolean isInited(){
+    return local != null;
+  }
+
+  public void init(String local, NetworkInterface nic){
     this.local = local;
     this.nic = nic;
   }
@@ -54,19 +62,19 @@ public class LeaderManager implements LeaderService {
   }
 
   @Override
-  public boolean isLeader(Member member) {
+  public boolean isLeader(String member) {
     LeaderToken token = this.getToken();
-    Member leader = token.getLeader();
+    String leader = token.getLeader();
     if(leader!=null) {
       return leader.equals(member);
     }
     return false;
   }
 
-  public void removed(Member member)
+  public void removed(String member)
   {
     LeaderToken token = leaderTokenStore.getToken();
-    Member leader = token.getLeader();
+    String leader = token.getLeader();
     if(leader!=null) {
       if(leader.equals(member)){
         token.setLeader(null);
@@ -77,7 +85,7 @@ public class LeaderManager implements LeaderService {
   }
 
   @Override
-  public void leader(Member leader, long tver) {
+  public void leader(String leader, long tver) {
     LeaderToken token = leaderTokenStore.getToken();
     if(leader!=null&&tver> token.getTver()){
       token.setLeader(leader);
