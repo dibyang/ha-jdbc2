@@ -57,8 +57,6 @@ import net.sf.hajdbc.management.MBeanRegistrar;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.LeaderEvent;
-import net.sf.hajdbc.state.LeaderToken;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.sync.SynchronizationContext;

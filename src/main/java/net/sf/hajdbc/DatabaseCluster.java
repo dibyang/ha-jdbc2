@@ -27,7 +27,6 @@ import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.io.InputSinkStrategy;
 import net.sf.hajdbc.lock.LockManager;
-import net.sf.hajdbc.state.LeaderToken;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
