@@ -40,11 +40,11 @@ public class LoadBalancerFactory implements BalancerFactory
 
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, StateManager)
+	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set)
 	 */
 	@Override
-	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases, StateManager stateManager)
+	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases)
 	{
-		return new LoadBalancer<Z, D>(databases,stateManager);
+		return new LoadBalancer<Z, D>(databases);
 	}
 }

@@ -158,12 +158,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	
 	void removeSynchronizationListener(SynchronizationListener listener);
 
-	void addLeaderListener(LeaderListener listener);
-
-	void removeLeaderListener(LeaderListener listener);
-
-	void leader(LeaderToken token);
-
 	void addConfigurationListener(DatabaseClusterConfigurationListener<Z, D> listener);
 	
 	void removeConfigurationListener(DatabaseClusterConfigurationListener<Z, D> listener);

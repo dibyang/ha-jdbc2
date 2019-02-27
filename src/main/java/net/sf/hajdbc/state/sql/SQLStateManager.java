@@ -580,16 +580,6 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 		return true;
 	}
 
-	@Override
-	public boolean isValid(Database<?> database) {
-		return this.getActiveDatabases().contains(database.getId());
-	}
-
-	@Override
-	public boolean isLeader() {
-		return false;
-	}
-
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.Lifecycle#start()

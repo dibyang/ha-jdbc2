@@ -44,9 +44,9 @@ public class RandomBalancer<P, D extends Database<P>> extends AbstractSetBalance
 	 * Constructs a new RandomBalancer
 	 * @param databases
 	 */
-	public RandomBalancer(Set<D> databases, StateManager stateManager)
+	public RandomBalancer(Set<D> databases)
 	{
-		super(databases,stateManager);
+		super(databases);
 		
 		int total = 0;
 		

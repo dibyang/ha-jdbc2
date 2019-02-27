@@ -39,8 +39,7 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	private final Lock lock = new ReentrantLock();
 	
 	private volatile SortedMap<D, AtomicInteger> databaseMap = Collections.emptySortedMap();
-	private final StateManager stateManager;
-	
+
 	private Comparator<Map.Entry<D, AtomicInteger>> comparator = new Comparator<Map.Entry<D, AtomicInteger>>()
 	{
 		@Override
@@ -72,9 +71,8 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	 * Constructs a new LoadBalancer
 	 * @param databases
 	 */
-	public LoadBalancer(Set<D> databases, StateManager stateManager)
+	public LoadBalancer(Set<D> databases)
 	{
-		this.stateManager = stateManager;
 		if (databases.isEmpty())
 		{
 			this.databaseMap = Collections.emptySortedMap();

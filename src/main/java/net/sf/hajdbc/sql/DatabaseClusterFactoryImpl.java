@@ -34,8 +34,6 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 {
 	Map<String, Set<DatabaseClusterListener>> databaseClusterListeners = new HashMap<String, Set<DatabaseClusterListener>>();
 
-	Map<String, Set<LeaderListener>> leaderListeners = new HashMap<String, Set<LeaderListener>>();
-	
 	Map<String, Set<SynchronizationListener>> synchronizationListeners = new HashMap<String, Set<SynchronizationListener>>();
 	
 	
@@ -49,17 +47,7 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		DatabaseCluster<Z, D> databaseCluster = new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
 		addDatabaseClusterListeners(id, databaseCluster);
 		addSynchronizationListeners(id, databaseCluster);
-		addLeaderListeners(id, databaseCluster);
 		return databaseCluster;
-	}
-
-	private void addLeaderListeners(String id, DatabaseCluster<Z, D> databaseCluster) {
-		Set<LeaderListener> listeners = leaderListeners.get(id);
-		if(listeners!=null){
-			for(LeaderListener listener:listeners){
-				databaseCluster.addLeaderListener(listener);
-			}
-		}
 	}
 
 	private void addDatabaseClusterListeners(String id,
@@ -136,28 +124,4 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		}		
 	}
 
-	@Override
-	public void addListener(String id, LeaderListener listener) {
-		Set<LeaderListener> listeners = leaderListeners.get(id);
-		if(listeners==null){
-			listeners = new LinkedHashSet<LeaderListener>();
-		}
-		if(listener!=null){
-			listeners.add(listener);
-			leaderListeners.put(id, listeners);
-		}
-	}
-
-	@Override
-	public void removeListener(String id, LeaderListener listener) {
-		Set<LeaderListener> listeners = leaderListeners.get(id);
-		if(listeners!=null){
-			if(listener!=null){
-				listeners.remove(listener);
-			}
-			if(listeners.isEmpty()){
-				leaderListeners.remove(id);
-			}
-		}
-	}
 }

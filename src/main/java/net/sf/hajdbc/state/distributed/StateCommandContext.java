@@ -40,8 +40,5 @@ public interface StateCommandContext<Z, D extends Database<Z>>
 	
 	Map<InvocationEvent, Map<String, InvokerEvent>> getRemoteInvokers(Remote remote);
 
-	LeaderManager getLeaderManager();
-
-	boolean leader(String leader, long tver);
 
 }

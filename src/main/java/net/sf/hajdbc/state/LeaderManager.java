@@ -14,9 +14,18 @@ public class LeaderManager implements LeaderService {
   private NetworkInterface nic;
   private String local;
   private LeaderTokenStore leaderTokenStore = new LocalLeaderTokenStore();
+  private volatile boolean election = false;
 
   public LeaderManager() {
 
+  }
+
+  public boolean isElection() {
+    return election;
+  }
+
+  public void elect() {
+    this.election = true;
   }
 
   public boolean isInited(){
@@ -57,12 +66,18 @@ public class LeaderManager implements LeaderService {
   }
 
   @Override
-  public boolean hasLeader() {
+  public synchronized boolean hasLeader() throws InterruptedException {
+    while(election){
+      wait();
+    }
     return leaderTokenStore.getToken().hasLeader();
   }
 
   @Override
-  public boolean isLeader(String member) {
+  public synchronized boolean isLeader(String member) throws InterruptedException {
+    while(election){
+      wait();
+    }
     LeaderToken token = this.getToken();
     String leader = token.getLeader();
     if(leader!=null) {
@@ -85,7 +100,8 @@ public class LeaderManager implements LeaderService {
   }
 
   @Override
-  public void leader(String leader, long tver) {
+  public synchronized void leader(String leader, long tver) {
+
     LeaderToken token = leaderTokenStore.getToken();
     if(leader!=null&&tver> token.getTver()){
       token.setLeader(leader);
@@ -95,5 +111,11 @@ public class LeaderManager implements LeaderService {
       leaderTokenStore.update(token);
       leaderTokenStore.save();
     }
+    if(!election){
+      return;
+    }
+    election = false;
+    notifyAll();
+
   }
 }

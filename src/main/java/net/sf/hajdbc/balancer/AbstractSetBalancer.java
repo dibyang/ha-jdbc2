@@ -39,11 +39,9 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	private final Lock lock = new ReentrantLock();
 
 	private volatile SortedSet<D> databaseSet;
-	private final StateManager stateManager;
 
-	protected AbstractSetBalancer(Set<D> databases, StateManager stateManager)
+	protected AbstractSetBalancer(Set<D> databases)
 	{
-		this.stateManager = stateManager;
 		if (databases.isEmpty())
 		{
 			this.databaseSet = Collections.emptySortedSet();
@@ -104,29 +102,6 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	@Override
 	protected Set<D> getDatabases()
 	{
-
-		this.lock.lock();
-		try {
-			SortedSet<D> removeSet = new TreeSet<D>();
-			SortedSet<D> newSet = new TreeSet<D>();
-			for(D d : this.databaseSet){
-				if(!stateManager.isValid(d)){
-					removeSet.add(d);
-				}else{
-					newSet.add(d);
-				}
-			}
-			databaseSet = newSet;
-			for (D database: removeSet)
-			{
-				this.removed(database);
-			}
-		}
-		finally
-		{
-			this.lock.unlock();
-		}
-
 		return this.databaseSet;
 	}
 	

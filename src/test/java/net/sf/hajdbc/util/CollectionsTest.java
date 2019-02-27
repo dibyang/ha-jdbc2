@@ -41,7 +41,7 @@ public class CollectionsTest
 		SortedSet<Integer> set = new TreeSet<Integer>();
 		set.add(1);
 		
-		verify(Collections.<Integer>singletonSortedSet(1), set, 0, 1);
+		verify(Collections.singletonSortedSet(1), set, 0, 1);
 	}
 	
 	private static <T> void verify(SortedSet<T> immutableSet, SortedSet<T> mutableSet, T value1, T value2)
@@ -79,8 +79,10 @@ public class CollectionsTest
 		Assert.assertEquals(immutableSet.contains(value2), mutableSet.contains(value2));
 		
 		Assert.assertEquals(immutableSet.containsAll(java.util.Collections.emptySet()), mutableSet.containsAll(java.util.Collections.emptySet()));
-		Assert.assertEquals(immutableSet.containsAll(java.util.Collections.singleton(0)), mutableSet.containsAll(java.util.Collections.singleton(0)));
-		Assert.assertEquals(immutableSet.containsAll(java.util.Collections.singleton(1)), mutableSet.containsAll(java.util.Collections.singleton(1)));
+		Assert.assertEquals(immutableSet.contains(0), mutableSet.contains(
+				0));
+		Assert.assertEquals(immutableSet.contains(1), mutableSet.contains(
+				1));
 		
 		Iterator<T> iterator = immutableSet.iterator();
 
@@ -181,7 +183,7 @@ public class CollectionsTest
 		SortedMap<Integer, String> map = new TreeMap<Integer, String>();
 		map.put(1, "");
 		
-		verify(Collections.<Integer, String>singletonSortedMap(1, ""), map, 0, 1, "");
+		verify(Collections.singletonSortedMap(1, ""), map, 0, 1, "");
 	}
 	
 	private static <K, V> void verify(SortedMap<K, V> immutableMap, SortedMap<K, V> mutableMap, K key1, K key2, V value)

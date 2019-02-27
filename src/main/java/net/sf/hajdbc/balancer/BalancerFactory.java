@@ -37,5 +37,5 @@ public interface BalancerFactory extends Identifiable, Serializable
 	 * @param databases set of initial databases
 	 * @return a new balancer.
 	 */
-	<Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases, StateManager stateManager);
+	<Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases);
 }

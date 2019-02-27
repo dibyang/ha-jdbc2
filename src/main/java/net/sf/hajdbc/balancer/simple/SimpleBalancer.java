@@ -48,9 +48,9 @@ public class SimpleBalancer<Z, D extends Database<Z>> extends AbstractSetBalance
 	 * Constructs a new SimpleBalancer
 	 * @param databases
 	 */
-	public SimpleBalancer(Set<D> databases, StateManager stateManager)
+	public SimpleBalancer(Set<D> databases)
 	{
-		super(databases,stateManager);
+		super(databases);
 		
 		this.reset();
 	}

@@ -21,16 +21,12 @@ import java.io.IOException;
 import java.io.ObjectInput;
 import java.io.ObjectOutput;
 import java.io.Serializable;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
-import net.sf.hajdbc.LeaderListener;
 import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
@@ -45,8 +41,6 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.*;
-import org.jgroups.Address;
-import org.jgroups.stack.IpAddress;
 
 /**
  * @author Paul Ferraro
@@ -57,16 +51,12 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
 
-  private LeaderManager leaderManager;
-  private volatile boolean election = false;
-
   public CommandDispatcher<StateCommandContext<Z, D>> getDispatcher() {
     return dispatcher;
   }
 
   private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
-	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
@@ -74,7 +64,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-		this.leaderManager = new LeaderManager();
+
 	}
 
 	/**
@@ -192,10 +182,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager.stop();
 	}
 
-  @Override
-	public boolean isLeader(){
-	  return !election&& this.getLeaderManager().isLeader(getIp(this.dispatcher.getLocal()));
-  }
+
 
 	@Override
 	public boolean isEnabled()
@@ -283,60 +270,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void added(Member member)
 	{
-		members.add(member);
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
-		if(this.isEnabled()){
-		  this.elect(false);
-    }
 	}
 
 
-
-	private void elect(boolean recover){
-    election = true;
-    InquireCommand cmd = new InquireCommand();
-    Member member = null;
-    LeaderToken token = null;
-    LeaderToken ltoken = this.getLeaderManager().getToken();
-    LeaderToken rtoken = null;
-    Iterator<Member> iterator = members.iterator();
-    while(iterator.hasNext()){
-      member = iterator.next();
-      if(!dispatcher.getLocal().equals(member)){
-        rtoken = (LeaderToken)dispatcher.execute(cmd, member);
-        break;
-      }
-    }
-    if(rtoken!=null){
-      if(ltoken.hasLeader()){
-        if(rtoken.hasLeader()&&rtoken.getTver()>ltoken.getTver()){
-          token = rtoken;
-        }else{
-          token = ltoken;
-        }
-      }else{
-        token = rtoken;
-      }
-    }else{
-      if(ltoken.hasLeader()){
-        token = ltoken;
-      }
-    }
-    if(token!=null){
-      //
-      if(recover){
-        token.setTver(token.getTver()+1000);
-      }else{
-        token.setTver(token.getTver()+1);
-      }
-    }
-		LeaderCommand cmdLeader = new LeaderCommand(token);
-    this.leader(token.getLeader(),token.getTver());
-		if(members.size()>1){
-			dispatcher.executeAll(cmdLeader,this.dispatcher.getLocal());
-		}
-		election = false;
-  }
 
 	/**
 	 * {@inheritDoc}
@@ -354,12 +291,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 				this.cluster.getDurability().recover(invokers);
 			}
 
-			this.getLeaderManager().removed(getIp(member));
 		}
-		members.remove(member);
-    if(this.isEnabled()){
-      this.elect(true);
-    }
 	}
 	
 	/**
@@ -372,54 +304,12 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		return this.stateManager.recover();
 	}
 
-	@Override
-	public boolean isValid(Database<?> database) {
-		Set<InetAddress> ips = getIps();
-		if(ips.contains(database.getIp())){
-			return true;
-		}
-		return false;
-	}
 
-	private Set<InetAddress> getIps() {
-		Set<InetAddress> ips = new HashSet<>();
-		for(Member m:this.members){
-			if(m instanceof AddressMember){
-				Address address = ((AddressMember) m).getAddress();
-				if(address instanceof IpAddress){
-					ips.add(((IpAddress)address).getIpAddress());
-				}
-			}
-		}
-		return ips;
-	}
-
-  @Override
-  public LeaderManager getLeaderManager() {
-		if(!leaderManager.isInited()){
-			try {
-				Member local = dispatcher.getLocal();
-				String ip = getIp(local);
-				InetAddress address = InetAddress.getByName(ip);
-				NetworkInterface nic = NetworkInterface.getByInetAddress(address);
-				leaderManager.init(ip, nic);
-			}catch (Exception ex){
-				ex.printStackTrace();
-			}
-		}
-    return leaderManager;
-  }
 
 	private String getIp(Member local) {
 		return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
 	}
 
-	@Override
-  public boolean leader(String leader, long tver) {
-		this.getLeaderManager().leader(leader,tver);
-		this.cluster.leader(this.getLeaderManager().getToken());
-		return true;
-  }
 
 	private static class RemoteDescriptor implements Remote, Serializable
 	{

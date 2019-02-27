@@ -32,7 +32,6 @@ import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterConfiguration;
 import net.sf.hajdbc.DatabaseClusterConfigurationListener;
 import net.sf.hajdbc.DatabaseClusterListener;
-import net.sf.hajdbc.LeaderListener;
 import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.SynchronizationListener;
 import net.sf.hajdbc.SynchronizationStrategy;
@@ -98,7 +97,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private final List<DatabaseClusterConfigurationListener<Z, D>> configurationListeners = new CopyOnWriteArrayList<DatabaseClusterConfigurationListener<Z, D>>();	
 	private final List<DatabaseClusterListener> clusterListeners = new CopyOnWriteArrayList<DatabaseClusterListener>();
 	private final List<SynchronizationListener> synchronizationListeners = new CopyOnWriteArrayList<SynchronizationListener>();
-	private final List<LeaderListener> leaderListeners = new CopyOnWriteArrayList<>();
 
 	public DatabaseClusterImpl(String id, DatabaseClusterConfiguration<Z, D> configuration, DatabaseClusterConfigurationListener<Z, D> listener)
 	{
@@ -417,27 +415,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		this.synchronizationListeners.remove(listener);
 	}
 
-	@Override
-	public void addLeaderListener(LeaderListener listener) {
-		leaderListeners.add(listener);
-	}
-
-	@Override
-	public void removeLeaderListener(LeaderListener listener) {
-		leaderListeners.remove(listener);
-	}
-
-	final LeaderToken token = new LeaderToken();
-
-	@Override
-	public void leader(LeaderToken token) {
-		this.token.update(token);
-		Iterator<LeaderListener> iterator = leaderListeners.iterator();
-		while(iterator.hasNext()){
-			iterator.next().leader(new LeaderEvent(this.token.copy()));
-		}
-	}
-
 
 	/**
 	 * {@inheritDoc}
@@ -722,7 +699,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			this.stateManager = new DistributedStateManager<Z, D>(this, dispatcherFactory);
 		}
 		
-		this.balancer = this.configuration.getBalancerFactory().createBalancer(new TreeSet<D>(),this.stateManager);
+		this.balancer = this.configuration.getBalancerFactory().createBalancer(new TreeSet<D>());
 		this.dialect = this.configuration.getDialectFactory().createDialect();
 		this.durability = this.configuration.getDurabilityFactory().createDurability(this);
 		this.executor = this.configuration.getExecutorProvider().getExecutor(this.configuration.getThreadFactory());
@@ -744,40 +721,49 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	 * Recover all active databases.
 	 */
 	private void recoverDatabase() {
-		if(token.hasLeader()){
-			Set<String> databases = this.stateManager.getActiveDatabases();
+		Set<String> databases = this.stateManager.getActiveDatabases();
 
-			for (D database: this.configuration.getDatabaseMap().values())
+		if (!databases.isEmpty())
+		{
+			for (String databaseId: databases)
 			{
-				if(token.getLeader().equals(database.getIp())) {
-					if(databases.contains(database.getId())){
-						this.balancer.add(database);
-						database.setActive(true);
-					}else {
-						if (this.isAlive(database, Level.WARN)) {
-							this.activate(database, this.stateManager);
-						}
-					}
+				D database = this.getDatabase(databaseId);
+				if (database != null)
+				{
+					this.balancer.add(database);
+					database.setActive(true);
+				}
+				else
+				{
+					logger.log(Level.WARN, Messages.DATABASE_IGNORED.getMessage(), this, databaseId);
 				}
 			}
-			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.stateManager.recover();
-			if (!invokers.isEmpty())
+		}
+		else
+		{
+			for (D database: this.configuration.getDatabaseMap().values())
 			{
-				this.durability.recover(invokers);
-			}
-			this.databaseMetaDataCache = this.configuration.getDatabaseMetaDataCacheFactory().createCache(this);
-			try
-			{
-				this.flushMetaDataCache();
-			}
-			catch (IllegalStateException e)
-			{
-				// Ignore - cache will initialize lazily.
+				if (this.isAlive(database, Level.WARN))
+				{
+					this.activate(database, this.stateManager);
+				}
 			}
 		}
 
-
-
+		Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.stateManager.recover();
+		if (!invokers.isEmpty())
+		{
+			this.durability.recover(invokers);
+		}
+		this.databaseMetaDataCache = this.configuration.getDatabaseMetaDataCacheFactory().createCache(this);
+		try
+		{
+			this.flushMetaDataCache();
+		}
+		catch (IllegalStateException e)
+		{
+			// Ignore - cache will initialize lazily.
+		}
 	}
 
 	/**

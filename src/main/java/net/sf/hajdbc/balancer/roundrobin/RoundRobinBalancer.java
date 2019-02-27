@@ -39,9 +39,9 @@ public class RoundRobinBalancer<P, D extends Database<P>> extends AbstractSetBal
 	 * Constructs a new RoundRobinBalancer
 	 * @param databases
 	 */
-	public RoundRobinBalancer(Set<D> databases, StateManager stateManager)
+	public RoundRobinBalancer(Set<D> databases)
 	{
-		super(databases,stateManager);
+		super(databases);
 		
 		for (D database: databases)
 		{

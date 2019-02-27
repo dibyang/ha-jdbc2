@@ -10,11 +10,11 @@ import net.sf.hajdbc.distributed.Member;
  * @author dib
  */
 public interface LeaderService {
-  boolean isLeader(String member);
+  boolean isLeader(String member) throws InterruptedException;
   void removed(String member);
   void leader(String leader,long tver);
-  LeaderToken getToken();
-  boolean hasLeader();
+  LeaderToken getToken() throws InterruptedException;
+  boolean hasLeader() throws InterruptedException;
   //long getTver();
   //Member getLeader();
   //void leaderElection();
