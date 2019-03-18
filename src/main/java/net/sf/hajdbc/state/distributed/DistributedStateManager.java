@@ -51,12 +51,14 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
 
+
   public CommandDispatcher<StateCommandContext<Z, D>> getDispatcher() {
     return dispatcher;
   }
 
   private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
+	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
@@ -183,7 +185,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	}
 
 
-
 	@Override
 	public boolean isEnabled()
 	{
@@ -271,7 +272,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void added(Member member)
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
+
 	}
+
+
 
 
 
@@ -292,9 +296,16 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			}
 
 		}
+
 	}
-	
-	/**
+
+  @Override
+  public void changed(Set<Member> newMembers, Set<Member> oldMembers) {
+    members.retainAll(newMembers);
+    members.addAll(newMembers);
+  }
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#recover()
 	 */
@@ -302,6 +313,24 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public Map<InvocationEvent, Map<String, InvokerEvent>> recover()
 	{
 		return this.stateManager.recover();
+	}
+
+	@Override
+	public boolean isValid(Database<?> database) {
+		Set<String> ips = getIps();
+		if(ips.contains(database.getIp())){
+			return true;
+		}
+		return false;
+	}
+
+	private Set<String> getIps() {
+		Set<String> ips = new HashSet<>();
+		for(Member m:this.members){
+      ips.add(getIp(m));
+
+		}
+		return ips;
 	}
 
 

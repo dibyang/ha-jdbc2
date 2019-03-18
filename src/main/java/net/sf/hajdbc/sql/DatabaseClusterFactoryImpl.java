@@ -24,8 +24,6 @@ import java.util.Map;
 import java.util.Set;
 
 import net.sf.hajdbc.*;
-import net.sf.hajdbc.state.StateManager;
-import net.sf.hajdbc.state.distributed.DistributedStateManager;
 
 /**
  * @author Paul Ferraro

@@ -23,7 +23,9 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -236,6 +238,20 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		if (this.membershipListener != null)
 		{
 			View oldView = this.viewReference.getAndSet(view);
+			Set<Member> newMembers = new LinkedHashSet<>();
+			Set<Member> oldMembers = new LinkedHashSet<>();
+			if (oldView != null)
+			{
+				for (Address address: oldView.getMembers())
+				{
+					oldMembers.add(new AddressMember(address));
+				}
+			}
+			for (Address address: view.getMembers())
+			{
+				newMembers.add(new AddressMember(address));
+			}
+			membershipListener.changed(newMembers,oldMembers);
 			
 			for (Address address: view.getMembers())
 			{

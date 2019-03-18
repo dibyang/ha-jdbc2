@@ -372,6 +372,10 @@ public class BerkeleyDBStateManager extends CloseablePoolProvider<Environment, D
 		return true;
 	}
 
+	@Override
+	public boolean isValid(net.sf.hajdbc.Database<?> database) {
+		return this.getActiveDatabases().contains(database.getId());
+	}
 
 
 	/**

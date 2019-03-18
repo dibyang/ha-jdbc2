@@ -239,7 +239,12 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			}
 		}
 	}
-	
+
+	@Override
+	public void changed(Set<Member> newMembers, Set<Member> oldMembers) {
+
+	}
+
 	private static class DistributedLock implements Lock
 	{
 		private final RemoteLockDescriptor descriptor;

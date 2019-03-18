@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.distributed;
 
+import java.util.Set;
+
 /**
  * Used to notify the implementor of changes to group membership.
  * 
@@ -35,4 +37,13 @@ public interface MembershipListener
 	 * @param member the removed member
 	 */
 	void removed(Member member);
+
+	/**
+	 * Indicates that member list have changed.
+	 *
+	 * @param newMembers the new members
+	 * @param oldMembers the old members
+	 */
+	void changed(Set<Member> newMembers,Set<Member> oldMembers);
+
 }

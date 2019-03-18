@@ -96,6 +96,11 @@ public class SimpleStateManager implements StateManager
 		return true;
 	}
 
+	@Override
+	public boolean isValid(Database<?> database) {
+		return activeDatabases.contains(database.getId());
+	}
+
 
 
 	@Override
