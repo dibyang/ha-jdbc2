@@ -7,7 +7,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 public class TokenStore {
-  public static final String TOKEN_DAT = "token.dat";
+  public static final String TOKEN_DAT = "token.conf";
 
   protected final Path path ;
   private volatile long lastModified = 0;

@@ -4,6 +4,7 @@ package net.sf.hajdbc.state.distributed;
 public enum NodeState {
   offline,
   host,
+  ready,
   backup;
   public static NodeState of(String name){
     NodeState state = NodeState.offline;

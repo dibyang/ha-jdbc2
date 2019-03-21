@@ -1,8 +1,11 @@
 package net.sf.hajdbc.state.health;
 
+import java.io.Serializable;
 import net.sf.hajdbc.state.distributed.NodeState;
 
-public class NodeHealth {
+public class NodeHealth implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   private NodeState state = NodeState.offline;
   private volatile long local;
   private volatile long arbiter;
@@ -21,6 +24,10 @@ public class NodeHealth {
 
   public boolean isValidLocal() {
     return isValidArbiter()&&(local>arbiter);
+  }
+
+  public boolean isEmpty() {
+    return local==0&&arbiter==0;
   }
 
   public long getLocal() {

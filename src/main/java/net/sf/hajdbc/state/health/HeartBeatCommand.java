@@ -29,12 +29,21 @@ public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void,
 {
 	private static final long serialVersionUID = 1L;
 
+	private volatile long token;
+
+	public long getToken() {
+		return token;
+	}
+
+	public void setToken(long token) {
+		this.token = token;
+	}
 
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
 		ClusterHealth health = context.getExtContext(ClusterHealth.class);
 		if(health!=null){
-			health.receiveHeartbeat();
+			health.receiveHeartbeat(token);
 		}
 		return null;
 	}

@@ -1,1 +1,1 @@
-net.sf.hajdbc.state.health.arbiter.PingObserveAdapter
+net.sf.hajdbc.state.health.observer.PingObserveAdapter

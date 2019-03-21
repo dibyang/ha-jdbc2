@@ -49,6 +49,10 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   }
 
   public void start(){
+    elect();
+    if(state.equals(NodeState.offline)){
+      throw new RuntimeException("not find host node.");
+    }
     scheduledService.scheduleWithFixedDelay(this,0,2000, TimeUnit.MILLISECONDS);
   }
   public void stop(){
@@ -66,9 +70,12 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   /**
    * Receive host node heart beat.
    */
-  public void receiveHeartbeat(){
+  public void receiveHeartbeat(long token){
     counter.set(0);
     lastHeartbeat = System.currentTimeMillis();
+    if(state.equals(NodeState.host)||state.equals(NodeState.backup)){
+      arbiter.update(token);
+    }
   }
 
   public NodeState getState() {
@@ -83,7 +90,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     if(state==null){
       state = NodeState.offline;
     }
-    if(state.equals(this.state)){
+    if(!state.equals(this.state)){
       NodeState old  = this.state;
       this.state = state;
       changeState(old,this.state);
@@ -99,7 +106,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
    * Send heartbeat.
    */
   private void sendHeartbeat(){
-
+    beatCommand.setToken(arbiter.getLocal().getToken()+1);
     stateManager.executeAll(beatCommand);
   }
 
@@ -159,6 +166,11 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
       host = findNodeByValidLocal(all);
     }
 
+    //not find valid local. find empty node
+    if(host==null){
+      host = findNodeByEmpty(all);
+    }
+
     if(host==null){
       if(unattended){
 
@@ -179,12 +191,28 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
         setState(NodeState.host);
         stateManager.activated(new DatabaseEvent(stateManager.getDatabaseCluster().getLocalDatabase()));
       }else{
-        setState(NodeState.offline);
+        setState(NodeState.ready);
       }
     }else{
       setState(NodeState.offline);
     }
 
+  }
+
+  private Member findNodeByEmpty(Map<Member, NodeHealth> all) {
+    Member find = null;
+    Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+    while(iterator.hasNext()) {
+      Entry<Member, NodeHealth> next = iterator.next();
+      NodeHealth health = next.getValue();
+      if (next.getValue() != null) {
+        if (health != null && health.isEmpty()) {
+          find = next.getKey();
+          break;
+        }
+      }
+    }
+    return find;
   }
 
   private Member findNodeByValidLocal(Map<Member, NodeHealth> all) {
@@ -193,7 +221,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     while(iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (next.getValue() == null) {
+      if (next.getValue() != null) {
         if (health != null && health.isValidLocal()) {
           find = next.getKey();
           break;
@@ -209,7 +237,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     while(iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (next.getValue() == null) {
+      if (next.getValue() != null) {
         if (health != null && health.getState().equals(find)) {
           find = next.getKey();
           break;
@@ -245,7 +273,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
         {
           sendHeartbeat();
         }
-      }else if(NodeState.backup.equals(state)){
+      }else if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
         if(isLostHeartBeat()&&canElect()){
           elect();
         }
