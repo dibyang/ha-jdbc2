@@ -238,20 +238,6 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		if (this.membershipListener != null)
 		{
 			View oldView = this.viewReference.getAndSet(view);
-			Set<Member> newMembers = new LinkedHashSet<>();
-			Set<Member> oldMembers = new LinkedHashSet<>();
-			if (oldView != null)
-			{
-				for (Address address: oldView.getMembers())
-				{
-					oldMembers.add(new AddressMember(address));
-				}
-			}
-			for (Address address: view.getMembers())
-			{
-				newMembers.add(new AddressMember(address));
-			}
-			membershipListener.changed(newMembers,oldMembers);
 			
 			for (Address address: view.getMembers())
 			{

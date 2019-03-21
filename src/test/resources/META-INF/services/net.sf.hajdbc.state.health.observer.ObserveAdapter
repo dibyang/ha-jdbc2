@@ -1,0 +1,3 @@
+net.sf.hajdbc.state.health.arbiter.PingObserveAdapter
+net.sf.hajdbc.state.health.arbiter.Test1ObserveAdapter
+net.sf.hajdbc.state.health.arbiter.Test2ObserveAdapter

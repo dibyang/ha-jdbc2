@@ -28,6 +28,7 @@ import java.util.concurrent.ConcurrentMap;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
+import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
@@ -41,6 +42,7 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.*;
+import net.sf.hajdbc.state.health.ClusterHealth;
 
 /**
  * @author Paul Ferraro
@@ -60,13 +62,17 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
 
+  private final Map<Class,Object> extContexts = new HashMap<>();
+	private final ClusterHealth<Z,D> health;
+
+
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
 		this.cluster = cluster;
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-
+    this.health = new ClusterHealth(this);
 	}
 
 	/**
@@ -97,6 +103,12 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void activated(DatabaseEvent event)
 	{
 		this.stateManager.activated(event);
+		if(cluster.getBalancer().size()>1){
+			D database = cluster.getDatabase(event.toString());
+			if(database.isLocal()){
+				health.setState(NodeState.backup);
+			}
+		}
 		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
 
@@ -109,6 +121,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.stateManager.deactivated(event);
 		this.dispatcher.executeAll(new DeactivationCommand<Z, D>(event), this.dispatcher.getLocal());
+
 	}
 
 	/**
@@ -170,6 +183,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.stateManager.start();
 		this.dispatcher.start();
+		this.health.start();
 
 	}
 
@@ -180,6 +194,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void stop()
 	{
+    this.health.stop();
 		this.dispatcher.stop();
 		this.stateManager.stop();
 	}
@@ -188,7 +203,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public boolean isEnabled()
 	{
-		return this.stateManager.isEnabled() && this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator());
+		return this.stateManager.isEnabled() && this.health.isHost();
 	}
 
 
@@ -220,6 +235,35 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public Map<InvocationEvent, Map<String, InvokerEvent>> getRemoteInvokers(Remote remote)
 	{
 		return this.remoteInvokerMap.get(remote.getMember());
+	}
+
+	@Override
+	public <R> Map<Member, R> executeAll(Command<R, StateCommandContext<Z, D>> command,
+			Member... excludedMembers) {
+		return dispatcher.executeAll(command, excludedMembers);
+	}
+
+
+	@Override
+	public <R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member) {
+		return dispatcher.execute(command, member);
+	}
+
+	@Override
+	public <C> C getExtContext(Class<C> clazz) {
+		return (C)extContexts.get(clazz);
+	}
+
+	@Override
+	public <C> C removeExtContext(Class<C> clazz) {
+		return (C)extContexts.remove(clazz);
+	}
+
+	@Override
+	public <C> void setExtContext(C context) {
+		if(context!=null){
+			extContexts.put(context.getClass(),context);
+		}
 	}
 
 	/**
@@ -272,7 +316,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void added(Member member)
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
-
+		members.add(member);
 	}
 
 
@@ -296,14 +340,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			}
 
 		}
+		members.remove(member);
 
 	}
 
-  @Override
-  public void changed(Set<Member> newMembers, Set<Member> oldMembers) {
-    members.retainAll(newMembers);
-    members.addAll(newMembers);
-  }
 
   /**
 	 * {@inheritDoc}
@@ -334,10 +374,17 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	}
 
 
-
 	private String getIp(Member local) {
 		return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
 	}
+
+  public Member getLocal() {
+    return this.dispatcher.getLocal();
+  }
+
+  public String getLocalIp() {
+    return getIp(getLocal());
+  }
 
 
 	private static class RemoteDescriptor implements Remote, Serializable

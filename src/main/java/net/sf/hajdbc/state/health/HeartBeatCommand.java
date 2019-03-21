@@ -15,28 +15,27 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package net.sf.hajdbc.distributed;
+package net.sf.hajdbc.state.health;
 
-import java.util.Set;
+import net.sf.hajdbc.Database;
+import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.distributed.Command;
+import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.distributed.StateCommand;
+import net.sf.hajdbc.state.distributed.StateCommandContext;
 
-/**
- * Used to notify the implementor of changes to group membership.
- * 
- * @author Paul Ferraro
- */
-public interface MembershipListener
+public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
 {
-	/**
-	 * Indicates that the specified member was added to the group.
-	 * @param member the added member
-	 */
-	void added(Member member);
-	
-	/**
-	 * Indicates the the specified member was removed from the group.
-	 * @param member the removed member
-	 */
-	void removed(Member member);
+	private static final long serialVersionUID = 1L;
 
 
+	@Override
+	public Void execute(StateCommandContext<Z, D> context) {
+		ClusterHealth health = context.getExtContext(ClusterHealth.class);
+		if(health!=null){
+			health.receiveHeartbeat();
+		}
+		return null;
+	}
 }

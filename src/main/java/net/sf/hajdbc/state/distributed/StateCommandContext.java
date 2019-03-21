@@ -21,6 +21,8 @@ import java.util.Map;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.distributed.Command;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.Remote;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
@@ -38,6 +40,12 @@ public interface StateCommandContext<Z, D extends Database<Z>>
 	
 	Map<InvocationEvent, Map<String, InvokerEvent>> getRemoteInvokers(Remote remote);
 
+	<R> Map<Member, R> executeAll(Command<R, StateCommandContext<Z, D>> command,
+			Member... excludedMembers);
 
+	<R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member);
 
+	<C> C getExtContext(Class<C> clazz);
+	<C> C removeExtContext(Class<C> clazz);
+	<C> void setExtContext(C context);
 }
