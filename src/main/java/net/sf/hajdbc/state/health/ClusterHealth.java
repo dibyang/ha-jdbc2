@@ -3,7 +3,9 @@ package net.sf.hajdbc.state.health;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.Executors;
@@ -23,9 +25,11 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealth.class);
 
   public static final int HEARTBEAT_LOST_MAX = 3;
+  private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager<Z, D> stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = false;
+
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
   private volatile long lastHeartbeat = 0;
@@ -41,6 +45,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
       return t;
     }
   });
+
 
   public ClusterHealth(DistributedStateManager<Z, D> stateManager) {
     this.stateManager = stateManager;
@@ -67,15 +72,13 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     return health;
   }
 
+
   /**
    * Receive host node heart beat.
    */
-  public void receiveHeartbeat(long token){
+  public void receiveHeartbeat(){
     counter.set(0);
     lastHeartbeat = System.currentTimeMillis();
-    if(state.equals(NodeState.host)||state.equals(NodeState.backup)){
-      arbiter.update(token);
-    }
   }
 
   public NodeState getState() {
@@ -99,14 +102,27 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
 
   void changeState(NodeState oldState,NodeState newState){
     logger.info("node state from "+oldState+" to "+newState);
+    stateManager.getDatabaseCluster().changeState(oldState,newState);
+  }
 
+  UpdateTokenCommand updateTokenCommand = new UpdateTokenCommand();
+
+  public void incrementToken(){
+    long token = arbiter.getLocal().getToken() + 1;
+    updateTokenCommand.setToken(token);
+    stateManager.executeAll(updateTokenCommand);
+  }
+
+  public void updateToken(long token){
+    if(state.isCanUpdate()){
+      arbiter.update(token);
+    }
   }
 
   /**
    * Send heartbeat.
    */
   private void sendHeartbeat(){
-    beatCommand.setToken(arbiter.getLocal().getToken()+1);
     stateManager.executeAll(beatCommand);
   }
 
@@ -143,7 +159,22 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
    */
   private synchronized void elect(){
     logger.info("host elect begin.");
-    Map<Member,NodeHealth> all = stateManager.executeAll(healthCommand);
+    long beginElectTime = System.currentTimeMillis();
+    Entry<Member, NodeHealth> host = doElect(beginElectTime);
+    while(unattended&&host==null){
+      host = doElect(beginElectTime);
+    }
+    if(host!=null){
+      HostCommand hostCommand = new HostCommand();
+      hostCommand.setHost(host.getKey());
+      hostCommand.setToken(host.getValue().getLocal());
+      stateManager.executeAll(hostCommand);
+    }
+    logger.info("host elect end.");
+  }
+
+  private Entry<Member, NodeHealth> doElect(long beginElectTime) {
+    Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
 
     //delete invalid data.
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
@@ -153,7 +184,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
         iterator.remove();
       }
     }
-    Member host = null;
+    Entry<Member, NodeHealth> host = null;
     //find host
     host = findNodeByState(all, NodeState.host);
     //not find host. find backup
@@ -170,28 +201,26 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     if(host==null){
       host = findNodeByEmpty(all);
     }
-
     if(host==null){
-      if(unattended){
-
+      long time = System.currentTimeMillis() - beginElectTime;
+      if(time > maxElectTime){
+        host = findNodeByToken(all);
       }
     }
-    if(host!=null){
-      HostCommand hostCommand = new HostCommand();
-      hostCommand.setHost(host);
-      stateManager.executeAll(hostCommand);
-    }
 
-    logger.info("host elect end.");
+    return host;
+
   }
 
-  public void host(Member host){
+  public void host(Member host,long token){
     if(host!=null){
       if(stateManager.getLocal().equals(host)){
         setState(NodeState.host);
         stateManager.activated(new DatabaseEvent(stateManager.getDatabaseCluster().getLocalDatabase()));
       }else{
-        setState(NodeState.ready);
+        if(token>=arbiter.getLocal().getToken()) {
+          setState(NodeState.ready);
+        }
       }
     }else{
       setState(NodeState.offline);
@@ -199,49 +228,58 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
 
   }
 
-  private Member findNodeByEmpty(Map<Member, NodeHealth> all) {
-    Member find = null;
+  private Entry<Member, NodeHealth> findNodeByToken(Map<Member, NodeHealth> all) {
+    Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
     while(iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (next.getValue() != null) {
-        if (health != null && health.isEmpty()) {
-          find = next.getKey();
-          break;
+      if (health != null) {
+        if(find==null||health.getLocal()>find.getValue().getLocal()){
+          find = next;
         }
       }
     }
     return find;
   }
 
-  private Member findNodeByValidLocal(Map<Member, NodeHealth> all) {
-    Member find = null;
+  private Entry<Member, NodeHealth> findNodeByEmpty(Map<Member, NodeHealth> all) {
+    Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
     while(iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (next.getValue() != null) {
-        if (health != null && health.isValidLocal()) {
-          find = next.getKey();
-          break;
-        }
+      if (health != null && health.isEmpty()) {
+        find = next;
+        break;
       }
     }
     return find;
   }
 
-  private Member findNodeByState(Map<Member, NodeHealth> all,NodeState state) {
-    Member find = null;
+  private Entry<Member, NodeHealth> findNodeByValidLocal(Map<Member, NodeHealth> all) {
+    Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
     while(iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (next.getValue() != null) {
-        if (health != null && health.getState().equals(find)) {
-          find = next.getKey();
-          break;
-        }
+      if (health != null && health.isValidLocal()) {
+        find = next;
+        break;
+      }
+    }
+    return find;
+  }
+
+  private Entry<Member, NodeHealth> findNodeByState(Map<Member, NodeHealth> all,NodeState state) {
+    Entry<Member, NodeHealth> find = null;
+    Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+    while(iterator.hasNext()) {
+      Entry<Member, NodeHealth> next = iterator.next();
+      NodeHealth health = next.getValue();
+      if (health != null && health.getState().equals(find)) {
+        find = next;
+        break;
       }
     }
     return find;

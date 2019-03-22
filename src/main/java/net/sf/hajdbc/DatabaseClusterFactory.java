@@ -18,6 +18,7 @@
 package net.sf.hajdbc;
 
 import java.sql.SQLException;
+import net.sf.hajdbc.state.health.NodeStateListener;
 
 
 /**
@@ -34,5 +35,9 @@ public interface DatabaseClusterFactory<Z, D extends Database<Z>>
 	void addSynchronizationListener(String id, SynchronizationListener listener);
 	
 	void removeSynchronizationListener(String id, SynchronizationListener listener);
+
+	void addListener(String id, NodeStateListener listener);
+
+	void removeListener(String id, NodeStateListener listener);
 
 }

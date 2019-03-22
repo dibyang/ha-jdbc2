@@ -3,9 +3,22 @@ package net.sf.hajdbc.state.distributed;
 
 public enum NodeState {
   offline,
-  host,
+  host(true),
   ready,
-  backup;
+  backup(true);
+  private boolean canUpdate = false;
+
+  public boolean isCanUpdate() {
+    return canUpdate;
+  }
+
+  NodeState() {
+    this(false);
+  }
+  NodeState(boolean canUpdate) {
+    this.canUpdate = canUpdate;
+  }
+
   public static NodeState of(String name){
     NodeState state = NodeState.offline;
     NodeState[] values = NodeState.values();

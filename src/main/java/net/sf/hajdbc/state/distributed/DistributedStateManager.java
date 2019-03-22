@@ -47,7 +47,7 @@ import net.sf.hajdbc.state.health.ClusterHealth;
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
+public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, DistributedManager<Z,D>, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
@@ -75,7 +75,11 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
     this.health = new ClusterHealth(this);
 	}
 
-	/**
+  public ClusterHealth<Z, D> getHealth() {
+    return health;
+  }
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#getActiveDatabases()
 	 */
@@ -378,7 +382,16 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
 	}
 
-  public Member getLocal() {
+  public Member getCoordinator() {
+    return this.dispatcher.getCoordinator();
+  }
+
+	@Override
+	public List<Member> getMembers() {
+		return new ArrayList<>(members);
+	}
+
+	public Member getLocal() {
     return this.dispatcher.getLocal();
   }
 

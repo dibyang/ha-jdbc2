@@ -18,23 +18,27 @@
 package net.sf.hajdbc.state.health;
 
 import net.sf.hajdbc.Database;
-import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.StateManager;
-import net.sf.hajdbc.state.distributed.StateCommand;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 
-public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
+public class UpdateTokenCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
 {
 	private static final long serialVersionUID = 1L;
+	private volatile long token;
 
+	public long getToken() {
+		return token;
+	}
+
+	public void setToken(long token) {
+		this.token = token;
+	}
 
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
 		ClusterHealth health = context.getExtContext(ClusterHealth.class);
 		if(health!=null){
-			health.receiveHeartbeat();
+			health.updateToken(token);
 		}
 		return null;
 	}

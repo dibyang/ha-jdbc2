@@ -36,6 +36,7 @@ import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.invocation.AllResultsCollector;
 import net.sf.hajdbc.invocation.InvocationStrategies;
 import net.sf.hajdbc.invocation.InvocationStrategy;
+import net.sf.hajdbc.invocation.InvokeOnManyInvocationStrategy;
 import net.sf.hajdbc.invocation.Invoker;
 import net.sf.hajdbc.invocation.SimpleInvoker;
 import net.sf.hajdbc.logging.Level;
@@ -43,6 +44,7 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.serial.SerialLocatorFactories;
 import net.sf.hajdbc.sql.serial.SerialLocatorFactory;
+import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.util.reflect.Methods;
 
 /**
@@ -76,7 +78,7 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 	public Object invoke(Object proxy, Method method, Object[] args) throws Throwable
 	{
 		DatabaseCluster<Z, D> cluster = this.proxyFactory.getDatabaseCluster();
-		
+
 		if (!cluster.isActive())
 		{
 			throw new SQLException(Messages.CLUSTER_NOT_ACTIVE.getMessage(cluster));
@@ -99,7 +101,14 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		@SuppressWarnings("unchecked")
 		ProxyFactoryFactory<Z, D, T, E, R, ? extends Exception> factory = (ProxyFactoryFactory<Z, D, T, E, R, ? extends Exception>) this.getProxyFactoryFactory(proxy, method, parameters);
 		InvocationResultFactory<Z, D, R> resultFactory = (factory != null) ? new ProxyInvocationResultFactory<Z, D, T, R, E>(factory, proxy, this.getProxyFactory(), invoker) : new SimpleInvocationResultFactory<Z, D, R>();
-		
+		if(strategy instanceof InvokeOnManyInvocationStrategy){
+			DatabaseCluster<Z, D> cluster = this.proxyFactory.getDatabaseCluster();
+			ClusterHealth<Z, D> clusterHealth = cluster.getClusterHealth();
+			if(clusterHealth.isHost()){
+				clusterHealth.incrementToken();
+			}
+		}
+
 		return this.createResult(resultFactory, results);
 	}
 	

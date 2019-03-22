@@ -36,12 +36,22 @@ public class HostCommand<Z, D extends Database<Z>> implements Command<Void, Stat
 		this.host = host;
 	}
 
+  private volatile long token;
+
+  public long getToken() {
+    return token;
+  }
+
+  public void setToken(long token) {
+    this.token = token;
+  }
+
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
 
 		ClusterHealth health = context.getExtContext(ClusterHealth.class);
 		if(health!=null){
-			health.host(host);
+			health.host(host,token);
 		}
 		return null;
 	}

@@ -58,7 +58,11 @@ import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
+import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.sync.SynchronizationContextImpl;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
@@ -95,6 +99,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private final List<DatabaseClusterConfigurationListener<Z, D>> configurationListeners = new CopyOnWriteArrayList<DatabaseClusterConfigurationListener<Z, D>>();	
 	private final List<DatabaseClusterListener> clusterListeners = new CopyOnWriteArrayList<DatabaseClusterListener>();
 	private final List<SynchronizationListener> synchronizationListeners = new CopyOnWriteArrayList<SynchronizationListener>();
+  private final List<NodeStateListener> nodeStateListeners = new CopyOnWriteArrayList<>();
+
 
 	public DatabaseClusterImpl(String id, DatabaseClusterConfiguration<Z, D> configuration, DatabaseClusterConfigurationListener<Z, D> listener)
 	{
@@ -309,8 +315,20 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	{
 		return this.active;
 	}
-	
-	/**
+
+  @Override
+  public void changeState(NodeState oldState, NodeState newState) {
+    Iterator<NodeStateListener> iterator = nodeStateListeners.iterator();
+    while (iterator.hasNext()){
+      try {
+        iterator.next().changeState(oldState, newState);
+      }catch (Exception e){
+        logger.log(Level.WARN,e);
+      }
+    }
+  }
+
+  /**
 	 * Returns the set of synchronization strategies available to this cluster.
 	 * @return a set of synchronization strategy identifiers
 	 */
@@ -402,7 +420,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		this.clusterListeners.remove(listener);
 	}
 
-	/**
+  @Override
+  public void addListener(NodeStateListener listener) {
+    nodeStateListeners.add(listener);
+  }
+
+  @Override
+  public void removeListener(NodeStateListener listener) {
+    nodeStateListeners.remove(listener);
+  }
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseCluster#removeSynchronizationListener(net.sf.hajdbc.SynchronizationListener)
 	 */
@@ -586,7 +614,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		return this.stateManager;
 	}
 
-	@Override
+  @Override
+  public ClusterHealth<Z, D> getClusterHealth() {
+    return ((DistributedStateManager)stateManager).getHealth();
+  }
+
+  @Override
+  public DistributedManager<Z, D> getDistributedManager() {
+    return ((DistributedStateManager)stateManager);
+  }
+
+  @Override
 	public ThreadFactory getThreadFactory()
 	{
 		return this.configuration.getThreadFactory();

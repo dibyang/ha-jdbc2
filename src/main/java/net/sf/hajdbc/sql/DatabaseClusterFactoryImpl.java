@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import net.sf.hajdbc.*;
+import net.sf.hajdbc.state.health.NodeStateListener;
 
 /**
  * @author Paul Ferraro
@@ -33,8 +34,9 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 	Map<String, Set<DatabaseClusterListener>> databaseClusterListeners = new HashMap<String, Set<DatabaseClusterListener>>();
 
 	Map<String, Set<SynchronizationListener>> synchronizationListeners = new HashMap<String, Set<SynchronizationListener>>();
-	
-	
+
+	Map<String, Set<NodeStateListener>> nodeStateListeners = new HashMap<String, Set<NodeStateListener>>();
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseClusterFactory#createDatabaseCluster(java.lang.String, net.sf.hajdbc.DatabaseClusterConfigurationFactory)
@@ -45,6 +47,7 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		DatabaseCluster<Z, D> databaseCluster = new DatabaseClusterImpl<Z, D>(id, factory.createConfiguration(), factory);
 		addDatabaseClusterListeners(id, databaseCluster);
 		addSynchronizationListeners(id, databaseCluster);
+		addNodeStateListeners(id, databaseCluster);
 		return databaseCluster;
 	}
 
@@ -68,58 +71,70 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		}
 	}
 
+	private void addNodeStateListeners(String id,
+			DatabaseCluster<Z, D> databaseCluster) {
+		Set<NodeStateListener> listeners = nodeStateListeners.get(id);
+		if(listeners!=null){
+			for(NodeStateListener listener:listeners){
+				databaseCluster.addListener(listener);
+			}
+		}
+	}
+
 	@Override
 	public void addListener(String id, DatabaseClusterListener listener) {
-		Set<DatabaseClusterListener> listeners = databaseClusterListeners.get(id);
-		if(listeners==null){
-			listeners = new LinkedHashSet<DatabaseClusterListener>();
-		}
-		if(listener!=null){
-			listeners.add(listener);
-			databaseClusterListeners.put(id, listeners);
-		}
-		
+		addListener(databaseClusterListeners,id,listener);
 	}
 
 	@Override
 	public void removeListener(String id, DatabaseClusterListener listener) {
-		Set<DatabaseClusterListener> listeners = databaseClusterListeners.get(id);
-		if(listeners!=null){
-			if(listener!=null){
-				listeners.remove(listener);
-			}
-			if(listeners.isEmpty()){
-				databaseClusterListeners.remove(id);
-			}
-		}		
+		removeListener(databaseClusterListeners,id,listener);
 	}
 
 	@Override
 	public void addSynchronizationListener(String id,
 			SynchronizationListener listener) {
-		Set<SynchronizationListener> listeners = synchronizationListeners.get(id);
-		if(listeners==null){
-			listeners = new LinkedHashSet<SynchronizationListener>();
-		}
-		if(listener!=null){
-			listeners.add(listener);
-			synchronizationListeners.put(id, listeners);
-		}
-		
+
+		addListener(synchronizationListeners,id,listener);
 	}
 
 	@Override
 	public void removeSynchronizationListener(String id,
 			SynchronizationListener listener) {
-		Set<SynchronizationListener> listeners = synchronizationListeners.get(id);
+		removeListener(synchronizationListeners,id,listener);
+
+	}
+
+	@Override
+	public void addListener(String id, NodeStateListener listener) {
+		addListener(nodeStateListeners,id,listener);
+	}
+
+	public <T> void addListener(Map<String, Set<T>> map, String id, T listener) {
+		Set<T> listeners = map.get(id);
+		if(listeners==null){
+			listeners = new LinkedHashSet<T>();
+		}
+		if(listener!=null){
+			listeners.add(listener);
+			map.put(id, listeners);
+		}
+	}
+
+	@Override
+	public void removeListener(String id, NodeStateListener listener) {
+		removeListener(nodeStateListeners,id,listener);
+	}
+
+	private  <T> void removeListener(Map<String, Set<T>> map,String id, T listener) {
+		Set<T> listeners = map.get(id);
 		if(listeners!=null){
 			if(listener!=null){
 				listeners.remove(listener);
 			}
 			if(listeners.isEmpty()){
-				synchronizationListeners.remove(id);
+				map.remove(id);
 			}
-		}		
+		}
 	}
-
 }

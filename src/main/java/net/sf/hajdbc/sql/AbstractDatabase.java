@@ -35,6 +35,7 @@ import net.sf.hajdbc.management.Description;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.sql.AbstractDatabaseClusterConfiguration.Property;
+import net.sf.hajdbc.util.LocalHost;
 
 /**
  * @author  Paul Ferraro
@@ -337,6 +338,7 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 
 	public void setIp(String ip) {
 		this.ip = ip;
+		setLocal(LocalHost.getAllIp().contains(ip));
 	}
 
 	/**

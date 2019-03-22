@@ -28,6 +28,10 @@ import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.io.InputSinkStrategy;
 import net.sf.hajdbc.lock.LockManager;
 import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.distributed.DistributedManager;
+import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
 /**
@@ -100,6 +104,18 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	 * @return a StateManager implementation
 	 */
 	StateManager getStateManager();
+
+  /**
+   Returns a ClusterHealth for persisting database cluster health.
+   * @return a ClusterHealth implementation
+   */
+  ClusterHealth<Z, D> getClusterHealth();
+
+  /**
+   Returns a DistributedManager for distributed.
+   * @return a DistributedManager implementation
+   */
+  DistributedManager<Z, D> getDistributedManager();
 	
 	/**
 	 * Returns a DatabaseMetaData cache.
@@ -149,9 +165,15 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	 */
 	boolean isActive();
 
+  void changeState(NodeState oldState,NodeState newState);
+
 	void addListener(DatabaseClusterListener listener);
 	
 	void removeListener(DatabaseClusterListener listener);
+
+  void addListener(NodeStateListener listener);
+
+  void removeListener(NodeStateListener listener);
 	
 	void addSynchronizationListener(SynchronizationListener listener);
 	
