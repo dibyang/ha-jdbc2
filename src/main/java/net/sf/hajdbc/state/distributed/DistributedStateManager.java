@@ -25,6 +25,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
@@ -61,7 +62,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
   private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
-
+  private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
   private final Map<Class,Object> extContexts = new HashMap<>();
 	private final ClusterHealth<Z,D> health;
 
@@ -321,6 +322,15 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
+    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+    while(iterator.hasNext()){
+      try {
+        iterator.next().added(member);
+      }catch (Exception e){
+        logger.log(Level.WARN,e);
+      }
+
+    }
 	}
 
 
@@ -345,8 +355,16 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 
 		}
 		members.remove(member);
+    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+    while(iterator.hasNext()){
+      try {
+        iterator.next().removed(member);
+      }catch (Exception e){
+        logger.log(Level.WARN,e);
+      }
 
-	}
+    }
+  }
 
 
   /**
@@ -391,7 +409,17 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		return new ArrayList<>(members);
 	}
 
-	public Member getLocal() {
+  @Override
+  public void addMembershipListener(MembershipListener listener) {
+    membershipListeners.add(listener);
+  }
+
+  @Override
+  public void removeMembershipListener(MembershipListener listener) {
+    membershipListeners.remove(listener);
+  }
+
+  public Member getLocal() {
     return this.dispatcher.getLocal();
   }
 

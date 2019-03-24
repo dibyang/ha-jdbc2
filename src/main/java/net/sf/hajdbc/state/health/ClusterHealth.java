@@ -28,7 +28,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager<Z, D> stateManager;
   private final Arbiter arbiter;
-  private volatile boolean unattended = false;
+  private volatile boolean unattended = true;
 
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);

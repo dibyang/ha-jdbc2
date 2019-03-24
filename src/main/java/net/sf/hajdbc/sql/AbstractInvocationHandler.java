@@ -101,7 +101,7 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		@SuppressWarnings("unchecked")
 		ProxyFactoryFactory<Z, D, T, E, R, ? extends Exception> factory = (ProxyFactoryFactory<Z, D, T, E, R, ? extends Exception>) this.getProxyFactoryFactory(proxy, method, parameters);
 		InvocationResultFactory<Z, D, R> resultFactory = (factory != null) ? new ProxyInvocationResultFactory<Z, D, T, R, E>(factory, proxy, this.getProxyFactory(), invoker) : new SimpleInvocationResultFactory<Z, D, R>();
-		if(strategy instanceof InvokeOnManyInvocationStrategy){
+		if(isAllInvoke(strategy)){
 			DatabaseCluster<Z, D> cluster = this.proxyFactory.getDatabaseCluster();
 			ClusterHealth<Z, D> clusterHealth = cluster.getClusterHealth();
 			if(clusterHealth.isHost()){
@@ -111,7 +111,13 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 
 		return this.createResult(resultFactory, results);
 	}
-	
+
+	private boolean isAllInvoke(InvocationStrategy strategy) {
+		return InvocationStrategies.INVOKE_ON_ALL.equals(strategy)
+				//||InvocationStrategies.TRANSACTION_INVOKE_ON_ALL.equals(strategy)
+				||InvocationStrategies.END_TRANSACTION_INVOKE_ON_ALL.equals(strategy);
+	}
+
 	/**
 	 * @throws E 
 	 */
