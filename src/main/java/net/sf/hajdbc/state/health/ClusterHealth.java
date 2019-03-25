@@ -18,6 +18,7 @@ import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.util.LocalHost;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +55,8 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   }
 
   public void start(){
+    String localIp = stateManager.getLocalIp();
+    arbiter.setLocal(localIp);
     elect();
     if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");

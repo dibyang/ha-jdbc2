@@ -3,8 +3,10 @@ package net.sf.hajdbc.util;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -122,6 +124,27 @@ public class LocalHost {
       }
     }
     return ipv6s;
+  }
+
+  public static short getPrefixLength(String ip){
+    short prefixLen = 0;
+    try {
+      Enumeration<NetworkInterface> nifs = NetworkInterface.getNetworkInterfaces();
+      while (nifs.hasMoreElements()) {
+        NetworkInterface nif = nifs.nextElement();
+        if (nif.isUp()) {
+          List<InterfaceAddress> addresses = nif.getInterfaceAddresses();
+          for (InterfaceAddress address : addresses) {
+            if(address.getAddress().getHostAddress().equals(ip)){
+              prefixLen = address.getNetworkPrefixLength();
+            }
+          }
+        }
+      }
+    } catch (SocketException e) {
+      e.printStackTrace();
+    }
+    return prefixLen;
   }
   
   public static Set<InetAddress> getAllInetAddress() {

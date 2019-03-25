@@ -13,6 +13,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.sf.hajdbc.util.LocalHost;
+import net.sf.hajdbc.util.NetMasks;
 
 public class ArbiterConfig {
 
@@ -24,6 +25,8 @@ public class ArbiterConfig {
   private String arbiterPath;
   private final List<String> ips = new CopyOnWriteArrayList<>();
   private final Properties properties = new Properties();
+  private volatile short prefixLen =16;
+  private volatile String local ="";
 
   public ArbiterConfig() {
     this.path = Paths.get(System.getProperty("user.dir"), "conf","arbiter.conf");
@@ -36,6 +39,15 @@ public class ArbiterConfig {
   public void setArbiterPath(String arbiterPath) {
     this.arbiterPath = NVLPATH(arbiterPath);
     save();
+  }
+
+  public String getLocal() {
+    return local;
+  }
+
+  public void setLocal(String local) {
+    this.local = local;
+    prefixLen=LocalHost.getPrefixLength(local);
   }
 
   public List<String> getIps() {
@@ -88,9 +100,15 @@ public class ArbiterConfig {
     Iterator<String> iterator = ips.iterator();
     while(iterator.hasNext()){
       String next = iterator.next();
-      if(next==null||allIp.contains(next.trim())) {
+      if(next==null) {
         iterator.remove();
         needSave = true;
+      }else{
+        String ip = next.trim();
+        if(allIp.contains(ip)||!NetMasks.isSameSubnet(prefixLen,local, ip)){
+          iterator.remove();
+          needSave = true;
+        }
       }
     }
     return needSave;
