@@ -1,19 +1,22 @@
 package net.sf.hajdbc.state.health;
 
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
 import net.sf.hajdbc.state.health.observer.Observer;
 
 public class Arbiter {
   private final LocalTokenStore local = new LocalTokenStore();
   private final TokenStore arbiter;
   private final Observer observer = new Observer();
-  private final List<String> ips = new ArrayList<>();
+  private final ArbiterConfig config = new ArbiterConfig();
 
-  public Arbiter(String path) {
-    arbiter = new TokenStore(Paths.get(path,TokenStore.TOKEN_DAT));
+  public Arbiter() {
+    arbiter = new TokenStore(getArbiterPath());
+  }
+
+  private Path getArbiterPath() {
+    return Paths.get(config.getArbiterPath(), TokenStore.TOKEN_DAT);
   }
 
 
@@ -22,15 +25,25 @@ public class Arbiter {
   }
 
   public TokenStore getArbiter() {
+    checkPathChange();
     return arbiter;
+  }
+
+  private void checkPathChange() {
+    Path path = getArbiterPath();
+    if(!arbiter.getPath().equals(path)){
+      arbiter.setPath(path);
+    }
   }
 
   public void update(long token){
     local.update(token);
+    checkPathChange();
     arbiter.update(token);
   }
 
   public boolean existsArbiter(){
+    checkPathChange();
     return arbiter.exists();
   }
 
@@ -39,10 +52,10 @@ public class Arbiter {
    * @return observable or not
    */
   public boolean isObservable(){
-    if(ips.isEmpty()){
+    if(config.getIps().isEmpty()){
       return true;
     }else{
-      for(String ip : ips){
+      for(String ip : config.getIps()){
         if(observer.isObservable(ip)){
           return true;
         }

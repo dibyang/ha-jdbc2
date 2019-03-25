@@ -11,7 +11,7 @@ public abstract class ConnectObserveAdapter implements ObserveAdapter {
 
   public static final int TIME_OUT = 200;
 
-  abstract int getPort();
+  public abstract int getPort();
 
   @Override
   public boolean isObservable(String ip) {

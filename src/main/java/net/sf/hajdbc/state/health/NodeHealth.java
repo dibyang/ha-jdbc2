@@ -9,6 +9,8 @@ public class NodeHealth implements Serializable {
   private NodeState state = NodeState.offline;
   private volatile long local;
   private volatile long arbiter;
+  private volatile boolean lastOnlyHost = false;
+
 
   public NodeState getState() {
     return state;
@@ -44,5 +46,13 @@ public class NodeHealth implements Serializable {
 
   public void setArbiter(long arbiter) {
     this.arbiter = arbiter;
+  }
+
+  public boolean isLastOnlyHost() {
+    return lastOnlyHost;
+  }
+
+  public void setLastOnlyHost(boolean lastOnlyHost) {
+    this.lastOnlyHost = lastOnlyHost;
   }
 }

@@ -25,7 +25,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealth.class);
 
   public static final int HEARTBEAT_LOST_MAX = 3;
-  private long maxElectTime = 4 * 60*1000L;
+  private long maxElectTime = 5 * 60*1000L;
   private DistributedStateManager<Z, D> stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = true;
@@ -50,7 +50,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   public ClusterHealth(DistributedStateManager<Z, D> stateManager) {
     this.stateManager = stateManager;
     stateManager.setExtContext(this);
-    arbiter = new Arbiter("/datapool/.sconf/");
+    arbiter = new Arbiter();
   }
 
   public void start(){
@@ -67,6 +67,7 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
   public NodeHealth getNodeHealth(){
     NodeHealth health = new NodeHealth();
     health.setState(state);
+    health.setLastOnlyHost(arbiter.getLocal().isOnlyHost());
     health.setLocal(arbiter.getLocal().getToken());
     health.setArbiter(arbiter.getArbiter().getToken());
     return health;
@@ -159,10 +160,22 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
    */
   private synchronized void elect(){
     logger.info("host elect begin.");
+    long waitTime = 2;
     long beginElectTime = System.currentTimeMillis();
     Entry<Member, NodeHealth> host = doElect(beginElectTime);
     while(unattended&&host==null){
       host = doElect(beginElectTime);
+      if(host==null){
+        logger.info("can not elect host node. try elect again after "+waitTime+"s");
+        try {
+          Thread.sleep(waitTime*1000);
+          if(waitTime<30){
+            waitTime=waitTime*2;
+          }
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
     }
     if(host!=null){
       HostCommand hostCommand = new HostCommand();
@@ -187,17 +200,22 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     Entry<Member, NodeHealth> host = null;
     //find host
     host = findNodeByState(all, NodeState.host);
-    //not find host. find backup
+    //not find host node. find backup node
     if(host==null){
       host = findNodeByState(all, NodeState.backup);
     }
 
-    //not find backup. find by valid local
+    //not find backup node. find by valid local node
     if(host==null){
       host = findNodeByValidLocal(all);
     }
 
-    //not find valid local. find empty node
+    //not find valid local node. find last only host node
+    if(host==null){
+      host = findNodeByLastOnlyHost(all);
+    }
+
+    //not find last only host node. find empty node
     if(host==null){
       host = findNodeByEmpty(all);
     }
@@ -257,6 +275,22 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
     return find;
   }
 
+
+  private Entry<Member, NodeHealth> findNodeByLastOnlyHost(Map<Member, NodeHealth> all) {
+    Entry<Member, NodeHealth> find = null;
+    Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+    while(iterator.hasNext()) {
+      Entry<Member, NodeHealth> next = iterator.next();
+      NodeHealth health = next.getValue();
+      if (health != null && health.isLastOnlyHost()) {
+        if(find==null||health.getLocal()>find.getValue().getLocal()){
+          find = next;
+        }
+      }
+    }
+    return find;
+  }
+
   private Entry<Member, NodeHealth> findNodeByValidLocal(Map<Member, NodeHealth> all) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
@@ -309,9 +343,13 @@ public class ClusterHealth<Z, D extends Database<Z>> implements Runnable{
           downNode();
         }else
         {
+          arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
+
           sendHeartbeat();
         }
       }else if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
+        arbiter.getLocal().setOnlyHost(false);
+
         if(isLostHeartBeat()&&canElect()){
           elect();
         }

@@ -8,9 +8,14 @@ import java.util.List;
 
 public class TokenStore {
   public static final String TOKEN_DAT = "token.dat";
+  public static final String ONLYHOST_TRUE = "1";
+  public static final String ONLYHOST_FALSE = "0";
+  public static final String NEWLINE = "\n";
 
-  protected final Path path ;
+  protected Path path ;
+  private boolean autoCreate;
   private volatile long lastModified = 0;
+  private volatile boolean onlyHost = false;
   private volatile long token = 0;
 
   public TokenStore(Path path) {
@@ -18,8 +23,26 @@ public class TokenStore {
   }
 
   public TokenStore(Path path,boolean autoCreate) {
+    this.autoCreate = autoCreate;
+    this.setPath(path);
+  }
+
+  public void setPath(Path path) {
     this.path = path;
     checkPath(path, autoCreate);
+    lastModified = 0;
+  }
+
+  public Path getPath() {
+    return path;
+  }
+
+  public void setAutoCreate(boolean autoCreate) {
+    this.autoCreate = autoCreate;
+  }
+
+  public boolean isAutoCreate() {
+    return autoCreate;
   }
 
   private void checkPath(Path path, boolean autoCreate) {
@@ -42,6 +65,19 @@ public class TokenStore {
 
   public boolean exists() {
     return Files.exists(path);
+  }
+
+  public boolean isOnlyHost() {
+    reload();
+    return onlyHost;
+  }
+
+  public void setOnlyHost(boolean onlyHost) {
+    reload();
+    if(this.onlyHost!=onlyHost) {
+      this.onlyHost = onlyHost;
+      save();
+    }
   }
 
   public void update(long token){
@@ -67,6 +103,9 @@ public class TokenStore {
             List<String> lines = Files.readAllLines(path, Charset.defaultCharset());
             if (lines.size() > 0) {
               token = Long.parseLong(lines.get(0));
+              if(lines.size() > 1){
+                onlyHost = ONLYHOST_TRUE.equals(lines.get(1));
+              }
             }
 
           } catch (Exception e) {
@@ -80,8 +119,14 @@ public class TokenStore {
   public void save(){
     synchronized (this){
       if(exists()) {
-        try {
-          Files.write(path, String.valueOf(token).getBytes());
+
+        StringBuilder builder = new StringBuilder();
+
+        builder.append(token).append(NEWLINE);
+        builder.append(onlyHost?ONLYHOST_TRUE:ONLYHOST_FALSE).append(NEWLINE);
+
+        try{
+          Files.write(path,builder.toString().getBytes());
           lastModified = path.toFile().lastModified();
         } catch (IOException e) {
           e.printStackTrace();

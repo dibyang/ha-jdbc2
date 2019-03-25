@@ -113,9 +113,9 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 	}
 
 	private boolean isAllInvoke(InvocationStrategy strategy) {
-		return InvocationStrategies.INVOKE_ON_ALL.equals(strategy)
+		return //InvocationStrategies.INVOKE_ON_ALL.equals(strategy)
 				//||InvocationStrategies.TRANSACTION_INVOKE_ON_ALL.equals(strategy)
-				||InvocationStrategies.END_TRANSACTION_INVOKE_ON_ALL.equals(strategy);
+				InvocationStrategies.END_TRANSACTION_INVOKE_ON_ALL.equals(strategy);
 	}
 
 	/**
