@@ -44,6 +44,9 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.*;
 import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.ClusterHealthImpl;
+import net.sf.hajdbc.state.health.NodeHealth;
+import net.sf.hajdbc.state.health.NodeHealthCommand;
 
 /**
  * @author Paul Ferraro
@@ -64,7 +67,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
   private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
   private final Map<Class,Object> extContexts = new HashMap<>();
-	private final ClusterHealth<Z,D> health;
+	private final ClusterHealth health;
 
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
@@ -73,10 +76,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-    this.health = new ClusterHealth(this);
+    this.health = new ClusterHealthImpl(this);
 	}
 
-  public ClusterHealth<Z, D> getHealth() {
+  public ClusterHealth getHealth() {
     return health;
   }
 
@@ -108,12 +111,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void activated(DatabaseEvent event)
 	{
 		this.stateManager.activated(event);
-		if(cluster.getBalancer().size()>1){
-			D database = cluster.getDatabase(event.toString());
-			if(database.isLocal()){
-				health.setState(NodeState.backup);
-			}
-		}
 		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
 
@@ -381,10 +378,30 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public boolean isValid(Database<?> database) {
 		Set<String> ips = getIps();
 		if(ips.contains(database.getIp())){
-			return true;
+      Member find = getMember(database.getIp());
+      if(find!=null){
+        NodeHealthCommand cmd = new NodeHealthCommand();
+        NodeHealth nodeHealth = (NodeHealth)execute(cmd, find);
+        if(nodeHealth!=null){
+          return !nodeHealth.getState().equals(NodeState.offline);
+        }
+      }
 		}
 		return false;
 	}
+
+  public Member getMember(String ip) {
+    Member find = null;
+    Iterator<Member> iterator = members.iterator();
+    while(iterator.hasNext()){
+      Member next = iterator.next();
+      if(getIp(next).equals(ip)){
+        find = next;
+        break;
+      }
+    }
+    return find;
+  }
 
 	private Set<String> getIps() {
 		Set<String> ips = new HashSet<>();

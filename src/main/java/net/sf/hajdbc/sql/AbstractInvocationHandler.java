@@ -103,7 +103,7 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		InvocationResultFactory<Z, D, R> resultFactory = (factory != null) ? new ProxyInvocationResultFactory<Z, D, T, R, E>(factory, proxy, this.getProxyFactory(), invoker) : new SimpleInvocationResultFactory<Z, D, R>();
 		if(isAllInvoke(strategy)){
 			DatabaseCluster<Z, D> cluster = this.proxyFactory.getDatabaseCluster();
-			ClusterHealth<Z, D> clusterHealth = cluster.getClusterHealth();
+			ClusterHealth clusterHealth = cluster.getClusterHealth();
 			if(clusterHealth.isHost()){
 				clusterHealth.incrementToken();
 			}

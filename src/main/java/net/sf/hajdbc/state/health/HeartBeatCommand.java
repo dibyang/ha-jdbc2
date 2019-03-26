@@ -18,11 +18,7 @@
 package net.sf.hajdbc.state.health;
 
 import net.sf.hajdbc.Database;
-import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.StateManager;
-import net.sf.hajdbc.state.distributed.StateCommand;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 
 public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
@@ -32,7 +28,7 @@ public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void,
 
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
-		ClusterHealth health = context.getExtContext(ClusterHealth.class);
+		ClusterHealth health = context.getExtContext(ClusterHealthImpl.class);
 		if(health!=null){
 			health.receiveHeartbeat();
 		}

@@ -22,7 +22,7 @@ public class ArbiterConfig {
   public static final String IP = "ip";
   protected final Path path ;
   private volatile long lastModified = 0;
-  private String arbiterPath;
+  private String arbiterPath = ARBITER_PATH_DEFAULT;
   private final List<String> ips = new CopyOnWriteArrayList<>();
   private final Properties properties = new Properties();
   private volatile short prefixLen =16;

@@ -36,7 +36,7 @@ public class UpdateTokenCommand<Z, D extends Database<Z>> implements Command<Voi
 
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
-		ClusterHealth health = context.getExtContext(ClusterHealth.class);
+		ClusterHealth health = context.getExtContext(ClusterHealthImpl.class);
 		if(health!=null){
 			health.updateToken(token);
 		}

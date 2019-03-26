@@ -615,7 +615,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	}
 
   @Override
-  public ClusterHealth<Z, D> getClusterHealth() {
+  public ClusterHealth getClusterHealth() {
     return ((DistributedStateManager)stateManager).getHealth();
   }
 
@@ -985,40 +985,41 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	class FailureDetectionTask implements Runnable
 	{
 		@Override
-		public void run()
-		{
-			if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
-				return;
-			}
-			
-			Set<D> databases = DatabaseClusterImpl.this.getBalancer();
-			
-			int size = databases.size();
-			
-			if ((size > 1) || DatabaseClusterImpl.this.configuration.isEmptyClusterAllowed())
-			{
-				List<D> deadList = new ArrayList<D>(size);
-				
-				for (D database: databases)
-				{
-					if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN))
-					{
-						deadList.add(database);
-					}
+		public void run() {
+			try {
+				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+					return;
 				}
 
-				if ((deadList.size() < size) || DatabaseClusterImpl.this.configuration.isEmptyClusterAllowed())
-				{
-					for (D database: deadList)
-					{
-						if (DatabaseClusterImpl.this.deactivate(database, DatabaseClusterImpl.this.getStateManager()))
-						{
-							logger.log(Level.ERROR, Messages.DATABASE_DEACTIVATED.getMessage(), database, DatabaseClusterImpl.this);
+				Set<D> databases = DatabaseClusterImpl.this.getBalancer();
+
+				int size = databases.size();
+
+				if ((size > 1) || DatabaseClusterImpl.this.configuration.isEmptyClusterAllowed()) {
+					List<D> deadList = new ArrayList<D>(size);
+
+					for (D database : databases) {
+						if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)) {
+							deadList.add(database);
+						}
+					}
+
+					if ((deadList.size() < size) || DatabaseClusterImpl.this.configuration
+							.isEmptyClusterAllowed()) {
+						for (D database : deadList) {
+							if (DatabaseClusterImpl.this
+									.deactivate(database, DatabaseClusterImpl.this.getStateManager())) {
+								logger.log(Level.ERROR, Messages.DATABASE_DEACTIVATED.getMessage(), database,
+										DatabaseClusterImpl.this);
+							}
 						}
 					}
 				}
+			}catch(Exception e){
+				logger.log(Level.WARN,e);
 			}
 		}
+
 	}	
 	
 	class AutoActivationTask implements Runnable
@@ -1026,12 +1027,13 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		@Override
 		public void run()
 		{
-			if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
-				return;
-			}
 			
 			try
 			{
+				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+					return;
+				}
+
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 				
 				if (!activeDatabases.isEmpty())
@@ -1057,7 +1059,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			}
 			catch (InterruptedException e)
 			{
-				Thread.currentThread().interrupt();
+				logger.log(Level.WARN,e);
 			}
 		}
 	}

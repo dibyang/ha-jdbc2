@@ -109,7 +109,7 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
    Returns a ClusterHealth for persisting database cluster health.
    * @return a ClusterHealth implementation
    */
-  ClusterHealth<Z, D> getClusterHealth();
+  ClusterHealth getClusterHealth();
 
   /**
    Returns a DistributedManager for distributed.
