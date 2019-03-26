@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.distributed.jgroups;
 
+import java.util.List;
+import java.util.Map;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.MembershipListener;
@@ -24,6 +26,9 @@ import net.sf.hajdbc.distributed.Stateful;
 
 import org.jgroups.Channel;
 import org.jgroups.JChannel;
+import org.jgroups.conf.ConfiguratorFactory;
+import org.jgroups.conf.ProtocolConfiguration;
+import org.jgroups.conf.ProtocolStackConfigurator;
 
 /**
  * Factory for creating a JGroups instrumented command dispatcher.
@@ -53,7 +58,14 @@ public class JGroupsCommandDispatcherFactory implements CommandDispatcherFactory
 	@Override
 	public <C> CommandDispatcher<C> createCommandDispatcher(String id, C context, Stateful stateful, MembershipListener membershipListener) throws Exception
 	{
-		Channel channel = new JChannel(this.stack);
+		String jstack = this.stack;
+		if(id.endsWith(".lock")){
+			jstack = "lock_"+this.stack;
+		}else if(id.endsWith(".state")){
+			jstack = "state_"+this.stack;
+		}
+		ProtocolStackConfigurator configurator = ConfiguratorFactory.getStackConfigurator(jstack);
+		Channel channel = new JChannel(configurator);
 		if (this.name != null)
 		{
 			channel.setName(this.name);

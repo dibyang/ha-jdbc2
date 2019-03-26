@@ -66,7 +66,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
   private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
-  private final Map<Class,Object> extContexts = new HashMap<>();
+  private final Map<String,Object> extContexts = new HashMap<>();
 	private final ClusterHealth health;
 
 
@@ -252,19 +252,19 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	}
 
 	@Override
-	public <C> C getExtContext(Class<C> clazz) {
-		return (C)extContexts.get(clazz);
+	public <C> C getExtContext(String key) {
+		return (C)extContexts.get(key);
 	}
 
 	@Override
-	public <C> C removeExtContext(Class<C> clazz) {
-		return (C)extContexts.remove(clazz);
+	public <C> C removeExtContext(String key) {
+		return (C)extContexts.remove(key);
 	}
 
 	@Override
-	public <C> void setExtContext(C context) {
+	public <C> void setExtContext(String key,C context) {
 		if(context!=null){
-			extContexts.put(context.getClass(),context);
+			extContexts.put(key,context);
 		}
 	}
 

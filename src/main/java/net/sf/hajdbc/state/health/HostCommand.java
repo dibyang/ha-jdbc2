@@ -49,7 +49,7 @@ public class HostCommand<Z, D extends Database<Z>> implements Command<Void, Stat
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
 
-		ClusterHealth health = context.getExtContext(ClusterHealthImpl.class);
+		ClusterHealth health = context.getHealth();
 		if(health!=null){
 			health.host(host,token);
 		}

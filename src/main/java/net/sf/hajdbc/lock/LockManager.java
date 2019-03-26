@@ -31,15 +31,22 @@ public interface LockManager extends Lifecycle
 {
 	/**
 	 * Obtains a named read lock.
-	 * @param object an object to lock
+	 * @param id an object to lock
 	 * @return a read lock
 	 */
-	Lock readLock(String object);
+	Lock readLock(String id);
 
 	/**
 	 * Obtains a named write lock.
-	 * @param object an object to lock
+	 * @param id an object to lock
 	 * @return a write lock
 	 */
-	Lock writeLock(String object);
+	Lock writeLock(String id);
+
+	/**
+	 * Obtains a named only lock.
+	 * @param id an object to lock
+	 * @return a only lock
+	 */
+	Lock onlyLock(String id);
 }

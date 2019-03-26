@@ -28,7 +28,7 @@ public class NodeHealthCommand<Z, D extends Database<Z>> implements Command<Node
 
 	@Override
 	public NodeHealth execute(StateCommandContext<Z, D> context) {
-		ClusterHealth health = context.getExtContext(ClusterHealthImpl.class);
+		ClusterHealth health = context.getHealth();
 		if(health!=null){
 			return  health.getNodeHealth();
 		}

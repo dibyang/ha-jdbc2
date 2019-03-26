@@ -11,7 +11,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.sf.hajdbc.Database;
+import java.util.concurrent.locks.Lock;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class ClusterHealthImpl implements Runnable, ClusterHealth {
+
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
   public static final int HEARTBEAT_LOST_MAX = 3;
@@ -47,7 +48,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
-    stateManager.setExtContext(this);
+    stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter();
   }
 
@@ -168,33 +169,46 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * start elect host node.
    */
   private synchronized void elect(){
-    logger.info("host elect begin.");
-    long waitTime = 2;
-    long beginElectTime = System.currentTimeMillis();
-    Entry<Member, NodeHealth> host = doElect(beginElectTime);
-    while(host==null&&unattended){
-      host = doElect(beginElectTime);
-      if(host==null){
-        logger.info("can not elect host node. try elect again after "+waitTime+"s");
-        try {
-          Thread.sleep(waitTime*1000);
-          if(waitTime<30){
-            waitTime=waitTime*2;
+    Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock("HOST_ELECT");
+    try {
+      if(lock.tryLock()){
+        logger.info("host elect begin.");
+        long waitTime = 2;
+        long beginElectTime = System.currentTimeMillis();
+        Entry<Member, NodeHealth> host = doElect(beginElectTime);
+        while(host==null&&unattended){
+          host = doElect(beginElectTime);
+          if(host==null){
+            logger.info("can not elect host node. try elect again after "+waitTime+"s");
+            try {
+              Thread.sleep(waitTime*1000);
+              if(waitTime<30){
+                waitTime=waitTime*2;
+              }
+            } catch (InterruptedException e) {
+              e.printStackTrace();
+            }
+          }else{
+            break;
           }
-        } catch (InterruptedException e) {
-          e.printStackTrace();
         }
+        if(host!=null){
+          HostCommand hostCommand = new HostCommand();
+          hostCommand.setHost(host.getKey());
+          hostCommand.setToken(host.getValue().getLocal());
+          stateManager.executeAll(hostCommand);
+        }
+        logger.info("host elect end.");
       }else{
-        break;
+        logger.info("get elect lock fail.");
       }
+
+    }catch (Exception e){
+      logger.warn("",e);
+    }finally {
+      lock.unlock();
     }
-    if(host!=null){
-      HostCommand hostCommand = new HostCommand();
-      hostCommand.setHost(host.getKey());
-      hostCommand.setToken(host.getValue().getLocal());
-      stateManager.executeAll(hostCommand);
-    }
-    logger.info("host elect end.");
+
   }
 
   private Entry<Member, NodeHealth> doElect(long beginElectTime) {
@@ -208,36 +222,41 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
         iterator.remove();
       }
     }
+
     Entry<Member, NodeHealth> host = null;
-    //find host
-    host = findNodeByState(all, NodeState.host);
-    //not find host node. find backup node
-    if(host==null){
-      host = findNodeByState(all, NodeState.backup);
-    }
-
-    //not find backup node. find by valid local node
-    if(host==null){
-      host = findNodeByValidLocal(all);
-    }
-
-    //not find valid local node. find last only host node
-    if(host==null){
-      host = findNodeByLastOnlyHost(all);
-    }
-
-    //not find last only host node. find empty node
-    if(host==null){
-      host = findNodeByEmpty(all);
-    }
-    if(host==null){
-      long time = System.currentTimeMillis() - beginElectTime;
-      if(time > maxElectTime){
-        host = findNodeByToken(all);
+    if(all.size()>=stateManager.getMembers().size()){
+      //find host
+      host = findNodeByState(all, NodeState.host);
+      //not find host node. find backup node
+      if(host==null){
+        host = findNodeByState(all, NodeState.backup);
       }
-    }
-    if(host!=null){
-      logger.info("find host node "+host.getKey()+".");
+
+      //not find backup node. find by valid local node
+      if(host==null){
+        host = findNodeByValidLocal(all);
+      }
+
+      //not find valid local node. find last only host node
+      if(host==null){
+        host = findNodeByLastOnlyHost(all);
+      }
+
+      //not find last only host node. find empty node
+      if(host==null){
+        host = findNodeByEmpty(all);
+      }
+      if(host==null){
+        long time = System.currentTimeMillis() - beginElectTime;
+        if(time > maxElectTime){
+          host = findNodeByToken(all);
+        }
+      }
+      if(host!=null){
+        logger.info("find host node "+host.getKey()+".");
+      }
+    }else{
+      logger.info("some nodes are not responding.");
     }
     return host;
 

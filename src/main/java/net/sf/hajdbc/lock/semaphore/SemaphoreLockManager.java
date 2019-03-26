@@ -33,6 +33,7 @@ import net.sf.hajdbc.lock.LockManager;
 public class SemaphoreLockManager implements LockManager
 {
 	private final ConcurrentMap<String, ReadWriteLock> lockMap = new ConcurrentHashMap<String, ReadWriteLock>();
+	private final ConcurrentMap<String, SemaphoreLock> onlyLockMap = new ConcurrentHashMap<String, SemaphoreLock>();
 
 	private final boolean fair;
 	
@@ -62,7 +63,37 @@ public class SemaphoreLockManager implements LockManager
 		
 		return (object == null) ? readWriteLock.writeLock() : new GlobalLock(readWriteLock.readLock(), this.getReadWriteLock(object).writeLock());
 	}
-	
+
+	@Override
+	public Lock onlyLock(String id) {
+
+		Lock lock = this.getOnlyLock(id);
+		return lock;
+	}
+
+	private synchronized SemaphoreLock getOnlyLock(String object)
+	{
+		// CHM cannot use a null key
+		String key = (object != null) ? object : "";
+
+
+		SemaphoreLock lock = this.onlyLockMap.get(key);
+
+		if (lock == null)
+		{
+			lock = new SemaphoreLock(new Semaphore(1, this.fair));
+
+			SemaphoreLock existing = this.onlyLockMap.putIfAbsent(key, lock);
+
+			if (existing != null)
+			{
+				lock = existing;
+			}
+		}
+
+		return lock;
+	}
+
 	private synchronized ReadWriteLock getReadWriteLock(String object)
 	{
 		// CHM cannot use a null key

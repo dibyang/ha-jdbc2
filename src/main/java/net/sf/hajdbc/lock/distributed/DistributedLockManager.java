@@ -23,6 +23,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -79,6 +80,11 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		return this.getDistibutedLock(new RemoteLockDescriptorImpl(id, LockType.WRITE, this.dispatcher.getLocal()));
 	}
 
+	@Override
+	public Lock onlyLock(String id) {
+		return this.getDistibutedLock(new RemoteLockDescriptorImpl(id, LockType.ONLY, this.dispatcher.getLocal()));
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.lock.distributed.LockCommandContext#getLock(net.sf.hajdbc.lock.distributed.LockDescriptor)
@@ -97,6 +103,10 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			case WRITE:
 			{
 				return this.lockManager.writeLock(id);
+			}
+			case ONLY:
+			{
+				return this.lockManager.onlyLock(id);
 			}
 			default:
 			{
@@ -400,15 +410,15 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		private boolean lockMembers(Member coordinator)
 		{
 			boolean locked = true;
-			
+
 			Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), coordinator);
 			
 			for (Map.Entry<Member, Boolean> entry: results.entrySet())
 			{
 				locked &= entry.getValue();
 			}
-			
-			if (!locked)
+
+      if (!locked)
 			{
 				this.unlockMembers(coordinator);
 			}
@@ -441,7 +451,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		
 		private void unlockMembers(Member coordinator)
 		{
-			this.dispatcher.executeAll(new MemberReleaseLockCommand(this.descriptor), coordinator);
+      this.dispatcher.executeAll(new MemberReleaseLockCommand(this.descriptor), coordinator);
 		}
 		
 		private void unlockCoordinator(Member coordinator)

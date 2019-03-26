@@ -17,7 +17,7 @@ public interface DistributedManager<Z, D extends Database<Z>> {
   <R> Map<Member, R> executeAll(Command<R, StateCommandContext<Z, D>> command,
       Member... excludedMembers);
   <R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member);
-  <C> C getExtContext(Class<C> clazz);
-  <C> C removeExtContext(Class<C> clazz);
-  <C> void setExtContext(C context);
+  <C> C getExtContext(String key);
+  <C> C removeExtContext(String key);
+  <C> void setExtContext(String key, C context);
 }

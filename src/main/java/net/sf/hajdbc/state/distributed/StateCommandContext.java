@@ -27,6 +27,7 @@ import net.sf.hajdbc.distributed.Remote;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.health.ClusterHealth;
 
 /**
  * @author paul
@@ -45,7 +46,5 @@ public interface StateCommandContext<Z, D extends Database<Z>>
 
 	<R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member);
 
-	<C> C getExtContext(Class<C> clazz);
-	<C> C removeExtContext(Class<C> clazz);
-	<C> void setExtContext(C context);
+	ClusterHealth getHealth();
 }
