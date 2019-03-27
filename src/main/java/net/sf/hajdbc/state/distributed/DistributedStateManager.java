@@ -205,7 +205,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public boolean isEnabled()
 	{
-		return this.stateManager.isEnabled() && this.health.isHost();
+		return this.stateManager.isEnabled() && dispatcher.getLocal().equals(dispatcher.getCoordinator());
 	}
 
 
