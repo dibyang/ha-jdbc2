@@ -86,7 +86,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		this.context = context;
 		this.stateful = stateful;
 		this.membershipListener = membershipListener;
-		this.dispatcher = new MessageDispatcher(channel, this, this, this);
+		this.dispatcher = new MessageDispatcher( channel, this, this, this);
 		this.timeout = timeout;
 	}
 
@@ -172,7 +172,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	public <R> R execute(Command<R, C> command, Member member)
 	{
 		Message message = new Message(((AddressMember) member).getAddress(), this.getLocalAddress(), Objects.serialize(command));
-		
+
 		try
 		{
 			return this.dispatcher.sendMessage(message, new RequestOptions(ResponseMode.GET_ALL, this.timeout));
@@ -183,7 +183,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 			return null;
 		}
 	}
-	
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.CommandDispatcher#getLocal()

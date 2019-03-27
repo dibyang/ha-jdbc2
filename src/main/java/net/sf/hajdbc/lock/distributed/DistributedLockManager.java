@@ -411,7 +411,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		{
 			boolean locked = true;
 
-			Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), coordinator);
+			Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), coordinator,descriptor.getMember());
 			
 			for (Map.Entry<Member, Boolean> entry: results.entrySet())
 			{
@@ -428,8 +428,23 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		
 		private boolean lockCoordinator(Member coordinator, long timeout)
 		{
-			Boolean result = this.dispatcher.execute(new CoordinatorAcquireLockCommand(this.descriptor, timeout), coordinator);
-			return (result != null) ? result.booleanValue() : false;
+			boolean locked = false;
+			try {
+				if (this.lock.tryLock(timeout, TimeUnit.MILLISECONDS))
+				{
+					Boolean result = this.dispatcher.execute(new CoordinatorAcquireLockCommand(this.descriptor, timeout), coordinator);
+					locked= (result != null) ? result.booleanValue() : false;
+				}
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}finally
+			{
+				if (!locked)
+				{
+					this.lock.unlock();
+				}
+			}
+			return locked;
 		}
 		
 		@Override
@@ -451,12 +466,13 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		
 		private void unlockMembers(Member coordinator)
 		{
-      this.dispatcher.executeAll(new MemberReleaseLockCommand(this.descriptor), coordinator);
+      this.dispatcher.executeAll(new MemberReleaseLockCommand(this.descriptor), coordinator,descriptor.getMember());
 		}
 		
 		private void unlockCoordinator(Member coordinator)
 		{
 			this.dispatcher.execute(new CoordinatorReleaseLockCommand(this.descriptor), coordinator);
+			this.lock.unlock();
 		}
 
 		@Override
