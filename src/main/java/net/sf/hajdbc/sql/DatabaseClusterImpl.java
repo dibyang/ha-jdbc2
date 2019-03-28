@@ -904,7 +904,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
-	boolean isAlive(D database, Level level)
+	public boolean isAlive(D database, Level level)
 	{
 	  if(!stateManager.isValid(database)){
 	    return false;

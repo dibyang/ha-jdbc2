@@ -3,19 +3,29 @@ package net.sf.hajdbc.state.health;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
+import net.sf.hajdbc.Database;
+import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.util.Resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +38,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = true;
+  private final ExecutorService executorService;
 
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
@@ -48,6 +59,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
+    executorService = Executors.newFixedThreadPool(1);
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter();
   }
@@ -159,7 +171,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private boolean canElect(){
     if(isUp()){
       if(arbiter.isObservable()){
-        return true;
+        DatabaseCluster cluster = stateManager.getDatabaseCluster();
+        Database database = cluster.getLocalDatabase();
+        if(cluster.isAlive(database, Level.WARN)) {
+          return true;
+        }else{
+          logger.info("database not active.");
+        }
       }
     }
     return false;
@@ -215,13 +233,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
 
     //delete invalid data.
-    Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()){
-      Entry<Member, NodeHealth> next = iterator.next();
-      if(next.getValue()==null){
-        iterator.remove();
-      }
-    }
+    remveInvalidReceive(all);
 
     Entry<Member, NodeHealth> host = null;
     if(all.size()>=stateManager.getMembers().size()){
@@ -269,9 +281,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
         setState(NodeState.host);
         stateManager.activated(new DatabaseEvent(stateManager.getDatabaseCluster().getLocalDatabase()));
       }else{
-        if(token>=arbiter.getLocal().getToken()) {
+        //if(token>=arbiter.getLocal().getToken()) {
           setState(NodeState.ready);
-        }
+        //}
       }
     }else{
       setState(NodeState.offline);
@@ -357,7 +369,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * @return Does it need to be down?
    */
   private boolean isNeedDown(){
-    if(!isUp()||!arbiter.isObservable()){
+    if(!isUp()||!arbiter.isObservable()||!stateManager.getDatabaseCluster().getLocalDatabase().isActive()){
       return true;
     }
     return false;
@@ -379,11 +391,19 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
           arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
 
           sendHeartbeat();
+          executorService.submit(new Runnable() {
+            @Override
+            public void run() {
+              restoreReadyDatabases();
+            }
+          });
+
         }
       }else if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
         arbiter.getLocal().setOnlyHost(false);
         if(NodeState.ready.equals(state)){
-          if(stateManager.getDatabaseCluster().getLocalDatabase().isActive()) {
+          Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+          if(database.isActive()) {
             setState(NodeState.backup);
           }
         }
@@ -399,6 +419,69 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
       e.printStackTrace();
     }
   }
+
+  private void restoreReadyDatabases() {
+    DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+    Database database = databaseCluster.getLocalDatabase();
+    if(database.getLocation().startsWith("jdbc:h2:")&&stateManager.getMembers().size()>1){
+      Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand,stateManager.getLocal());
+      removeInvalidReceiveByState(all, NodeState.ready);
+      if(all.size()>0){
+        Lock lock = databaseCluster.getLockManager().writeLock(null);
+        try {
+          lock.lockInterruptibly();
+          Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.stateManager.getDatabaseCluster().getDecoder()));
+          try
+          {
+            Statement statement = connection.createStatement();
+            Path path = Paths.get(System.getProperty("user.dir"),"backup.zip");
+            if(Files.exists(path)){
+              Files.delete(path);
+            }
+            statement.execute("BACKUP TO '"+path.toFile().getPath()+"'");
+            if(Files.exists(path)){
+              H2RestoreCommand cmd= new H2RestoreCommand();
+              cmd.setBytes(Files.readAllBytes(path));
+              Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+              if(iterator.hasNext()){
+                Member member = iterator.next().getKey();
+                String dbId = (String)stateManager.execute(cmd,member);
+                if(dbId!=null){
+                  databaseCluster.activate(database, databaseCluster.getStateManager());
+                }
+              }
+            }
+          }
+          finally
+          {
+            Resources.close(connection);
+          }
+        }catch (Exception e){
+          logger.warn("",e);
+        }finally {
+          lock.unlock();
+        }
+      }
+
+    }
+  }
+
+  private void remveInvalidReceive(Map<Member, NodeHealth> all) {
+    //delete invalid data.
+    removeInvalidReceiveByState(all,null);
+  }
+
+  private void removeInvalidReceiveByState(Map<Member, NodeHealth> all,NodeState state) {
+    //delete invalid data.
+    Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+    while (iterator.hasNext()) {
+      Entry<Member, NodeHealth> next = iterator.next();
+      if (next.getValue() == null||(state!=null&&!state.equals(next.getValue().getState()))) {
+        iterator.remove();
+      }
+    }
+  }
+
 
   private  boolean isUp(){
     return isUp(stateManager.getLocalIp());

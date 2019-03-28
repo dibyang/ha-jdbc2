@@ -383,7 +383,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         NodeHealthCommand cmd = new NodeHealthCommand();
         NodeHealth nodeHealth = (NodeHealth)execute(cmd, find);
         if(nodeHealth!=null){
-          return !nodeHealth.getState().equals(NodeState.offline);
+          return true;
         }
       }
 		}

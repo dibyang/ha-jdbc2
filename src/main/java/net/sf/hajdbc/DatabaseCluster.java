@@ -27,6 +27,7 @@ import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.io.InputSinkStrategy;
 import net.sf.hajdbc.lock.LockManager;
+import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.NodeState;
@@ -193,4 +194,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	TransactionIdentifierFactory<? extends Object> getTransactionIdentifierFactory();
 
 	InputSinkStrategy<? extends Object> getInputSinkStrategy();
+
+	boolean isAlive(D database, Level level);
 }
