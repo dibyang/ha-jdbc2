@@ -200,7 +200,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
             logger.info("can not elect host node. try elect again after "+waitTime+"s");
             try {
               Thread.sleep(waitTime*1000);
-              if(waitTime<30){
+              if(waitTime<16){
                 waitTime=waitTime*2;
               }
             } catch (InterruptedException e) {
