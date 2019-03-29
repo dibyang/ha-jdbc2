@@ -22,6 +22,7 @@ import java.util.Set;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.balancer.BalancerFactory;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Factory for creating a {@link SimpleBalancer}.
@@ -39,7 +40,7 @@ public class SimpleBalancerFactory implements BalancerFactory
 
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(java.util.Set)
+	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, StateManager)
 	 */
 	@Override
 	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases)

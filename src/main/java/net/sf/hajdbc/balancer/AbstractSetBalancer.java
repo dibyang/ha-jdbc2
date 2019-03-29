@@ -27,6 +27,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.invocation.Invoker;
+import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.util.Collections;
 
 /**
@@ -86,7 +87,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 	{
 		try
 		{
-			return this.databaseSet.first();
+			return this.getDatabases().iterator().next();
 		}
 		catch (NoSuchElementException e)
 		{
@@ -329,6 +330,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 			this.lock.unlock();
 		}
 	}
+
 	
 	/**
 	 * Called when the set was cleared.

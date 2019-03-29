@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc;
 
+import java.net.InetAddress;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -31,20 +32,14 @@ import net.sf.hajdbc.distributed.Member;
  */
 public interface Database<Z> extends Comparable<Database<Z>>
 {
-	static final int ID_MAX_SIZE = 64;
+	int ID_MAX_SIZE = 64;
 	
 	/**
 	 * Returns the unique idenfier for this database
 	 * @return a unique identifier
 	 */
 	String getId();
-
-	/**
-	 * Database ip
-	 * @return ip
-	 */
-	String getIp();
-
+	
 	/**
 	 * Returns the location of this database
 	 * @return a location
@@ -91,4 +86,7 @@ public interface Database<Z> extends Comparable<Database<Z>>
 	boolean isActive();
 	
 	void setActive(boolean active);
+
+	String getIp();
+
 }

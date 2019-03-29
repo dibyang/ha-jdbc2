@@ -17,7 +17,6 @@
  */
 package net.sf.hajdbc.sql;
 
-import java.io.Serializable;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.DriverManager;
@@ -40,7 +39,7 @@ import net.sf.hajdbc.management.ManagedAttribute;
 @MBean
 @Description("Database accessed via DriverManager")
 @XmlType(name = "database")
-public class DriverDatabase extends AbstractDatabase<Driver> implements Serializable
+public class DriverDatabase extends AbstractDatabase<Driver>
 {
 	private static final String USER = "user"; //$NON-NLS-1$
 	private static final String PASSWORD = "password"; //$NON-NLS-1$

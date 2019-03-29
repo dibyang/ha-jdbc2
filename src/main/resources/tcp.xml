@@ -8,9 +8,9 @@
 -->
 <config xmlns="urn:org:jgroups"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/JGroups-3.3.xsd">
+        xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/JGroups-3.4.xsd">
   <TCP bind_addr="${jgroups.bind_addr:127.0.0.1}"
-       bind_port="${jgroups.tcp.bind_port:7800}"
+       bind_port="${jgroups.tcp.bind_port:7810}"
        loopback="false"
        recv_buf_size="${tcp.recv_buf_size:5M}"
        send_buf_size="${tcp.send_buf_size:640K}"
@@ -45,7 +45,7 @@
            initial_hosts="${jgroups.tcpping.initial_hosts:127.0.0.1[7800]}"
            port_range="1"
            num_initial_members="10"/>
-  <MERGE2  min_interval="10000"
+  <MERGE3  min_interval="10000"
            max_interval="30000"/>
   <FD_SOCK/>
   <FD timeout="3000" max_tries="3" />

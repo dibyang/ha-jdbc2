@@ -20,6 +20,7 @@ package net.sf.hajdbc.state;
 import java.util.Map;
 import java.util.Set;
 
+import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.Lifecycle;
 import net.sf.hajdbc.durability.DurabilityListener;
@@ -32,7 +33,7 @@ import net.sf.hajdbc.durability.InvokerEvent;
  */
 public interface StateManager extends DatabaseClusterListener, DurabilityListener, Lifecycle
 {
-	public static final String CLEAR_LOCAL_STATE = "ha-jdbc.state.clear";
+	String CLEAR_LOCAL_STATE = "ha-jdbc.state.clear";
 	
 	Set<String> getActiveDatabases();
 	
@@ -42,5 +43,5 @@ public interface StateManager extends DatabaseClusterListener, DurabilityListene
 	
 	boolean isEnabled();
 
-
+	boolean isValid(Database<?> database);
 }

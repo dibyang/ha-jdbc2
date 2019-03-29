@@ -40,7 +40,6 @@ import net.sf.hajdbc.TriggerSupport;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.ConnectionProperties;
 import net.sf.hajdbc.dialect.StandardDialect;
-import net.sf.hajdbc.state.distributed.DBCManager;
 import net.sf.hajdbc.util.Processes;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.Strings;
@@ -246,7 +245,7 @@ public class PostgreSQLDialect extends StandardDialect implements DumpRestoreSup
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void dump(D database,  Decoder decoder, File file, boolean dataOnly) throws Exception
+	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
 		ProcessBuilder builder = new ProcessBuilder("pg_dump");

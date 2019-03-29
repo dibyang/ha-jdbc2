@@ -23,7 +23,9 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -84,8 +86,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		this.context = context;
 		this.stateful = stateful;
 		this.membershipListener = membershipListener;
-		
-		this.dispatcher = new MessageDispatcher(channel, this, this, this);
+		this.dispatcher = new MessageDispatcher( channel, this, this, this);
 		this.timeout = timeout;
 	}
 
@@ -165,13 +166,13 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.distributed.CommandDispatcher#executeCoordinator(net.sf.hajdbc.distributed.Command)
+	 * @see net.sf.hajdbc.distributed.CommandDispatcher#execute(Command, Member)
 	 */
 	@Override
 	public <R> R execute(Command<R, C> command, Member member)
 	{
 		Message message = new Message(((AddressMember) member).getAddress(), this.getLocalAddress(), Objects.serialize(command));
-		
+
 		try
 		{
 			return this.dispatcher.sendMessage(message, new RequestOptions(ResponseMode.GET_ALL, this.timeout));
@@ -182,7 +183,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 			return null;
 		}
 	}
-	
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.CommandDispatcher#getLocal()

@@ -23,6 +23,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractSetBalancer;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Trivial balancer implementation whose {@link #next} implementation always returns the database with the highest weight.

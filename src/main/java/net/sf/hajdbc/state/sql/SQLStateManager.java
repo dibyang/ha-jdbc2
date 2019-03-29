@@ -78,6 +78,8 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 	private static final String PHASE_COLUMN = "phase_id";
 	private static final String EXCEPTION_COLUMN = "exception_id";
 	private static final String RESULT_COLUMN = "result";
+
+
 	
 	static final String SELECT_STATE_SQL = MessageFormat.format("SELECT {1} FROM {0}", STATE_TABLE, DATABASE_COLUMN);
 	static final String INSERT_STATE_SQL = MessageFormat.format("INSERT INTO {0} ({1}) VALUES (?)", STATE_TABLE, DATABASE_COLUMN);
@@ -93,10 +95,14 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 	static final String UPDATE_INVOKER_SQL = MessageFormat.format("UPDATE {0} SET {4} = ? WHERE {1} = ? AND {2} = ? AND {3} = ?", INVOKER_TABLE, TRANSACTION_COLUMN, PHASE_COLUMN, DATABASE_COLUMN, RESULT_COLUMN);
 	static final String DELETE_INVOKER_SQL = MessageFormat.format("DELETE FROM {0} WHERE {1} = ? AND {2} = ?", INVOKER_TABLE, TRANSACTION_COLUMN, PHASE_COLUMN);
 
+
+
+
 	private static final String CREATE_INVOCATION_SQL = MessageFormat.format("CREATE TABLE {0} ({1} {2} NOT NULL, {3} {4} NOT NULL, {5} {6} NOT NULL, PRIMARY KEY ({1}, {3}))", INVOCATION_TABLE, TRANSACTION_COLUMN, "{0}", PHASE_COLUMN, "{1}", EXCEPTION_COLUMN, "{2}");
 	private static final String CREATE_INVOKER_SQL = MessageFormat.format("CREATE TABLE {0} ({1} {2} NOT NULL, {3} {4} NOT NULL, {5} {6} NOT NULL, {7} {8}, PRIMARY KEY ({1}, {3}, {5}))", INVOKER_TABLE, TRANSACTION_COLUMN, "{0}", PHASE_COLUMN, "{1}", DATABASE_COLUMN, "{2}", RESULT_COLUMN, "{3}");
 	private static final String CREATE_STATE_SQL = MessageFormat.format("CREATE TABLE {0} ({1} {2} NOT NULL, PRIMARY KEY ({1}))", STATE_TABLE, DATABASE_COLUMN, "{0}");
-	
+
+
 	private static Logger logger = LoggerFactory.getLogger(SQLStateManager.class);
 	
 	private final DurabilityListener listener;
@@ -572,6 +578,11 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 	public boolean isEnabled()
 	{
 		return true;
+	}
+
+	@Override
+	public boolean isValid(Database<?> database) {
+		return this.getActiveDatabases().contains(database.getId());
 	}
 
 

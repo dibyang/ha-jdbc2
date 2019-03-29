@@ -36,7 +36,6 @@ import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.state.distributed.DBCManager;
 import net.sf.hajdbc.util.Resources;
 
 /**
@@ -207,5 +206,4 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 		
 		this.executor.shutdown();
 	}
-
 }

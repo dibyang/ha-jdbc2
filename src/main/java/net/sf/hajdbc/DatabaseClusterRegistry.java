@@ -18,7 +18,7 @@ import net.sf.hajdbc.util.concurrent.Registry;
 import net.sf.hajdbc.xml.XMLDatabaseClusterConfigurationFactory;
 
 /**
- *
+ * 注册管理器
  * @author dib
  *
  */

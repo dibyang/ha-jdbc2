@@ -38,4 +38,5 @@ public interface DatabaseClusterListener extends EventListener
 	 * @param event indicates the database that was deactivated
 	 */
 	void deactivated(DatabaseEvent event);
+
 }

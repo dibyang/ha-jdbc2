@@ -22,6 +22,7 @@ import java.util.Set;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.Identifiable;
+import net.sf.hajdbc.state.StateManager;
 
 /**
  * Factory for creating balancers.

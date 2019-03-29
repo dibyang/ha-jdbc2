@@ -34,6 +34,7 @@ import java.util.concurrent.Future;
 import net.sf.hajdbc.MockDatabase;
 import net.sf.hajdbc.invocation.Invoker;
 
+import net.sf.hajdbc.state.simple.SimpleStateManager;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
@@ -45,10 +46,10 @@ public abstract class AbstractBalancerTest
 {
 	final BalancerFactory factory;
 	final MockDatabase[] databases = new MockDatabase[] { new MockDatabase("0", 0), new MockDatabase("1", 1), new MockDatabase("2", 2) };
-	
 	AbstractBalancerTest(BalancerFactory factory)
 	{
 		this.factory = factory;
+		
 	}
 	
 	@Test
@@ -512,28 +513,28 @@ public abstract class AbstractBalancerTest
 		Balancer<Void, MockDatabase> balancer = this.factory.createBalancer(Collections.<MockDatabase>emptySet());
 
 		assertTrue(balancer.containsAll(Collections.emptyList()));
-		assertFalse(balancer.containsAll(Collections.singletonList(this.databases[0])));
+		assertFalse(balancer.contains(this.databases[0]));
 		assertFalse(balancer.containsAll(Arrays.asList(this.databases[0], this.databases[1])));
 		assertFalse(balancer.containsAll(Arrays.asList(this.databases)));
 		
 		balancer = this.factory.createBalancer(Collections.singleton(this.databases[0]));
 
 		assertTrue(balancer.containsAll(Collections.emptyList()));
-		assertTrue(balancer.containsAll(Collections.singletonList(this.databases[0])));
+		assertTrue(balancer.contains(this.databases[0]));
 		assertFalse(balancer.containsAll(Arrays.asList(this.databases[0], this.databases[1])));
 		assertFalse(balancer.containsAll(Arrays.asList(this.databases)));
 
 		balancer = this.factory.createBalancer(new HashSet<MockDatabase>(Arrays.asList(this.databases[0], this.databases[1])));
 		
 		assertTrue(balancer.containsAll(Collections.emptyList()));
-		assertTrue(balancer.containsAll(Collections.singletonList(this.databases[0])));
+		assertTrue(balancer.contains(this.databases[0]));
 		assertTrue(balancer.containsAll(Arrays.asList(this.databases[0], this.databases[1])));
 		assertFalse(balancer.containsAll(Arrays.asList(this.databases)));
 
 		balancer = this.factory.createBalancer(new HashSet<MockDatabase>(Arrays.asList(this.databases)));
 		
 		assertTrue(balancer.containsAll(Collections.emptyList()));
-		assertTrue(balancer.containsAll(Collections.singletonList(this.databases[0])));
+		assertTrue(balancer.contains(this.databases[0]));
 		assertTrue(balancer.containsAll(Arrays.asList(this.databases[0], this.databases[1])));
 		assertTrue(balancer.containsAll(Arrays.asList(this.databases)));
 	}

@@ -25,30 +25,48 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.distributed.*;
+import net.sf.hajdbc.distributed.Command;
+import net.sf.hajdbc.distributed.CommandDispatcher;
+import net.sf.hajdbc.distributed.CommandDispatcherFactory;
+import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.MembershipListener;
+import net.sf.hajdbc.distributed.Remote;
+import net.sf.hajdbc.distributed.Stateful;
+import net.sf.hajdbc.distributed.jgroups.AddressMember;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.sql.AbstractDatabase;
-import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.StateManager;
+import net.sf.hajdbc.state.*;
+import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.ClusterHealthImpl;
 
 /**
  * @author Paul Ferraro
  */
-public class DistributedStateManager<Z, D extends Database<Z>> implements DBCManager<Z, D>,StateManager, StateCommandContext<Z, D>, MembershipListener, Stateful
+public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, DistributedManager<Z,D>, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
-	private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
+
+
+  public CommandDispatcher<StateCommandContext<Z, D>> getDispatcher() {
+    return dispatcher;
+  }
+
+  private final CommandDispatcher<StateCommandContext<Z, D>> dispatcher;
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
-	private final Set<Member> members = Collections.synchronizedSet(new HashSet());
+	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
+  private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
+  private final Map<String,Object> extContexts = new HashMap<>();
+	private final ClusterHealth health;
+
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
@@ -56,9 +74,14 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
+    this.health = new ClusterHealthImpl(this);
 	}
 
-	/**
+  public ClusterHealth getHealth() {
+    return health;
+  }
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#getActiveDatabases()
 	 */
@@ -89,59 +112,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
 	}
 
-	private Set<String> getIps() {
-		Set<String> ips  = new HashSet<>();
-		for(Member m: this.members){
-			ips.add(m.toString());
-		}
-		return ips;
-	}
-
-	@Override
-	public boolean isValid(String dbId) {
-		return this.getIps().contains(dbId);
-	}
-
-	@Override
-	public Member getMember(String ip) {
-		Member find = null;
-		Iterator<Member> iterator = this.members.iterator();
-		while(iterator.hasNext()){
-			Member m = iterator.next();
-			if(m!=null&&m.toString().equals(ip)){
-				find = m;
-				break;
-			}
-		}
-		return find;
-	}
-
-
-	public Member getLocal() {
-		return dispatcher.getLocal();
-	}
-
-	@Override
-	public CommandDispatcher<?> getDispatcher() {
-		return dispatcher;
-	}
-
-
-
-	@Override
-	public void syncDbCfg() {
-		SyncDBCfgCommand<Z,D> cmd = new SyncDBCfgCommand<Z,D>();
-		cmd.setDb(this.getDatabaseCluster().getLocalDatabase());
-		Map<Member, D> map = this.dispatcher.executeAll(cmd, this.getLocal());
-		for(D d : map.values()){
-			if(d!=null){
-				((AbstractDatabase)d).setLocal(false);
-				this.cluster.addDatabase(d);
-			}
-		}
-	}
-
-
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseClusterListener#deactivated(net.sf.hajdbc.state.DatabaseEvent)
@@ -151,6 +121,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	{
 		this.stateManager.deactivated(event);
 		this.dispatcher.executeAll(new DeactivationCommand<Z, D>(event), this.dispatcher.getLocal());
+
 	}
 
 	/**
@@ -212,8 +183,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	{
 		this.stateManager.start();
 		this.dispatcher.start();
-
-
+		this.health.start();
 
 	}
 
@@ -224,18 +194,20 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	@Override
 	public void stop()
 	{
+    this.health.stop();
 		this.dispatcher.stop();
 		this.stateManager.stop();
 	}
 
+
 	@Override
 	public boolean isEnabled()
 	{
-		return this.stateManager.isEnabled() && this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator());
+		return this.stateManager.isEnabled() && dispatcher.getLocal().equals(dispatcher.getCoordinator());
 	}
 
 
-	/**
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.distributed.StateCommandContext#getDatabaseCluster()
 	 */
@@ -265,6 +237,35 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 		return this.remoteInvokerMap.get(remote.getMember());
 	}
 
+	@Override
+	public <R> Map<Member, R> executeAll(Command<R, StateCommandContext<Z, D>> command,
+			Member... excludedMembers) {
+		return dispatcher.executeAll(command, excludedMembers);
+	}
+
+
+	@Override
+	public <R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member) {
+		return dispatcher.execute(command, member);
+	}
+
+	@Override
+	public <C> C getExtContext(String key) {
+		return (C)extContexts.get(key);
+	}
+
+	@Override
+	public <C> C removeExtContext(String key) {
+		return (C)extContexts.remove(key);
+	}
+
+	@Override
+	public <C> void setExtContext(String key,C context) {
+		if(context!=null){
+			extContexts.put(key,context);
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.Stateful#readState(java.io.ObjectInput)
@@ -286,7 +287,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 			this.logger.log(Level.INFO, Messages.INITIAL_CLUSTER_STATE_REMOTE.getMessage(databases, this.dispatcher.getCoordinator()));
 			
 			this.stateManager.setActiveDatabases(databases);
-		}
+
+
+    }
 	}
 
 	/**
@@ -314,8 +317,20 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
+    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+    while(iterator.hasNext()){
+      try {
+        iterator.next().added(member);
+      }catch (Exception e){
+        logger.log(Level.WARN,e);
+      }
 
+    }
 	}
+
+
+
+
 
 	/**
 	 * {@inheritDoc}
@@ -324,10 +339,6 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	@Override
 	public void removed(Member member)
 	{
-		members.remove(member);
-		if(!this.getLocal().equals(member)) {
-			this.cluster.removeDatabase(member.toString());
-		}
 		if (this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator()))
 		{
 			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.remoteInvokerMap.remove(member);
@@ -336,10 +347,22 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 			{
 				this.cluster.getDurability().recover(invokers);
 			}
+
 		}
-	}
-	
-	/**
+		members.remove(member);
+    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+    while(iterator.hasNext()){
+      try {
+        iterator.next().removed(member);
+      }catch (Exception e){
+        logger.log(Level.WARN,e);
+      }
+
+    }
+  }
+
+
+  /**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#recover()
 	 */
@@ -348,6 +371,70 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements DBCMan
 	{
 		return this.stateManager.recover();
 	}
+
+	@Override
+	public boolean isValid(Database<?> database) {
+		Set<String> ips = getIps();
+		if(ips.contains(database.getIp())){
+     return true;
+		}
+		return false;
+	}
+
+  public Member getMember(String ip) {
+    Member find = null;
+    Iterator<Member> iterator = members.iterator();
+    while(iterator.hasNext()){
+      Member next = iterator.next();
+      if(getIp(next).equals(ip)){
+        find = next;
+        break;
+      }
+    }
+    return find;
+  }
+
+	private Set<String> getIps() {
+		Set<String> ips = new HashSet<>();
+		for(Member m:this.members){
+      ips.add(getIp(m));
+
+		}
+		return ips;
+	}
+
+
+	private String getIp(Member local) {
+		return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
+	}
+
+  public Member getCoordinator() {
+    return this.dispatcher.getCoordinator();
+  }
+
+	@Override
+	public List<Member> getMembers() {
+		return new ArrayList<>(members);
+	}
+
+  @Override
+  public void addMembershipListener(MembershipListener listener) {
+    membershipListeners.add(listener);
+  }
+
+  @Override
+  public void removeMembershipListener(MembershipListener listener) {
+    membershipListeners.remove(listener);
+  }
+
+  public Member getLocal() {
+    return this.dispatcher.getLocal();
+  }
+
+  public String getLocalIp() {
+    return getIp(getLocal());
+  }
+
 
 	private static class RemoteDescriptor implements Remote, Serializable
 	{

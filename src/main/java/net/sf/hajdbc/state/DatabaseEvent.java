@@ -27,7 +27,6 @@ import net.sf.hajdbc.util.Event;
 public class DatabaseEvent extends Event<String>
 {
 	private static final long serialVersionUID = -6709361835865578668L;
-
 	/**
 	 * @param database
 	 */

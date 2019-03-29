@@ -20,6 +20,7 @@ package net.sf.hajdbc.distributed;
 import java.util.Map;
 
 import net.sf.hajdbc.Lifecycle;
+import org.jgroups.util.FutureListener;
 
 /**
  * RPC dispatcher that uses the command pattern.

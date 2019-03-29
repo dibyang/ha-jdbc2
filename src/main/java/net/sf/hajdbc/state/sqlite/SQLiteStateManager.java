@@ -107,6 +107,13 @@ public class SQLiteStateManager<Z, D extends Database<Z>> implements StateManage
 		return true;
 	}
 
+	@Override
+	public boolean isValid(Database<?> database) {
+		return this.getActiveDatabases().contains(database.getId());
+	}
+
+
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseClusterListener#activated(net.sf.hajdbc.state.DatabaseEvent)
@@ -659,6 +666,4 @@ public class SQLiteStateManager<Z, D extends Database<Z>> implements StateManage
 	{
 		void execute(SqlJetDb database) throws SqlJetException;
 	}
-
-
 }

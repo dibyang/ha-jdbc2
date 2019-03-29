@@ -48,22 +48,14 @@ public abstract class AbstractBalancer<Z, D extends Database<Z>> implements Bala
 	{
 		Iterator<D> databases = this.getDatabases().iterator();
 		
-		if (!databases.hasNext() || ((databases.next() != null) && !databases.hasNext())) return Collections.emptySet();
-		
-		D database = databases.next();
-		
-		if (!databases.hasNext()) return Collections.singleton(database);
-		
+		if (!databases.hasNext() || ((databases.next() != null) && !databases.hasNext())){
+			return Collections.emptySet();
+		}
+
 		SortedSet<D> backups = new TreeSet<D>();
-		
-		backups.add(database);
-		
-		do
-		{
+		while(databases.hasNext()){
 			backups.add(databases.next());
 		}
-		while (databases.hasNext());
-
 		return backups;
 	}
 	
@@ -140,7 +132,9 @@ public abstract class AbstractBalancer<Z, D extends Database<Z>> implements Bala
 	@Override
 	public boolean equals(Object object)
 	{
-		if ((object == null) || !(object instanceof Collection)) return false;
+		if ((object == null) || !(object instanceof Collection)) {
+			return false;
+		}
 		
 		@SuppressWarnings("unchecked")
 		Collection<D> set = (Collection<D>) object;
