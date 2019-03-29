@@ -42,6 +42,7 @@ import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.durability.Durability;
 import net.sf.hajdbc.durability.InvocationEvent;
 import net.sf.hajdbc.durability.InvokerEvent;
@@ -62,6 +63,7 @@ import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeHealth;
 import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.sync.SynchronizationContextImpl;
@@ -906,9 +908,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 	public boolean isAlive(D database, Level level)
 	{
-	  if(!stateManager.isValid(database)){
-	    return false;
-    }
 		try
 		{
 			Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.decoder));
@@ -930,7 +929,16 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException
 	{
-		if (!this.isAlive(database, Level.DEBUG)) {
+		if (!this.isAlive(database, Level.DEBUG)||!stateManager.isValid(database)) {
+			return false;
+		}
+		Member find = getDistributedManager(). getMember(database.getIp());
+		if(find!=null){
+			NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
+			if(nodeHealth==null){
+				return false;
+			}
+		}else {
 			return false;
 		}
 		
@@ -999,7 +1007,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					List<D> deadList = new ArrayList<D>(size);
 
 					for (D database : databases) {
-						if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)) {
+						if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)
+						||!stateManager.isValid(database)) {
 							deadList.add(database);
 						}
 					}

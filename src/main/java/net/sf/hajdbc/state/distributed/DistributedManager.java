@@ -14,6 +14,7 @@ public interface DistributedManager<Z, D extends Database<Z>> {
   String getLocalIp();
   Member getCoordinator();
   List<Member> getMembers();
+  Member getMember(String ip);
   <R> Map<Member, R> executeAll(Command<R, StateCommandContext<Z, D>> command,
       Member... excludedMembers);
   <R> R execute(Command<R, StateCommandContext<Z, D>> command, Member member);

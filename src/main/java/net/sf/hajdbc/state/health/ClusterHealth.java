@@ -12,6 +12,8 @@ public interface ClusterHealth {
 
   NodeHealth getNodeHealth();
 
+  NodeHealth getNodeHealth(Member member);
+
   void receiveHeartbeat();
 
   NodeState getState();

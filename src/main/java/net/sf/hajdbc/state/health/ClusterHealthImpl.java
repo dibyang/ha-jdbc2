@@ -11,7 +11,6 @@ import java.sql.Statement;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -38,7 +37,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = true;
-  private final ExecutorService executorService;
+  //private final ExecutorService executorService;
 
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
@@ -59,7 +58,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
-    executorService = Executors.newFixedThreadPool(1);
+    //executorService = Executors.newFixedThreadPool(1);
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter();
   }
@@ -87,6 +86,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     health.setLocal(arbiter.getLocal().getToken());
     health.setArbiter(arbiter.getArbiter().getToken());
     return health;
+  }
+
+  @Override
+  public NodeHealth getNodeHealth(Member member) {
+    NodeHealthCommand cmd = new NodeHealthCommand();
+    return (NodeHealth) stateManager.execute(cmd,member);
   }
 
 
@@ -146,7 +151,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * Send heartbeat.
    */
   private void sendHeartbeat(){
-    stateManager.executeAll(beatCommand);
+    stateManager.executeAll(beatCommand,stateManager.getLocal());
   }
 
 
@@ -278,12 +283,15 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   public void host(Member host, long token){
     if(host!=null){
       if(stateManager.getLocal().equals(host)){
-        setState(NodeState.host);
-        stateManager.activated(new DatabaseEvent(stateManager.getDatabaseCluster().getLocalDatabase()));
+        if(!state.equals(NodeState.host)){
+          setState(NodeState.host);
+          Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+          if(!database.isActive()){
+            stateManager.activated(new DatabaseEvent(database));
+          }
+        }
       }else{
-        //if(token>=arbiter.getLocal().getToken()) {
-          setState(NodeState.ready);
-        //}
+        setState(NodeState.ready);
       }
     }else{
       setState(NodeState.offline);
@@ -384,25 +392,28 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   public synchronized void run() {
     try {
       if(NodeState.host.equals(state)){
-        if(isNeedDown()){
-          downNode();
-        }else
-        {
-          arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
-
-          sendHeartbeat();
-          executorService.submit(new Runnable() {
-            @Override
-            public void run() {
-              restoreReadyDatabases();
-            }
-          });
-
+        if(findOtherHost()){
+          if(canElect()){
+            elect();
+          }
+        }else{
+          if(isNeedDown()){
+            downNode();
+          }else
+          {
+            arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
+            sendHeartbeat();
+          }
         }
+
       }else if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
         arbiter.getLocal().setOnlyHost(false);
-        if(NodeState.ready.equals(state)){
-          Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+        Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+        if(NodeState.backup.equals(state)){
+          if(isNeedDown()) {
+            downNode();
+          }
+        }else{
           if(database.isActive()) {
             setState(NodeState.backup);
           }
@@ -416,8 +427,27 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
         }
       }
     }catch (Exception e){
-      e.printStackTrace();
+      logger.warn("",e);
     }
+  }
+
+  /**
+   * find other host or not
+   * @return find other host or not
+   */
+  private boolean findOtherHost() {
+    NodeHealthCommand cmd = new NodeHealthCommand();
+    Map all = stateManager.executeAll(cmd, stateManager.getLocal());
+    if(all.size()>0){
+      Iterator iterator = all.values().iterator();
+      while(iterator.hasNext()){
+        NodeHealth next = (NodeHealth)iterator.next();
+        if(next!=null&&next.getState().equals(NodeState.host)){
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private void restoreReadyDatabases() {

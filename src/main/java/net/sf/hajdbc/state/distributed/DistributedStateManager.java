@@ -45,8 +45,6 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.*;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.ClusterHealthImpl;
-import net.sf.hajdbc.state.health.NodeHealth;
-import net.sf.hajdbc.state.health.NodeHealthCommand;
 
 /**
  * @author Paul Ferraro
@@ -378,14 +376,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public boolean isValid(Database<?> database) {
 		Set<String> ips = getIps();
 		if(ips.contains(database.getIp())){
-      Member find = getMember(database.getIp());
-      if(find!=null){
-        NodeHealthCommand cmd = new NodeHealthCommand();
-        NodeHealth nodeHealth = (NodeHealth)execute(cmd, find);
-        if(nodeHealth!=null){
-          return !nodeHealth.getState().equals(NodeState.offline);
-        }
-      }
+     return true;
 		}
 		return false;
 	}
