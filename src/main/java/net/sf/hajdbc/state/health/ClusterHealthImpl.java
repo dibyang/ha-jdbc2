@@ -6,15 +6,10 @@ import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.sql.Connection;
-import java.sql.Statement;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import net.sf.hajdbc.Database;
@@ -24,7 +19,6 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
-import net.sf.hajdbc.util.Resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,7 +31,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = true;
-  //private final ExecutorService executorService;
+  private final ExecutorService executorService;
 
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
@@ -58,7 +52,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
-    //executorService = Executors.newFixedThreadPool(1);
+    executorService = Executors.newFixedThreadPool(1);
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter();
   }
@@ -100,6 +94,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    */
   @Override
   public void receiveHeartbeat(){
+    logger.debug("receive host heart beat.");
     counter.set(0);
     lastHeartbeat = System.currentTimeMillis();
   }
@@ -151,6 +146,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * Send heartbeat.
    */
   private void sendHeartbeat(){
+    logger.debug("host send heart beat.");
     stateManager.executeAll(beatCommand,stateManager.getLocal());
   }
 
@@ -403,6 +399,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
           {
             arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
             sendHeartbeat();
+            executorService.submit(new Runnable() {
+              @Override
+              public void run() {
+                restoreDatabaseForReady();
+              }
+            });
+
           }
         }
 
@@ -449,51 +452,48 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     }
     return false;
   }
+  DatabaseRestoreCommand cmd= new DatabaseRestoreCommand();
 
-  private void restoreReadyDatabases() {
+  private void restoreDatabaseForReady() {
     DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-    Database database = databaseCluster.getLocalDatabase();
-    if(database.getLocation().startsWith("jdbc:h2:")&&stateManager.getMembers().size()>1){
-      Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand,stateManager.getLocal());
-      removeInvalidReceiveByState(all, NodeState.ready);
-      if(all.size()>0){
-        Lock lock = databaseCluster.getLockManager().writeLock(null);
-        try {
-          lock.lockInterruptibly();
-          Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.stateManager.getDatabaseCluster().getDecoder()));
-          try
-          {
-            Statement statement = connection.createStatement();
-            Path path = Paths.get(System.getProperty("user.dir"),"backup.zip");
-            if(Files.exists(path)){
-              Files.delete(path);
-            }
-            statement.execute("BACKUP TO '"+path.toFile().getPath()+"'");
-            if(Files.exists(path)){
-              H2RestoreCommand cmd= new H2RestoreCommand();
-              cmd.setBytes(Files.readAllBytes(path));
-              Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-              if(iterator.hasNext()){
-                Member member = iterator.next().getKey();
-                String dbId = (String)stateManager.execute(cmd,member);
-                if(dbId!=null){
-                  databaseCluster.activate(database, databaseCluster.getStateManager());
+    synchronized (databaseCluster){
+      if(databaseCluster.getDialect().isSupportRestore()){
+        Database database = databaseCluster.getLocalDatabase();
+        if(stateManager.getActiveDatabases().size()>0
+            &&stateManager.getMembers().size()>1){
+          Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand,stateManager.getLocal());
+          removeInvalidReceiveByState(all, NodeState.ready);
+          if(all.size()>0){
+            Lock lock = databaseCluster.getLockManager().writeLock(null);
+            try {
+              lock.lockInterruptibly();
+              Path path = Paths.get(System.getProperty("user.dir"),"backup.bak");
+              if(Files.exists(path)){
+                Files.delete(path);
+              }
+              databaseCluster.backup(database,path.toFile());
+
+              if(Files.exists(path)){
+                cmd.setBytes(Files.readAllBytes(path));
+                Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
+                if(iterator.hasNext()){
+                  Member member = iterator.next().getKey();
+                  String dbId = (String)stateManager.execute(cmd,member);
+                  if(dbId!=null){
+                    databaseCluster.activate(databaseCluster.getDatabase(dbId), databaseCluster.getStateManager());
+                  }
                 }
               }
+            }catch (Exception e){
+              logger.warn("",e);
+            }finally {
+              lock.unlock();
             }
           }
-          finally
-          {
-            Resources.close(connection);
-          }
-        }catch (Exception e){
-          logger.warn("",e);
-        }finally {
-          lock.unlock();
         }
       }
-
     }
+
   }
 
   private void remveInvalidReceive(Map<Member, NodeHealth> all) {

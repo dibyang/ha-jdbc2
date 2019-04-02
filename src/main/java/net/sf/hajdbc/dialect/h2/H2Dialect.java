@@ -17,10 +17,8 @@
  */
 package net.sf.hajdbc.dialect.h2;
 
-import java.sql.DatabaseMetaData;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.io.File;
+import java.sql.*;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -29,11 +27,17 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
+import net.sf.hajdbc.Database;
 import net.sf.hajdbc.SequenceProperties;
 import net.sf.hajdbc.SequencePropertiesFactory;
 import net.sf.hajdbc.SequenceSupport;
 import net.sf.hajdbc.dialect.StandardDialect;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.logging.Logger;
+import net.sf.hajdbc.logging.LoggerFactory;
+import net.sf.hajdbc.sql.DatabaseClusterImpl;
 import net.sf.hajdbc.util.Resources;
+import org.h2.tools.Restore;
 
 /**
  * Dialect for <a href="http://www.h2database.com">H2 Database Engine</a>.
@@ -41,6 +45,7 @@ import net.sf.hajdbc.util.Resources;
  */
 public class H2Dialect extends StandardDialect
 {
+	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
 	
 	/**
@@ -156,5 +161,31 @@ public class H2Dialect extends StandardDialect
 	protected boolean indicatesFailure(int code)
 	{
 		return failureCodes.contains(code);
+	}
+
+	@Override
+	public boolean isSupportRestore() {
+		return true;
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> void backup(D database, File backup, Connection connection) throws SQLException {
+		Statement statement = connection.createStatement();
+		statement.execute("BACKUP TO '"+backup.getPath()+"'");
+
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> void restore(D database, File backup, Connection connection) throws SQLException {
+		String location = database.getLocation();
+		location=location.substring(14);
+		int index = location.indexOf("/");
+		location =location.substring(index+1);
+		index = location.lastIndexOf("/");
+
+		String dir=location.substring(0,index);
+		String db=location.substring(index+1);
+		logger.log(Level.INFO,"h2 restore dir="+dir+" db="+db);
+		Restore.execute(backup.getPath(), dir, db);
 	}
 }

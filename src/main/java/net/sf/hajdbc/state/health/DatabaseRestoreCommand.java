@@ -17,25 +17,30 @@
  */
 package net.sf.hajdbc.state.health;
 
+import java.io.File;
+import java.io.FilenameFilter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 import org.h2.tools.Restore;
-import org.h2.tools.RunScript;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class H2RestoreCommand<Z, D extends Database<Z>> implements Command<String, StateCommandContext<Z, D>>
+public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command<String, StateCommandContext<Z, D>>
 {
-	private final static Logger logger = LoggerFactory.getLogger(H2RestoreCommand.class);
+	private final static Logger logger = LoggerFactory.getLogger(DatabaseRestoreCommand.class);
 	private static final long serialVersionUID = 1L;
+	public static final int DEFAULT_MAX_BACKUP_COUNT = 10;
+	private int getMaxBackupCount = DEFAULT_MAX_BACKUP_COUNT;
+	static SimpleDateFormat format = new SimpleDateFormat("yyyyMMddHHmmss");
 	private byte[] bytes;
 
 	public byte[] getBytes() {
@@ -51,29 +56,47 @@ public class H2RestoreCommand<Z, D extends Database<Z>> implements Command<Strin
 		if(bytes!=null){
 			if(context.getHealth().getState().equals(NodeState.ready)){
 				try {
-					Path path = Paths.get(System.getProperty("user.dir"),"backup.zip");
+					Path path = Paths.get(System.getProperty("user.dir"),"backup.bak");
 					if (Files.exists(path)) {
 						Files.delete(path);
 					}
 					Files.write(path,bytes);
 					DatabaseCluster<Z, D> databaseCluster = context.getDatabaseCluster();
 					D database = databaseCluster.getLocalDatabase();
-					String location = database.getLocation();
-					location=location.substring(14);
-					int index = location.indexOf("/");
-					location =location.substring(index+1);
-					index = location.lastIndexOf("/");
-
-					String dir=location.substring(0,index);
-					String db=location.substring(index+1);
-					logger.info("h2 restore dir="+dir+" db="+db);
-					Restore.execute(path.toFile().getPath(),dir,db);
-					return database.getId();
+					backOldData(databaseCluster, database);
+					if(databaseCluster.restore(database,path.toFile())) {
+						return database.getId();
+					}
 				}catch (Exception e){
-					e.printStackTrace();
+          logger.warn("",e);
 				}
 			}
 		}
 		return null;
+	}
+
+	private void backOldData(DatabaseCluster<Z, D> databaseCluster, D database) {
+		Path backupDir = Paths.get(System.getProperty("user.dir"),"backups");
+		LinkedList<File> files = new LinkedList<>();
+		File[] allFiles = backupDir.toFile().listFiles();
+		if(allFiles!=null){
+			for(File file : allFiles){
+				if(file.getName().endsWith(".bak")){
+					files.add(file);
+				}
+			}
+		}
+		Collections.sort(files, new Comparator<File>() {
+			public int compare(File f1, File f2) {
+				return f1.getName().compareTo(f2.getName());
+			}
+		});
+		while(files.size()>getMaxBackupCount){
+			File file = files.peekFirst();
+			file.delete();
+		}
+		Path backup = Paths.get(backupDir.toFile().getPath(),"db_"+format.format(new Date())+".bak");
+		databaseCluster.backup(database,backup.toFile());
+    logger.info("backup old data:"+backup.toFile().getName());
 	}
 }

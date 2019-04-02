@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc.dialect;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
@@ -257,4 +258,15 @@ public interface Dialect
 	boolean isValid(Connection connection) throws SQLException;
 	
 	<Z, D extends Database<Z>> ConnectionProperties getConnectionProperties(D database, Decoder decoder) throws SQLException;
+
+	/**
+	 * Returns database support restore or not.
+	 * @return database support restore or not.
+	 */
+	boolean isSupportRestore();
+
+	<Z, D extends Database<Z>> void backup(D database, File backup,Connection connection) throws SQLException;
+
+	<Z, D extends Database<Z>> void restore(D database,File backup,Connection connection) throws SQLException;
+
 }

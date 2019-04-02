@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc;
 
+import java.io.File;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 
@@ -32,6 +33,7 @@ import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
@@ -175,7 +177,11 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
   void addListener(NodeStateListener listener);
 
   void removeListener(NodeStateListener listener);
-	
+
+	void addListener(NodeDatabaseRestoreListener listener);
+
+	void removeListener(NodeDatabaseRestoreListener listener);
+
 	void addSynchronizationListener(SynchronizationListener listener);
 	
 	void removeSynchronizationListener(SynchronizationListener listener);
@@ -196,4 +202,17 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	InputSinkStrategy<? extends Object> getInputSinkStrategy();
 
 	boolean isAlive(D database, Level level);
+
+	/**
+	 * Returns database support restore or not.
+	 * @return database support restore or not.
+	 */
+	boolean isSupportRestore();
+
+	boolean backup(D database,File backup);
+
+	boolean restore(D database,File backup);
+
+	boolean beforeRestore(Database<Z> database);
+	void afterRestored(Database<Z> database);
 }

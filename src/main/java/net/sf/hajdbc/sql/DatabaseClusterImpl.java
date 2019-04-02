@@ -17,8 +17,10 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -41,6 +43,7 @@ import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.Dialect;
+import net.sf.hajdbc.dialect.h2.H2Dialect;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.durability.Durability;
@@ -63,6 +66,7 @@ import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeHealth;
 import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.sync.SynchronizationContext;
@@ -102,7 +106,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private final List<DatabaseClusterListener> clusterListeners = new CopyOnWriteArrayList<DatabaseClusterListener>();
 	private final List<SynchronizationListener> synchronizationListeners = new CopyOnWriteArrayList<SynchronizationListener>();
   private final List<NodeStateListener> nodeStateListeners = new CopyOnWriteArrayList<>();
-
+  private final List<NodeDatabaseRestoreListener> nodeDatabaseRestoreListeners = new CopyOnWriteArrayList<>();
 
 	public DatabaseClusterImpl(String id, DatabaseClusterConfiguration<Z, D> configuration, DatabaseClusterConfigurationListener<Z, D> listener)
 	{
@@ -432,7 +436,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
     nodeStateListeners.remove(listener);
   }
 
-  /**
+	@Override
+	public void addListener(NodeDatabaseRestoreListener listener) {
+		nodeDatabaseRestoreListeners.add(listener);
+	}
+
+	@Override
+	public void removeListener(NodeDatabaseRestoreListener listener) {
+		nodeDatabaseRestoreListeners.remove(listener);
+	}
+
+	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseCluster#removeSynchronizationListener(net.sf.hajdbc.SynchronizationListener)
 	 */
@@ -906,6 +920,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
+	@Override
 	public boolean isAlive(D database, Level level)
 	{
 		try
@@ -924,6 +939,71 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			logger.log(level, e);
 			return false;
+		}
+	}
+
+	@Override
+	public boolean isSupportRestore() {
+		return dialect.isSupportRestore();
+	}
+
+	@Override
+	public boolean backup(D database, File backup) {
+		Connection connection = null;
+		try
+		{
+			connection = database.connect(database.getConnectionSource(), database.decodePassword(this.getDecoder()));
+			dialect.backup(database,backup,connection);
+			return true;
+		}catch (Exception e){
+			logger.log(Level.WARN,e);
+		}finally {
+			if(connection!=null){
+				Resources.close(connection);
+			}
+		}
+		return false;
+	}
+
+	@Override
+	public boolean restore(D database, File backup) {
+		Connection connection = null;
+		try
+		{
+			connection = database.connect(database.getConnectionSource(), database.decodePassword(this.getDecoder()));
+			if(beforeRestore(database)) {
+				dialect.restore(database,backup,connection);
+			}
+			return true;
+		}catch (Exception e){
+			logger.log(Level.WARN,e);
+		}finally {
+			afterRestored(database);
+			if(connection!=null){
+				Resources.close(connection);
+			}
+		}
+		return false;
+	}
+
+	@Override
+	public boolean beforeRestore(Database<Z> database) {
+		Iterator<NodeDatabaseRestoreListener> iterator = nodeDatabaseRestoreListeners.iterator();
+		while (iterator.hasNext()){
+			NodeDatabaseRestoreListener listener = iterator.next();
+			if(!listener.beforeRestore(database)){
+				return false;
+			}
+		}
+		return true;
+	}
+
+	@Override
+	public void afterRestored(Database<Z> database) {
+		Iterator<NodeDatabaseRestoreListener> iterator = nodeDatabaseRestoreListeners.iterator();
+		while (iterator.hasNext()){
+			NodeDatabaseRestoreListener listener = iterator.next();
+			listener.afterRestored(database);
 		}
 	}
 
@@ -1036,9 +1116,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		@Override
 		public void run()
 		{
-			
 			try
 			{
+				if(DatabaseClusterImpl.this.isSupportRestore()){
+					return;
+				}
 				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
 					return;
 				}
