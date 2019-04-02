@@ -31,6 +31,7 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.SequenceProperties;
 import net.sf.hajdbc.SequencePropertiesFactory;
 import net.sf.hajdbc.SequenceSupport;
+import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
@@ -169,23 +170,42 @@ public class H2Dialect extends StandardDialect
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void backup(D database, File backup, Connection connection) throws SQLException {
-		Statement statement = connection.createStatement();
-		statement.execute("BACKUP TO '"+backup.getPath()+"'");
+	public <Z, D extends Database<Z>> boolean backup(D database, File backup, Decoder decoder) {
 
+		Connection connection = null;
+		try
+		{
+			connection = database.connect(database.getConnectionSource(), database.decodePassword(decoder));
+			Statement statement = connection.createStatement();
+			statement.execute("BACKUP TO '"+backup.getPath()+"'");
+			return true;
+		}catch (Exception e){
+			logger.log(Level.WARN,e);
+		}finally {
+			if(connection!=null){
+				Resources.close(connection);
+			}
+		}
+		return false;
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void restore(D database, File backup, Connection connection) throws SQLException {
-		String location = database.getLocation();
-		location=location.substring(14);
-		int index = location.indexOf("/");
-		location =location.substring(index+1);
-		index = location.lastIndexOf("/");
+	public <Z, D extends Database<Z>> boolean restore(D database, File backup, Decoder decoder) {
+		try {
+			String location = database.getLocation();
+			location=location.substring(14);
+			int index = location.indexOf("/");
+			location =location.substring(index+1);
+			index = location.lastIndexOf("/");
 
-		String dir=location.substring(0,index);
-		String db=location.substring(index+1);
-		logger.log(Level.INFO,"h2 restore dir="+dir+" db="+db);
-		Restore.execute(backup.getPath(), dir, db);
+			String dir=location.substring(0,index);
+			String db=location.substring(index+1);
+			logger.log(Level.INFO,"h2 restore dir="+dir+" db="+db);
+			Restore.execute(backup.getPath(), dir, db);
+			return true;
+		}catch (Exception e){
+			logger.log(Level.WARN,e);
+		}
+		return false;
 	}
 }

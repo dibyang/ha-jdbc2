@@ -19,6 +19,7 @@ package net.sf.hajdbc.state.health;
 
 import java.io.File;
 import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -65,6 +66,10 @@ public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command
 					D database = databaseCluster.getLocalDatabase();
 					backOldData(databaseCluster, database);
 					if(databaseCluster.restore(database,path.toFile())) {
+            Path end = Paths.get(System.getProperty("user.dir"),"backups/backup.end");
+            if(Files.exists(end)){
+              end.toFile().delete();
+            }
 						return database.getId();
 					}
 				}catch (Exception e){
@@ -75,28 +80,32 @@ public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command
 		return null;
 	}
 
-	private void backOldData(DatabaseCluster<Z, D> databaseCluster, D database) {
+	private void backOldData(DatabaseCluster<Z, D> databaseCluster, D database) throws IOException {
 		Path backupDir = Paths.get(System.getProperty("user.dir"),"backups");
-		LinkedList<File> files = new LinkedList<>();
-		File[] allFiles = backupDir.toFile().listFiles();
-		if(allFiles!=null){
-			for(File file : allFiles){
-				if(file.getName().endsWith(".bak")){
-					files.add(file);
-				}
-			}
-		}
-		Collections.sort(files, new Comparator<File>() {
-			public int compare(File f1, File f2) {
-				return f1.getName().compareTo(f2.getName());
-			}
-		});
-		while(files.size()>getMaxBackupCount){
-			File file = files.peekFirst();
-			file.delete();
-		}
-		Path backup = Paths.get(backupDir.toFile().getPath(),"db_"+format.format(new Date())+".bak");
-		databaseCluster.backup(database,backup.toFile());
-    logger.info("backup old data:"+backup.toFile().getName());
+    Path end = Paths.get(System.getProperty("user.dir"),"backups/backup.end");
+    if(!Files.exists(end)){
+      LinkedList<File> files = new LinkedList<>();
+      File[] allFiles = backupDir.toFile().listFiles();
+      if(allFiles!=null){
+        for(File file : allFiles){
+          if(file.getName().endsWith(".bak")){
+            files.add(file);
+          }
+        }
+      }
+      Collections.sort(files, new Comparator<File>() {
+        public int compare(File f1, File f2) {
+          return f1.getName().compareTo(f2.getName());
+        }
+      });
+      while(files.size()>getMaxBackupCount){
+        File file = files.peekFirst();
+        file.delete();
+      }
+      Path backup = Paths.get(backupDir.toFile().getPath(),"db_"+format.format(new Date())+".bak");
+      databaseCluster.backup(database,backup.toFile());
+      end.toFile().createNewFile();
+      logger.info("backup old data:"+backup.toFile().getName());
+    }
 	}
 }

@@ -949,41 +949,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 	@Override
 	public boolean backup(D database, File backup) {
-		Connection connection = null;
-		try
-		{
-			connection = database.connect(database.getConnectionSource(), database.decodePassword(this.getDecoder()));
-			dialect.backup(database,backup,connection);
-			return true;
-		}catch (Exception e){
-			logger.log(Level.WARN,e);
-		}finally {
-			if(connection!=null){
-				Resources.close(connection);
-			}
-		}
-		return false;
+		return dialect.backup(database,backup,getDecoder());
 	}
 
 	@Override
 	public boolean restore(D database, File backup) {
-		Connection connection = null;
-		try
-		{
-			connection = database.connect(database.getConnectionSource(), database.decodePassword(this.getDecoder()));
-			if(beforeRestore(database)) {
-				dialect.restore(database,backup,connection);
-			}
-			return true;
-		}catch (Exception e){
-			logger.log(Level.WARN,e);
-		}finally {
-			afterRestored(database);
-			if(connection!=null){
-				Resources.close(connection);
-			}
-		}
-		return false;
+		return dialect.restore(database,backup,getDecoder());
 	}
 
 	@Override

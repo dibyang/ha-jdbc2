@@ -265,8 +265,8 @@ public interface Dialect
 	 */
 	boolean isSupportRestore();
 
-	<Z, D extends Database<Z>> void backup(D database, File backup,Connection connection) throws SQLException;
+	<Z, D extends Database<Z>> boolean backup(D database, File backup,Decoder decoder);
 
-	<Z, D extends Database<Z>> void restore(D database,File backup,Connection connection) throws SQLException;
+	<Z, D extends Database<Z>> boolean restore(D database,File backup,Decoder decoder);
 
 }
