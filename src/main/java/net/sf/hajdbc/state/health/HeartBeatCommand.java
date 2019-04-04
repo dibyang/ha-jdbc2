@@ -24,13 +24,18 @@ import net.sf.hajdbc.state.distributed.StateCommandContext;
 public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
 {
 	private static final long serialVersionUID = 1L;
+  private long sendTime = 0;
 
+	public HeartBeatCommand preSend() {
+		this.sendTime = System.currentTimeMillis();
+		return this;
+	}
 
 	@Override
 	public Void execute(StateCommandContext<Z, D> context) {
 		ClusterHealth health = context.getHealth();
 		if(health!=null){
-			health.receiveHeartbeat();
+			health.receiveHeartbeat(sendTime);
 		}
 		return null;
 	}

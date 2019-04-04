@@ -14,7 +14,13 @@ public interface ClusterHealth {
 
   NodeHealth getNodeHealth(Member member);
 
-  void receiveHeartbeat();
+  void receiveHeartbeat(long sendTime);
+
+  long getOffsetTime();
+
+  long getHostTime();
+
+  boolean canWrite();
 
   NodeState getState();
 

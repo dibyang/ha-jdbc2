@@ -35,6 +35,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
+  private volatile long offsetTime = 0;
   private volatile long lastHeartbeat = 0;
 
   HeartBeatCommand beatCommand = new HeartBeatCommand();
@@ -93,10 +94,26 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * Receive host node heart beat.
    */
   @Override
-  public void receiveHeartbeat(){
+  public void receiveHeartbeat(long sendTime){
     logger.debug("receive host heart beat.");
     counter.set(0);
-    lastHeartbeat = System.currentTimeMillis();
+    lastHeartbeat = sendTime;
+    offsetTime = sendTime -System.currentTimeMillis();
+  }
+
+  @Override
+  public long getOffsetTime() {
+    return offsetTime;
+  }
+
+  @Override
+  public long getHostTime() {
+    return System.currentTimeMillis()+offsetTime;
+  }
+
+  @Override
+  public boolean canWrite() {
+    return state.isCanUpdate();
   }
 
   @Override
@@ -137,7 +154,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   @Override
   public void updateToken(long token){
-    if(state.isCanUpdate()){
+    if(canWrite()){
       arbiter.update(token);
     }
   }
@@ -147,7 +164,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    */
   private void sendHeartbeat(){
     logger.debug("host send heart beat.");
-    stateManager.executeAll(beatCommand,stateManager.getLocal());
+    stateManager.executeAll(beatCommand.preSend(),stateManager.getLocal());
   }
 
 
