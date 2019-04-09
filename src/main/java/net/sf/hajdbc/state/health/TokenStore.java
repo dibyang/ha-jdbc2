@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.util.List;
 
 public class TokenStore {
-  public static final String TOKEN_DAT = "token.dat";
   public static final String ONLYHOST_TRUE = "1";
   public static final String ONLYHOST_FALSE = "0";
   public static final String NEWLINE = "\n";
