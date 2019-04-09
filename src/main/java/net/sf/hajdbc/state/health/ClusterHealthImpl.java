@@ -28,7 +28,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
   public static final int HEARTBEAT_LOST_MAX = 5;
-  private long maxElectTime = 5 * 60*1000L;
+  private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
   private volatile boolean unattended = true;
