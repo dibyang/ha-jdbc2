@@ -50,7 +50,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     this.stateManager = stateManager;
     executorService = Executors.newFixedThreadPool(1,HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
-    arbiter = new Arbiter();
+    arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
   }
 
   @Override
