@@ -18,6 +18,7 @@ public class Arbiter {
 
   public Arbiter() {
     arbiter = new TokenStore(getArbiterPath());
+    checkMount();
   }
 
   private Path getArbiterPath() {

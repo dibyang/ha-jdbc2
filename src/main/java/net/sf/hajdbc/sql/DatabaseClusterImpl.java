@@ -20,7 +20,6 @@ package net.sf.hajdbc.sql;
 import java.io.File;
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -43,7 +42,6 @@ import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.Dialect;
-import net.sf.hajdbc.dialect.h2.H2Dialect;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.durability.Durability;
@@ -540,6 +538,25 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 		
 		return database;
+	}
+
+	@Override
+	public D getDatabaseByIp(String ip) {
+		D find = null;
+		Iterator<D> iterator = this.configuration.getDatabaseMap().values().iterator();
+		while(iterator.hasNext()){
+			D next = iterator.next();
+			if(next.getIp().equals(ip)){
+				find = next;
+				break;
+			}
+		}
+		return find;
+	}
+
+	@Override
+	public void addDatabase(D database) {
+		this.configuration.getDatabaseMap().putIfAbsent(database.getId(),database);
 	}
 
 	/**

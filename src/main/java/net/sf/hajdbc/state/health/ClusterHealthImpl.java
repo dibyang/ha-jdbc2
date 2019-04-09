@@ -19,6 +19,7 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,7 +27,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int HEARTBEAT_LOST_MAX = 3;
+  public static final int HEARTBEAT_LOST_MAX = 5;
   private long maxElectTime = 5 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -41,19 +42,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   HeartBeatCommand beatCommand = new HeartBeatCommand();
   NodeHealthCommand healthCommand = new NodeHealthCommand();
 
-  private final ScheduledExecutorService scheduledService = Executors.newScheduledThreadPool(1, new ThreadFactory() {
-    private AtomicInteger atoInteger = new AtomicInteger(0);
-    public Thread newThread(Runnable r) {
-      Thread t = new Thread(r);
-      t.setName("cluster-health-Thread "+ atoInteger.getAndIncrement());
-      return t;
-    }
-  });
+  private final ScheduledExecutorService scheduledService = Executors.newScheduledThreadPool(1,
+      HaJdbcThreadFactory.c("cluster-health-Thread"));
 
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
-    executorService = Executors.newFixedThreadPool(1);
+    executorService = Executors.newFixedThreadPool(1,HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter();
   }
@@ -66,7 +61,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");
     }
-    scheduledService.scheduleWithFixedDelay(this,0,2000, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this,4000,2000, TimeUnit.MILLISECONDS);
   }
   @Override
   public void stop(){
@@ -165,6 +160,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
   private void sendHeartbeat(){
     logger.debug("host send heart beat.");
     stateManager.executeAll(beatCommand.preSend(),stateManager.getLocal());
+    logger.debug("host send heart beat end.");
   }
 
 
@@ -177,7 +173,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     int count = counter.incrementAndGet();
     if(count>= HEARTBEAT_LOST_MAX){
       counter.set(0);
-      return true;
+      Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
+
+      //delete invalid data.
+      remveInvalidReceive(all);
+      Entry<Member, NodeHealth> host = findNodeByState(all, NodeState.host);
+      boolean lost = (host == null);
+      logger.info("lost heart beat = "+lost);
+      return lost;
     }
     return false;
   }
@@ -205,8 +208,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
    * start elect host node.
    */
   private synchronized void elect(){
-    Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock("HOST_ELECT");
+    Lock lock = null;
     try {
+      lock = stateManager.getDatabaseCluster().getLockManager().onlyLock("HOST_ELECT");
       if(lock.tryLock()){
         logger.info("host elect begin.");
         long waitTime = 2;
@@ -242,7 +246,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     }catch (Exception e){
       logger.warn("",e);
     }finally {
-      lock.unlock();
+      if(lock!=null){
+        lock.unlock();
+      }
     }
 
   }
@@ -402,7 +408,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
 
   @Override
-  public synchronized void run() {
+  public void run() {
     try {
       if(NodeState.host.equals(state)){
         if(findOtherHost()){
@@ -446,6 +452,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
           elect();
         }
       }
+
     }catch (Exception e){
       logger.warn("",e);
     }

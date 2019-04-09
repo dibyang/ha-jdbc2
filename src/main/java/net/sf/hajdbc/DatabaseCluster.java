@@ -74,6 +74,10 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	 */
 	D getDatabase(String id);
 
+	D getDatabaseByIp(String ip);
+
+	void addDatabase(D database);
+
 	/**
 	 * Returns the local database.
 	 * @return local database

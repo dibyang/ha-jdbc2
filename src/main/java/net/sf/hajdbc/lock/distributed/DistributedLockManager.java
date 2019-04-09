@@ -471,8 +471,8 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		
 		private void unlockCoordinator(Member coordinator)
 		{
-			this.dispatcher.execute(new CoordinatorReleaseLockCommand(this.descriptor), coordinator);
 			this.lock.unlock();
+			this.dispatcher.execute(new CoordinatorReleaseLockCommand(this.descriptor), coordinator);
 		}
 
 		@Override
