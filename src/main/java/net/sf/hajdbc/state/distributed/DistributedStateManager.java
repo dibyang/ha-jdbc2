@@ -308,7 +308,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		}
 	}
 
-	//GetDatabaseCommand getDatabaseCommand = new GetDatabaseCommand();
+
 
 	/**
 	 * {@inheritDoc}
@@ -320,7 +320,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
 
-		//checkMemberDatabaseConfig(member);
+		checkMemberDatabaseConfig(member);
 
 		Iterator<MembershipListener> iterator = membershipListeners.iterator();
     while(iterator.hasNext()){
@@ -340,17 +340,17 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			checkMemberDatabaseConfig(member);
 		}
 	}//*/
-
+	GetDatabaseCommand getDatabaseCommand = new GetDatabaseCommand();
 	private void checkMemberDatabaseConfig(Member member) {
 		if(!member.equals(getLocal())){
 			String ip = getIp(member);
 			D database = cluster.getDatabaseByIp(ip);
 			if(database==null){
-				/*D db = (D)execute(getDatabaseCommand, member);
+				D db = (D)execute(getDatabaseCommand, member);
 				if(db!=null){
 					db.checkLocal();
 					cluster.addDatabase(db);
-				}//*/
+				}
 			}
 		}
 	}
