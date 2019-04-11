@@ -649,7 +649,10 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
   @Override
   public ClusterHealth getClusterHealth() {
-    return ((DistributedStateManager)stateManager).getHealth();
+		if(stateManager instanceof  DistributedStateManager) {
+			return ((DistributedStateManager) stateManager).getHealth();
+		}
+		return null;
   }
 
   @Override
