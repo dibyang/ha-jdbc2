@@ -1,0 +1,23 @@
+image: maven:3.6-jdk-8
+
+stages:
+  - build
+  - test
+
+job_build:
+  stage: build
+  script:
+    - mvn clean install
+  only:
+    - develop
+  tags:
+    - jdk8
+    - maven
+
+job_test:
+  stage: test
+  script:
+    - mvn test
+  tags:
+    - jdk8
+    - maven
