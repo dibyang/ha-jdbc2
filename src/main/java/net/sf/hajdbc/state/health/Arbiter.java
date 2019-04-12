@@ -10,18 +10,25 @@ import java.util.List;
 import net.sf.hajdbc.state.health.observer.Observer;
 
 public class Arbiter {
-  private final LocalTokenStore local = new LocalTokenStore();
+  private final LocalTokenStore local;
   private final TokenStore arbiter;
   private final Observer observer = new Observer();
   private final ArbiterConfig config = new ArbiterConfig();
+  //private final String clusterId;
+  private final String tokenName;
 
 
-  public Arbiter() {
+  public Arbiter(String clusterId) {
+    //this.clusterId = clusterId;
+    tokenName = clusterId+".token";
+    local = new LocalTokenStore(tokenName);
     arbiter = new TokenStore(getArbiterPath());
+    checkMount();
   }
 
+
   private Path getArbiterPath() {
-    return Paths.get(config.getArbiterPath(), TokenStore.TOKEN_DAT);
+    return Paths.get(config.getArbiterPath(),tokenName);
   }
 
 
@@ -54,16 +61,20 @@ public class Arbiter {
         if(lines!=null){
           for(String line : lines){
             if(line!=null&&line.startsWith("none")&&line.contains(" LeoFS ")){
-              String[] ss = line.split(" ");
-              if(ss.length>2&&ss[1]!=null){
-                if(config.getArbiterPath().startsWith(ss[1])){
-                  Path parent = Paths.get(config.getArbiterPath());
+              int bindex = 5;
+              int eindex = line.indexOf(" LeoFS ",bindex);
+              if(eindex>bindex){
+                String mount = line.substring(5,eindex).trim()+"/";
+                String arbiterPath = config.getArbiterPath();
+                if(arbiterPath.startsWith(mount)){
+                  Path parent = Paths.get(arbiterPath);
                   if(!Files.exists(parent)){
                     Files.createDirectories(parent);
                     break;
                   }
                 }
               }
+
             }
           }
         }

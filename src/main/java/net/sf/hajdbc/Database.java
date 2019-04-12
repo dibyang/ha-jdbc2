@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc;
 
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -30,7 +31,7 @@ import net.sf.hajdbc.distributed.Member;
  * @param <Z> connection source (e.g. Driver, DataSource, etc.)
  * @since   1.0
  */
-public interface Database<Z> extends Comparable<Database<Z>>
+public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 {
 	int ID_MAX_SIZE = 64;
 	
@@ -89,4 +90,5 @@ public interface Database<Z> extends Comparable<Database<Z>>
 
 	String getIp();
 
+	void checkLocal();
 }

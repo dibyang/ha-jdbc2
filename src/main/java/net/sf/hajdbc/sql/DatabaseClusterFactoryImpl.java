@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Set;
 
 import net.sf.hajdbc.*;
+import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeStateListener;
 
 /**
@@ -37,6 +38,8 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 
 	Map<String, Set<NodeStateListener>> nodeStateListeners = new HashMap<String, Set<NodeStateListener>>();
 
+	Map<String, Set<NodeDatabaseRestoreListener>> nodeDatabaseRestoreListeners = new HashMap<String, Set<NodeDatabaseRestoreListener>>();
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.DatabaseClusterFactory#createDatabaseCluster(java.lang.String, net.sf.hajdbc.DatabaseClusterConfigurationFactory)
@@ -48,6 +51,7 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 		addDatabaseClusterListeners(id, databaseCluster);
 		addSynchronizationListeners(id, databaseCluster);
 		addNodeStateListeners(id, databaseCluster);
+		addNodeDatabaseRestoreListeners(id,databaseCluster);
 		return databaseCluster;
 	}
 
@@ -72,10 +76,20 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 	}
 
 	private void addNodeStateListeners(String id,
-			DatabaseCluster<Z, D> databaseCluster) {
-		Set<NodeStateListener> listeners = nodeStateListeners.get(id);
+																			DatabaseCluster<Z, D> databaseCluster) {
+	Set<NodeStateListener> listeners = nodeStateListeners.get(id);
+	if(listeners!=null){
+		for(NodeStateListener listener:listeners){
+			databaseCluster.addListener(listener);
+		}
+	}
+}
+
+	private void addNodeDatabaseRestoreListeners(String id,
+																		 DatabaseCluster<Z, D> databaseCluster) {
+		Set<NodeDatabaseRestoreListener> listeners = nodeDatabaseRestoreListeners.get(id);
 		if(listeners!=null){
-			for(NodeStateListener listener:listeners){
+			for(NodeDatabaseRestoreListener listener:listeners){
 				databaseCluster.addListener(listener);
 			}
 		}
@@ -136,5 +150,15 @@ public class DatabaseClusterFactoryImpl<Z, D extends Database<Z>> implements Dat
 				map.remove(id);
 			}
 		}
+	}
+
+	@Override
+	public void addListener(String id, NodeDatabaseRestoreListener listener){
+		addListener(nodeDatabaseRestoreListeners,id,listener);
+	}
+
+	@Override
+	public void removeListener(String id,NodeDatabaseRestoreListener listener){
+		removeListener(nodeDatabaseRestoreListeners,id,listener);
 	}
 }

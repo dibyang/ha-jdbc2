@@ -15,28 +15,19 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-package net.sf.hajdbc.state.health;
+package net.sf.hajdbc.state.distributed;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.state.distributed.StateCommandContext;
+import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.state.health.NodeHealth;
 
-public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
+public class GetDatabaseCommand<Z, D extends Database<Z>> implements Command<D, StateCommandContext<Z, D>>
 {
 	private static final long serialVersionUID = 1L;
-  private long sendTime = 0;
-
-	public HeartBeatCommand preSend() {
-		this.sendTime = System.currentTimeMillis();
-		return this;
-	}
 
 	@Override
-	public Void execute(StateCommandContext<Z, D> context) {
-		ClusterHealth health = context.getHealth();
-		if(health!=null){
-			health.receiveHeartbeat(sendTime);
-		}
-		return null;
+	public D execute(StateCommandContext<Z, D> context) {
+		return context.getDatabaseCluster().getLocalDatabase();
 	}
 }

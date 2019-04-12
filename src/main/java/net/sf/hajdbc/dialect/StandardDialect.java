@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc.dialect;
 
+import java.io.File;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Driver;
@@ -1066,5 +1067,20 @@ public class StandardDialect implements Dialect, SequenceSupport, IdentityColumn
 		{
 			connection.close();
 		}
+	}
+
+	@Override
+	public boolean isSupportRestore() {
+		return false;
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> boolean backup(D database, File backup, Decoder decoder)  {
+    return false;
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> boolean restore(D database, File backup, Decoder decoder) {
+    return false;
 	}
 }

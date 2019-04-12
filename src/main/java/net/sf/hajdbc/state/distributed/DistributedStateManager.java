@@ -308,6 +308,8 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		}
 	}
 
+
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.MembershipListener#added(net.sf.hajdbc.distributed.Member)
@@ -317,19 +319,41 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
-    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+
+		checkMemberDatabaseConfig(member);
+
+		Iterator<MembershipListener> iterator = membershipListeners.iterator();
     while(iterator.hasNext()){
       try {
         iterator.next().added(member);
       }catch (Exception e){
         logger.log(Level.WARN,e);
       }
-
     }
 	}
 
-
-
+	/*
+	public void checkDatabaseConfig() {
+		Iterator<Member> iterator = members.iterator();
+		while(iterator.hasNext()){
+			Member member = iterator.next();
+			checkMemberDatabaseConfig(member);
+		}
+	}//*/
+	GetDatabaseCommand getDatabaseCommand = new GetDatabaseCommand();
+	private void checkMemberDatabaseConfig(Member member) {
+		if(!member.equals(getLocal())){
+			String ip = getIp(member);
+			D database = cluster.getDatabaseByIp(ip);
+			if(database==null){
+				D db = (D)execute(getDatabaseCommand, member);
+				if(db!=null){
+					db.checkLocal();
+					cluster.addDatabase(db);
+				}
+			}
+		}
+	}
 
 
 	/**

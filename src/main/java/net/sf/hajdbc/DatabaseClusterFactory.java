@@ -18,6 +18,8 @@
 package net.sf.hajdbc;
 
 import java.sql.SQLException;
+
+import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeStateListener;
 
 
@@ -39,5 +41,9 @@ public interface DatabaseClusterFactory<Z, D extends Database<Z>>
 	void addListener(String id, NodeStateListener listener);
 
 	void removeListener(String id, NodeStateListener listener);
+
+	void addListener(String id, NodeDatabaseRestoreListener listener);
+
+	void removeListener(String id,NodeDatabaseRestoreListener listener);
 
 }

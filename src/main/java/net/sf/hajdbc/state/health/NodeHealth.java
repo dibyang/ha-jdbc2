@@ -25,7 +25,7 @@ public class NodeHealth implements Serializable {
   }
 
   public boolean isValidLocal() {
-    return isValidArbiter()&&(local>arbiter);
+    return isValidArbiter()&&(local>=arbiter);
   }
 
   public boolean isEmpty() {

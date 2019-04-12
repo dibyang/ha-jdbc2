@@ -36,7 +36,6 @@ import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.invocation.AllResultsCollector;
 import net.sf.hajdbc.invocation.InvocationStrategies;
 import net.sf.hajdbc.invocation.InvocationStrategy;
-import net.sf.hajdbc.invocation.InvokeOnManyInvocationStrategy;
 import net.sf.hajdbc.invocation.Invoker;
 import net.sf.hajdbc.invocation.SimpleInvoker;
 import net.sf.hajdbc.logging.Level;
@@ -104,7 +103,7 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		if(isAllInvoke(strategy)){
 			DatabaseCluster<Z, D> cluster = this.proxyFactory.getDatabaseCluster();
 			ClusterHealth clusterHealth = cluster.getClusterHealth();
-			if(clusterHealth.isHost()){
+			if(clusterHealth!=null&&clusterHealth.isHost()){
 				clusterHealth.incrementToken();
 			}
 		}
