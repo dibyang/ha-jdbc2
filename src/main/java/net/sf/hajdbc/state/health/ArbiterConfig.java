@@ -29,7 +29,7 @@ public class ArbiterConfig {
   private volatile String local ="";
 
   public ArbiterConfig() {
-    this.path = Paths.get(System.getProperty("user.dir"), "conf","arbiter.conf");
+    this.path = PathHelper.helper.get("conf","arbiter.conf");
   }
 
   public String getArbiterPath() {
