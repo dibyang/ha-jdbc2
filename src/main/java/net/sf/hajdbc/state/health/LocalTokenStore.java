@@ -7,6 +7,6 @@ public class LocalTokenStore  extends TokenStore{
 
 
   public LocalTokenStore(String tokenName) {
-    super(Paths.get(System.getProperty("user.dir"), tokenName),true);
+    super(PathHelper.helper.get(tokenName),true);
   }
 }

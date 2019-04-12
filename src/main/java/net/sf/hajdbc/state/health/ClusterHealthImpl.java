@@ -491,7 +491,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
             Lock lock = databaseCluster.getLockManager().writeLock(null);
             try {
               lock.lockInterruptibly();
-              Path path = Paths.get(System.getProperty("user.dir"),"backup.bak");
+              Path path = PathHelper.helper.get("backup.bak");
               if(Files.exists(path)){
                 Files.delete(path);
               }

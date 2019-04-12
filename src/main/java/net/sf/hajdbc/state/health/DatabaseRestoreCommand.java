@@ -57,7 +57,7 @@ public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command
 		if(bytes!=null){
 			if(context.getHealth().getState().equals(NodeState.ready)){
 				try {
-					Path path = Paths.get(System.getProperty("user.dir"),"backup.bak");
+					Path path = PathHelper.helper.get("backup.bak");
 					if (Files.exists(path)) {
 						Files.delete(path);
 					}
@@ -66,7 +66,7 @@ public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command
 					D database = databaseCluster.getLocalDatabase();
 					backOldData(databaseCluster, database);
 					if(databaseCluster.restore(database,path.toFile())) {
-            Path end = Paths.get(System.getProperty("user.dir"),"backups/backup.end");
+            Path end = PathHelper.helper.get("backups/backup.end");
             if(Files.exists(end)){
               end.toFile().delete();
             }
@@ -81,8 +81,8 @@ public class DatabaseRestoreCommand<Z, D extends Database<Z>> implements Command
 	}
 
 	private void backOldData(DatabaseCluster<Z, D> databaseCluster, D database) throws IOException {
-		Path backupDir = Paths.get(System.getProperty("user.dir"),"backups");
-    Path end = Paths.get(System.getProperty("user.dir"),"backups/backup.end");
+		Path backupDir = PathHelper.helper.get("backups");
+    Path end = PathHelper.helper.get("backups/backup.end");
     if(!Files.exists(end)){
       LinkedList<File> files = new LinkedList<>();
       File[] allFiles = backupDir.toFile().listFiles();
