@@ -657,7 +657,10 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
   @Override
   public DistributedManager<Z, D> getDistributedManager() {
-    return ((DistributedStateManager)stateManager);
+		if(stateManager instanceof DistributedManager) {
+			return ((DistributedManager) stateManager);
+		}
+		return null;
   }
 
   @Override
@@ -1112,7 +1115,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				if(DatabaseClusterImpl.this.isSupportRestore()){
 					return;
 				}
-				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
 

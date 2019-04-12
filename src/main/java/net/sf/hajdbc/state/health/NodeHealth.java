@@ -1,16 +1,23 @@
 package net.sf.hajdbc.state.health;
 
 import java.io.Serializable;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
+
 import net.sf.hajdbc.state.distributed.NodeState;
 
 public class NodeHealth implements Serializable {
   private static final long serialVersionUID = 1L;
 
   private NodeState state = NodeState.offline;
+  private final Set<String> activeDBs = new CopyOnWriteArraySet<>();
   private volatile long local;
   private volatile long arbiter;
   private volatile boolean lastOnlyHost = false;
 
+  public Set<String> getActiveDBs() {
+    return activeDBs;
+  }
 
   public NodeState getState() {
     return state;

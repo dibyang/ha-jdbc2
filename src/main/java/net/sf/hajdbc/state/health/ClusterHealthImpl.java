@@ -9,12 +9,15 @@ import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
@@ -23,7 +26,7 @@ import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ClusterHealthImpl implements Runnable, ClusterHealth {
+public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClusterListener {
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
@@ -48,7 +51,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
-    executorService = Executors.newFixedThreadPool(1,HaJdbcThreadFactory.c("cluster-executor-Thread"));
+    this.stateManager.getDatabaseCluster().addListener(this);
+    executorService = Executors.newFixedThreadPool(2,HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
   }
@@ -75,6 +79,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     health.setLastOnlyHost(arbiter.getLocal().isOnlyHost());
     health.setLocal(arbiter.getLocal().getToken());
     health.setArbiter(arbiter.getArbiter().getToken());
+    Set databases = stateManager.getActiveDatabases();
+    health.getActiveDBs().retainAll(databases);
+    health.getActiveDBs().addAll(databases);
     return health;
   }
 
@@ -94,7 +101,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     counter.set(0);
     lastHeartbeat = sendTime;
     offsetTime = sendTime -System.currentTimeMillis();
+
   }
+
 
   @Override
   public long getOffsetTime() {
@@ -432,24 +441,31 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
           }
         }
 
-      }else if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
-        arbiter.getLocal().setOnlyHost(false);
-        Database database = stateManager.getDatabaseCluster().getLocalDatabase();
-        if(NodeState.backup.equals(state)){
-          if(isNeedDown()) {
-            downNode();
+      }else {
+        DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+        if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
+          arbiter.getLocal().setOnlyHost(false);
+          Database database = databaseCluster.getLocalDatabase();
+          if(NodeState.backup.equals(state)){
+            if(isNeedDown()) {
+              downNode();
+            }
+          }else{
+            if(database.isActive()) {
+              setState(NodeState.backup);
+            }
+          }
+          if(isLostHeartBeat()&&canElect()){
+            elect();
           }
         }else{
+          Database database = databaseCluster.getLocalDatabase();
           if(database.isActive()) {
-            setState(NodeState.backup);
+            databaseCluster.deactivate(database,stateManager);
           }
-        }
-        if(isLostHeartBeat()&&canElect()){
-          elect();
-        }
-      }else{
-        if(canElect()){
-          elect();
+          if(canElect()){
+            elect();
+          }
         }
       }
 
@@ -564,5 +580,42 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth {
     return false;
   }
 
+  private void checkActiveDatabases(Set<String> activeDatabases) {
+    DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+    Set databases = stateManager.getActiveDatabases();
+    for(String db:activeDatabases){
+      if(!databases.contains(db)){
+        Database database = databaseCluster.getDatabase(db);
+        if(!database.isActive()){
+          logger.info("database:"+db+" is reactive.");
+          databaseCluster.getBalancer().add(database);
+          database.setActive(true);
+        }
+      }
+    }
+  }
 
+  @Override
+  public void activated(DatabaseEvent event) {
+    if(!state.equals(NodeState.host)){
+      executorService.submit(new Runnable() {
+        @Override
+        public void run() {
+          Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
+
+          //delete invalid data.
+          remveInvalidReceive(all);
+          Entry<Member, NodeHealth> host = findNodeByState(all, NodeState.host);
+          if(host!=null){
+            checkActiveDatabases(host.getValue().getActiveDBs());
+          }
+        }
+      });
+    }
+  }
+
+  @Override
+  public void deactivated(DatabaseEvent event) {
+
+  }
 }
