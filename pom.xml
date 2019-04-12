@@ -36,18 +36,18 @@
 		<github.site.repositoryName>ha-jdbc.github.com</github.site.repositoryName>
 		<github.site.repositoryOwner>ha-jdbc</github.site.repositoryOwner>
 	</properties>
-
+	<pluginRepositories>
+		<pluginRepository>
+			<id>repo_inner</id>
+			<name>repo_inner</name>
+			<url>http://13.13.13.247:8081/nexus/content/groups/public/</url>
+		</pluginRepository>
+	</pluginRepositories>
 	<repositories>
 		<repository>
-			<id>jboss-public-repository-group</id>
-			<name>JBoss Public Repository Group</name>
-			<url>http://repository.jboss.org/nexus/content/groups/public/</url>
-		</repository>
-		<repository>
-			<!-- Provides berkeleydb-je -->
-			<id>download.oracle.com</id>
-			<name>Orace maven repository</name>
-			<url>http://download.oracle.com/maven</url>
+			<id>repo_inner</id>
+			<name>repo_inner</name>
+			<url>http://13.13.13.247:8081/nexus/content/groups/public/</url>
 		</repository>
 	</repositories>
 	
