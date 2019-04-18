@@ -7,3 +7,9 @@
 
 ## v3.2.2
 1. fix bug for more instances.
+
+## v3.2.3
+1. fix bug for cluster merge.
+
+## v3.2.4
+1. optimize cluster merge speed.
