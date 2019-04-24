@@ -34,7 +34,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
-  private final AtomicInteger token = new AtomicInteger(0);
+  private volatile int token = 0;
   private volatile boolean unattended = true;
   private final ExecutorService executorService;
 
@@ -152,7 +152,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void incrementToken(){
-    token.incrementAndGet();
+    if(token<=0){
+      token = 1;
+    }
   }
 
   @Override
@@ -481,10 +483,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   private void updateNewToken() {
-    int offset = token.getAndSet(0);
-    if(offset>0) {
-      long newToken = arbiter.getLocal().getToken() + offset;
+    if(token>0) {
+      long newToken = arbiter.getLocal().getToken() + token;
       logger.debug("update newToken=" + newToken);
+      token = 0;
       updateTokenCommand.setToken(newToken);
       stateManager.executeAll(updateTokenCommand);
     }
