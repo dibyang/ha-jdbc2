@@ -481,10 +481,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   private void updateNewToken() {
-    long newToken = arbiter.getLocal().getToken() + token.getAndSet(0);
-    logger.debug("update newToken="+newToken);
-    updateTokenCommand.setToken(newToken);
-    stateManager.executeAll(updateTokenCommand);
+    int offset = token.getAndSet(0);
+    if(offset>0) {
+      long newToken = arbiter.getLocal().getToken() + offset;
+      logger.debug("update newToken=" + newToken);
+      updateTokenCommand.setToken(newToken);
+      stateManager.executeAll(updateTokenCommand);
+    }
   }
 
   /**
