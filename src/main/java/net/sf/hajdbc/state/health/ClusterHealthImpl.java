@@ -34,6 +34,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
+  private final AtomicInteger token = new AtomicInteger(0);
   private volatile boolean unattended = true;
   private final ExecutorService executorService;
 
@@ -151,9 +152,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void incrementToken(){
-    long token = arbiter.getLocal().getToken() + 1;
-    updateTokenCommand.setToken(token);
-    stateManager.executeAll(updateTokenCommand);
+    token.incrementAndGet();
   }
 
   @Override
@@ -170,6 +169,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     logger.debug("host send heart beat.");
     stateManager.executeAll(beatCommand.preSend(),stateManager.getLocal());
     logger.debug("host send heart beat end.");
+
   }
 
 
@@ -434,6 +434,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
             executorService.submit(new Runnable() {
               @Override
               public void run() {
+                updateNewToken();
+              }
+            });
+            executorService.submit(new Runnable() {
+              @Override
+              public void run() {
                 restoreDatabaseForReady();
               }
             });
@@ -472,6 +478,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }catch (Exception e){
       logger.warn("",e);
     }
+  }
+
+  private void updateNewToken() {
+    long newToken = arbiter.getLocal().getToken() + token.getAndSet(0);
+    logger.debug("update newToken="+newToken);
+    updateTokenCommand.setToken(newToken);
+    stateManager.executeAll(updateTokenCommand);
   }
 
   /**
