@@ -20,6 +20,7 @@ package net.sf.hajdbc.state.health;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
+import org.joda.time.DateTime;
 
 public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void, StateCommandContext<Z, D>>
 {
@@ -27,7 +28,8 @@ public class HeartBeatCommand<Z, D extends Database<Z>> implements Command<Void,
   private long sendTime = 0;
 
 	public HeartBeatCommand preSend() {
-		this.sendTime = System.currentTimeMillis();
+		DateTime now = new DateTime();
+		this.sendTime = now.getMillis();
 		return this;
 	}
 
