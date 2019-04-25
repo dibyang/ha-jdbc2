@@ -23,6 +23,8 @@ import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
+import org.joda.time.DateTime;
+import org.joda.time.DateTimeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -101,7 +103,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     logger.debug("receive host heart beat.");
     counter.set(0);
     lastHeartbeat = sendTime;
-    offsetTime = sendTime -System.currentTimeMillis();
+    DateTime now = new DateTime();
+    long offset = ((sendTime - now.getMillis())/1000)*1000;
+    if(offset!=offsetTime) {
+      offsetTime = offset;
+      DateTimeUtils.setCurrentMillisOffset(offsetTime);
+    }
 
   }
 
@@ -113,7 +120,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public long getHostTime() {
-    return System.currentTimeMillis()+offsetTime;
+    DateTime now = new DateTime();
+    return now.getMillis();
   }
 
   @Override
