@@ -9,6 +9,7 @@ import java.nio.file.Paths;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,6 +45,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final AtomicInteger counter = new AtomicInteger(0);
   private volatile long offsetTime = 0;
   private volatile long lastHeartbeat = 0;
+  private volatile Member host = null;
 
   HeartBeatCommand beatCommand = new HeartBeatCommand();
   NodeHealthCommand healthCommand = new NodeHealthCommand();
@@ -147,6 +149,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(!state.equals(this.state)){
       NodeState old  = this.state;
       this.state = state;
+      if(!this.state.equals(NodeState.host)){
+        host = null;
+      }
       changeState(old,this.state);
     }
   }
@@ -319,13 +324,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void host(Member host, long token){
+    this.host = host;
     if(host!=null){
       if(stateManager.getLocal().equals(host)){
         if(!state.equals(NodeState.host)){
           setState(NodeState.host);
-          Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+          DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+          Database database = databaseCluster.getLocalDatabase();
           if(!database.isActive()){
             stateManager.activated(new DatabaseEvent(database));
+            databaseCluster.getBalancer().add(database);
+            database.setActive(true);
           }
         }
       }else{
@@ -335,6 +344,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       setState(NodeState.offline);
     }
 
+  }
+
+  @Override
+  public Member getHost() {
+    return host;
   }
 
   private Entry<Member, NodeHealth> findNodeByToken(Map<Member, NodeHealth> all) {
@@ -461,13 +475,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
         if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
           arbiter.getLocal().setOnlyHost(false);
-          Database database = databaseCluster.getLocalDatabase();
           if(NodeState.backup.equals(state)){
             if(isNeedDown()) {
               downNode();
             }
           }else{
-            if(database.isActive()) {
+            if(isActiveNode(databaseCluster)) {
               setState(NodeState.backup);
             }
           }
@@ -488,6 +501,24 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }catch (Exception e){
       logger.warn("",e);
     }
+  }
+
+  private boolean isActiveNode(DatabaseCluster databaseCluster) {
+    boolean active = false;
+    try {
+      ServiceLoader<NodeActiveChecker> load = ServiceLoader.load(NodeActiveChecker.class);
+      Iterator<NodeActiveChecker> iterator = load.iterator();
+      while (iterator.hasNext()) {
+        active = iterator.next().isActive(databaseCluster);
+        if (!active) {
+          break;
+        }
+      }
+    }catch (Exception e){
+      e.printStackTrace();
+      active = false;
+    }
+    return active;
   }
 
   private void updateNewToken() {

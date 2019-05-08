@@ -33,4 +33,6 @@ public interface ClusterHealth {
   void updateToken(long token);
 
   void host(Member host, long token);
+
+  Member getHost();
 }
