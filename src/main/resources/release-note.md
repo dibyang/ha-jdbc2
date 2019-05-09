@@ -13,3 +13,12 @@
 
 ## v3.2.4
 1. optimize cluster merge speed.
+
+## v3.2.6
+1. add joda time lib.
+
+## v3.2.7
+1. fix bug for one node network down.
+
+## v3.2.8
+1. more data sync support.

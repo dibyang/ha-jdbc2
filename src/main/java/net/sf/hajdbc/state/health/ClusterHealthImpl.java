@@ -149,9 +149,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(!state.equals(this.state)){
       NodeState old  = this.state;
       this.state = state;
-      if(!this.state.equals(NodeState.host)){
-        host = null;
-      }
       changeState(old,this.state);
     }
   }
