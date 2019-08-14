@@ -22,3 +22,6 @@
 
 ## v3.2.8
 1. more data sync support.
+
+## v3.2.9
+1. min node count elect  support.

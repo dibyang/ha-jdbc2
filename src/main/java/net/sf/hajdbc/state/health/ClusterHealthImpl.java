@@ -33,7 +33,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int HEARTBEAT_LOST_MAX = 5;
+  public static final int HEARTBEAT_LOST_MAX = 4;
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -70,7 +70,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");
     }
-    scheduledService.scheduleWithFixedDelay(this,4000,2000, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this,4000,1000, TimeUnit.MILLISECONDS);
   }
   @Override
   public void stop(){
@@ -304,8 +304,15 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         host = findNodeByEmpty(all);
       }
       if(host==null){
+        //满足最小节点数
+        if(all.size()>=getMinNodeCount()){
+          host = findNodeByToken(all);
+        }
+      }
+      if(host==null){
         long time = System.currentTimeMillis() - beginElectTime;
-        if(time > maxElectTime){
+        //选举超时
+        if((time > maxElectTime)){
           host = findNodeByToken(all);
         }
       }
@@ -317,6 +324,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
     return host;
 
+  }
+
+  private int getMinNodeCount(){
+    int count = stateManager.getDatabaseCluster().getNodeCount();
+    return Math.max(2,count);
   }
 
   @Override

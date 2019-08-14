@@ -1001,6 +1001,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
+	@Override
+	public int getNodeCount() {
+		return configuration.getDatabaseMap().size();
+	}
+
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException
 	{
 		if (!this.isAlive(database, Level.DEBUG)||!stateManager.isValid(database)) {

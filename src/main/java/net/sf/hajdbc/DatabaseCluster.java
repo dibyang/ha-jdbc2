@@ -219,4 +219,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 
 	boolean beforeRestore(Database<Z> database);
 	void afterRestored(Database<Z> database);
+
+	int getNodeCount();
 }
