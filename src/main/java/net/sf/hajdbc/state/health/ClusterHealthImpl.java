@@ -328,7 +328,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private int getMinNodeCount(){
     int count = stateManager.getDatabaseCluster().getNodeCount();
-    return Math.max(2,count);
+    return count;
   }
 
   @Override
