@@ -19,5 +19,5 @@ package net.sf.hajdbc.lock.distributed;
 
 public enum LockType
 { 
-	READ, WRITE, ONLY;
+	READ, WRITE;
 }

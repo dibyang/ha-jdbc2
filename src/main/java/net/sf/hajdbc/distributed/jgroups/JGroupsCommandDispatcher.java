@@ -40,15 +40,12 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.Objects;
 
-import org.jgroups.Address;
-import org.jgroups.Channel;
-import org.jgroups.Message;
-import org.jgroups.MessageListener;
-import org.jgroups.View;
+import org.jgroups.*;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
 import org.jgroups.blocks.RequestOptions;
 import org.jgroups.blocks.ResponseMode;
+import org.jgroups.blocks.locking.LockService;
 import org.jgroups.util.Rsp;
 
 /**
@@ -69,6 +66,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	private final AtomicReference<View> viewReference = new AtomicReference<View>();
 	private final MembershipListener membershipListener;
 	private final Stateful stateful;
+	private final LockService lockService;
 	
 	/**
 	 * Constructs a new ChannelCommandDispatcher.
@@ -86,8 +84,13 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		this.context = context;
 		this.stateful = stateful;
 		this.membershipListener = membershipListener;
+		this.lockService = new LockService(channel);
 		this.dispatcher = new MessageDispatcher( channel, this, this, this);
 		this.timeout = timeout;
+	}
+
+	public LockService getLockService() {
+		return lockService;
 	}
 
 	/**
@@ -235,6 +238,15 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	@Override
 	public void viewAccepted(View view)
 	{
+		if(view instanceof MergeView) {
+			new Thread() {
+				public void run() {
+					lockService.unlockAll();
+					// stop all access to resources protected by l1, l2 or l3
+					// every thread needs to re-acquire the locks it holds
+				}
+			}.start();
+		}
 		if (this.membershipListener != null)
 		{
 			View oldView = this.viewReference.getAndSet(view);

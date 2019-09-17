@@ -20,6 +20,7 @@ package net.sf.hajdbc.distributed;
 import java.util.Map;
 
 import net.sf.hajdbc.Lifecycle;
+import org.jgroups.blocks.locking.LockService;
 import org.jgroups.util.FutureListener;
 
 /**
@@ -59,4 +60,6 @@ public interface CommandDispatcher<C> extends Lifecycle
 	 * @return the group coordinator.
 	 */
 	Member getCoordinator();
+
+	LockService getLockService();
 }

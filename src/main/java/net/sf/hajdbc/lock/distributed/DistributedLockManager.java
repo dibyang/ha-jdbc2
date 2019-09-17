@@ -82,7 +82,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 
 	@Override
 	public Lock onlyLock(String id) {
-		return this.getDistibutedLock(new RemoteLockDescriptorImpl(id, LockType.ONLY, this.dispatcher.getLocal()));
+		return this.dispatcher.getLockService().getLock(id);
 	}
 
 	/**
@@ -103,10 +103,6 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			case WRITE:
 			{
 				return this.lockManager.writeLock(id);
-			}
-			case ONLY:
-			{
-				return this.lockManager.onlyLock(id);
 			}
 			default:
 			{
