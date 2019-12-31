@@ -13,21 +13,21 @@ import java.util.concurrent.*;
 public class TimeoutUtil {
   static final Logger logger = LoggerFactory.getLogger(TimeoutUtil.class);
 
-  public static final int DEFAULT_TIMEOUT = 500;
+  public static final int DEFAULT_TIMEOUT = 1000;
   private final int timeout;
 
   private final ExecutorService exec;
 
   public TimeoutUtil(String name){
-    this(name,DEFAULT_TIMEOUT,1);
+    this(name,DEFAULT_TIMEOUT,2);
   }
 
   public TimeoutUtil(int timeout){
-    this("TimeoutUtil",timeout,1);
+    this("TimeoutUtil",timeout,2);
   }
 
   public TimeoutUtil(String name, int timeout){
-    this(name,timeout,1);
+    this(name,timeout,2);
   }
 
   public TimeoutUtil(String name, int timeout,int nThreads) {
@@ -94,7 +94,6 @@ public class TimeoutUtil {
       task.success(value);
       return value;
     } catch (Exception e) {
-      logger.warn(null,e);
       return task.failed(e);
     }
   }

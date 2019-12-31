@@ -5,12 +5,8 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.ServiceLoader;
-import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
@@ -18,7 +14,6 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.distributed.Member;
-import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
@@ -46,6 +41,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile long offsetTime = 0;
   private volatile long lastHeartbeat = 0;
   private volatile Member host = null;
+  private final Random random = new Random();
 
   HeartBeatCommand beatCommand = new HeartBeatCommand();
   NodeHealthCommand healthCommand = new NodeHealthCommand();
@@ -70,8 +66,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");
     }
-    scheduledService.scheduleWithFixedDelay(this,4000,1000, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this,4000,2000, TimeUnit.MILLISECONDS);
   }
+
+
+
   @Override
   public void stop(){
     scheduledService.shutdown();
@@ -225,6 +224,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return false;
   }
 
+  private void delayTryLock() {
+    try {
+      Thread.sleep(200+100*random.nextInt(40));
+    } catch (InterruptedException e) {
+      //ignore InterruptedException
+    }
+  }
+
   /**
    * start elect host node.
    */
@@ -232,7 +239,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     Lock lock = null;
     try {
       lock = stateManager.getDatabaseCluster().getLockManager().onlyLock("HOST_ELECT");
-      if(lock.tryLock()){
+      boolean locked = lock.tryLock();
+      while(!locked){
+        delayTryLock();
+        locked = lock.tryLock();
+      }
+      if(locked){
         logger.info("host elect begin.");
         long waitTime = 2;
         long beginElectTime = System.currentTimeMillis();
