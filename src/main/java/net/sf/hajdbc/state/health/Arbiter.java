@@ -23,7 +23,6 @@ public class Arbiter {
     tokenName = clusterId+".token";
     local = new LocalTokenStore(tokenName);
     arbiter = new TokenStore(getArbiterPath());
-    checkMount();
   }
 
 
@@ -49,40 +48,7 @@ public class Arbiter {
     Path path = getArbiterPath();
     if(!arbiter.getPath().equals(path)){
       arbiter.setPath(path);
-      checkMount();
     }
-  }
-
-  private void checkMount() {
-    Path path = Paths.get("/proc/mounts");
-    if(Files.exists(path)){
-      try {
-        List<String> lines = Files.readAllLines(path, Charset.defaultCharset());
-        if(lines!=null){
-          for(String line : lines){
-            if(line!=null&&line.startsWith("none")&&line.contains(" LeoFS ")){
-              int bindex = 5;
-              int eindex = line.indexOf(" LeoFS ",bindex);
-              if(eindex>bindex){
-                String mount = line.substring(5,eindex).trim()+"/";
-                String arbiterPath = config.getArbiterPath();
-                if(arbiterPath.startsWith(mount)){
-                  Path parent = Paths.get(arbiterPath);
-                  if(!Files.exists(parent)){
-                    Files.createDirectories(parent);
-                    break;
-                  }
-                }
-              }
-
-            }
-          }
-        }
-      } catch (IOException e) {
-        e.printStackTrace();
-      }
-    }
-
   }
 
   public void update(long token){
