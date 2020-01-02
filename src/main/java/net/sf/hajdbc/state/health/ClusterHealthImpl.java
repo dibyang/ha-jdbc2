@@ -29,6 +29,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
   public static final int HEARTBEAT_LOST_MAX = 4;
+  public static final int MAX_TRY_LOCK = 10;
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -63,9 +64,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     String localIp = stateManager.getLocalIp();
     arbiter.setLocal(localIp);
     elect();
-    if(state.equals(NodeState.offline)){
+   /* if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");
-    }
+    }*/
     scheduledService.scheduleWithFixedDelay(this,4000,2000, TimeUnit.MILLISECONDS);
   }
 
@@ -226,7 +227,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private void delayTryLock() {
     try {
-      Thread.sleep(200+100*random.nextInt(40));
+      Thread.sleep(200+100*random.nextInt(20));
     } catch (InterruptedException e) {
       //ignore InterruptedException
     }
@@ -240,9 +241,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     try {
       lock = stateManager.getDatabaseCluster().getLockManager().onlyLock("HOST_ELECT");
       boolean locked = lock.tryLock();
-      while(!locked){
+      int tryCount = 1;
+      while(!locked&&tryCount< MAX_TRY_LOCK){
         delayTryLock();
         locked = lock.tryLock();
+        tryCount++;
       }
       if(locked){
         logger.info("host elect begin.");
