@@ -65,7 +65,7 @@ public class TokenStore {
                 String mount = line.substring(5,eindex).trim()+"/";
                 String arbiterPath = path.toString();
                 if(arbiterPath.startsWith(mount)){
-                  Path parent = Paths.get(arbiterPath);
+                  Path parent = Paths.get(arbiterPath).getParent();
                   if(!Files.exists(parent)){
                     Files.createDirectories(parent);
                     break;
