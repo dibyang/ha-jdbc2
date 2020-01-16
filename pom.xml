@@ -23,7 +23,7 @@
 
 	<groupId>net.sf.ha-jdbc</groupId>
 	<artifactId>ha-jdbc</artifactId>
-	<version>3.3.0</version>
+	<version>3.5.0</version>
 	<packaging>jar</packaging>
 	
 	<name>HA-JDBC</name>
@@ -40,14 +40,14 @@
 		<pluginRepository>
 			<id>repo_inner</id>
 			<name>repo_inner</name>
-			<url>http://13.13.13.247:8081/nexus/content/groups/public/</url>
+			<url>http://13.15.21.5:8081/repository/maven-public/</url>
 		</pluginRepository>
 	</pluginRepositories>
 	<repositories>
 		<repository>
 			<id>repo_inner</id>
 			<name>repo_inner</name>
-			<url>http://13.13.13.247:8081/nexus/content/groups/public/</url>
+			<url>http://13.15.21.5:8081/repository/maven-public/</url>
 		</repository>
 	</repositories>
 	
@@ -133,19 +133,12 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<version>1.4.181</version>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.derby</groupId>
 			<artifactId>derby</artifactId>
 			<version>10.11.1.1</version>
 			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.h2database</groupId>
-			<artifactId>h2</artifactId>
-			<version>1.4.181</version>
-			<scope>compile</scope>
 		</dependency>
 	</dependencies>
 	
@@ -502,12 +495,12 @@
 		<snapshotRepository>
 			<id>snapshots</id>
 			<name>Snapshots</name>
-			<url>http://13.13.13.247:8081/nexus/content/repositories/snapshots</url>
+			<url>http://13.15.21.5:8081/repository/maven-snapshots/</url>
 		</snapshotRepository> 
 		<repository>  
 			<id>releases</id>
 			<name>Internal Releases</name>  
-			<url>http://13.13.13.247:8081/nexus/content/repositories/releases</url>			
+			<url>http://13.15.21.5:8081/repository/maven-releases/</url>
 		</repository>
 	</distributionManagement>
 

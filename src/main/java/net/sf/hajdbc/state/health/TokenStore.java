@@ -1,18 +1,25 @@
 package net.sf.hajdbc.state.health;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 public class TokenStore {
+  static final Logger logger = LoggerFactory.getLogger(TokenStore.class);
   public static final String ONLYHOST_TRUE = "1";
   public static final String ONLYHOST_FALSE = "0";
   public static final String NEWLINE = "\n";
+  static final TimeoutUtil timeoutUtil = new TimeoutUtil("TokenStore");
 
   protected Path path ;
-  private boolean autoCreate;
+  private boolean local;
   private volatile long lastModified = 0;
   private volatile boolean onlyHost = false;
   private volatile long token = 0;
@@ -21,14 +28,14 @@ public class TokenStore {
     this(path,false);
   }
 
-  public TokenStore(Path path,boolean autoCreate) {
-    this.autoCreate = autoCreate;
+  public TokenStore(Path path,boolean local) {
+    this.local = local;
     this.setPath(path);
   }
 
   public void setPath(Path path) {
     this.path = path;
-    checkPath(path, autoCreate);
+    checkPath(path, local);
     lastModified = 0;
   }
 
@@ -36,34 +43,92 @@ public class TokenStore {
     return path;
   }
 
-  public void setAutoCreate(boolean autoCreate) {
-    this.autoCreate = autoCreate;
+  public void setLocal(boolean local) {
+    this.local = local;
   }
 
-  public boolean isAutoCreate() {
-    return autoCreate;
+  public boolean isLocal() {
+    return local;
   }
 
-  private void checkPath(Path path, boolean autoCreate) {
-    Path parent = path.getParent();
-    if(autoCreate){
-      if(!Files.exists(parent)){
-        parent.toFile().mkdirs();
+  private void checkMount() {
+    Path mounts = Paths.get("/proc/mounts");
+    if(Files.exists(mounts)){
+      try {
+        List<String> lines = Files.readAllLines(mounts, Charset.defaultCharset());
+        if(lines!=null){
+          for(String line : lines){
+            if(line!=null&&line.startsWith("none")&&line.contains(" LeoFS ")){
+              int bindex = 5;
+              int eindex = line.indexOf(" LeoFS ",bindex);
+              if(eindex>bindex){
+                String mount = line.substring(5,eindex).trim()+"/";
+                String arbiterPath = path.toString();
+                if(arbiterPath.startsWith(mount)){
+                  Path parent = Paths.get(arbiterPath).getParent();
+                  if(!Files.exists(parent)){
+                    Files.createDirectories(parent);
+                    break;
+                  }
+                }
+              }
+
+            }
+          }
+        }
+      } catch (IOException e) {
+        logger.warn(null,e);
       }
     }
-    if(Files.exists(parent)){
-      if(!exists()){
-        try {
-          path.toFile().createNewFile();
-        } catch (IOException e) {
-          e.printStackTrace();
+
+  }
+  private void checkPath(final Path path, final boolean local) {
+    timeoutUtil.call(new Runnable() {
+      @Override
+      public void run() {
+        Path parent = path.getParent();
+        if(!local){
+          checkMount();
+        }else{
+          if(!Files.exists(parent)){
+            parent.toFile().mkdirs();
+          }
+        }
+
+        if(Files.exists(parent)){
+          if(!exists()){
+            try {
+              path.toFile().createNewFile();
+            } catch (IOException e) {
+              logger.warn(null,e);
+            }
+          }
         }
       }
-    }
+    });
   }
 
   public boolean exists() {
-    return Files.exists(path);
+    Boolean exists = timeoutUtil.call(new Task<Boolean>() {
+      @Override
+      public Boolean failed(Exception e) {
+        if(e instanceof TimeoutException){
+          token = 0;
+        }
+        return false;
+      }
+
+      @Override
+      public void success(Boolean value) {
+
+      }
+
+      @Override
+      public Boolean call() throws Exception {
+        return Files.exists(path);
+      }
+    }, false);
+    return exists;
   }
 
   public boolean isOnlyHost() {
@@ -94,42 +159,67 @@ public class TokenStore {
 
   private void reload() {
     if(exists()) {
-      if (path.toFile().lastModified() != lastModified) {
-        lastModified = path.toFile().lastModified();
-        synchronized (this) {
+      timeoutUtil.call(new Task() {
 
-          try {
-            List<String> lines = Files.readAllLines(path, Charset.defaultCharset());
-            if (lines.size() > 0) {
-              token = Long.parseLong(lines.get(0));
-              if(lines.size() > 1){
-                onlyHost = ONLYHOST_TRUE.equals(lines.get(1));
+        @Override
+        public Object failed(Exception e) {
+          if(e instanceof TimeoutException){
+            token = 0;
+          }
+          return null;
+        }
+
+        @Override
+        public void success(Object value) {
+
+        }
+
+        @Override
+        public Object call() {
+          if (path.toFile().lastModified() != lastModified) {
+            lastModified = path.toFile().lastModified();
+            synchronized (this) {
+
+              try {
+                List<String> lines = Files.readAllLines(path, Charset.defaultCharset());
+                if (lines.size() > 0) {
+                  token = Long.parseLong(lines.get(0));
+                  if(lines.size() > 1){
+                    onlyHost = ONLYHOST_TRUE.equals(lines.get(1));
+                  }
+                }
+
+              } catch (Exception e) {
+                logger.warn(null,e);
               }
             }
-
-          } catch (Exception e) {
-            e.printStackTrace();
           }
+          return null;
         }
-      }
+      });
+
     }
   }
 
   public void save(){
     synchronized (this){
       if(exists()) {
+        timeoutUtil.call(new Runnable() {
+          @Override
+          public void run() {
+            StringBuilder builder = new StringBuilder();
 
-        StringBuilder builder = new StringBuilder();
+            builder.append(token).append(NEWLINE);
+            builder.append(onlyHost?ONLYHOST_TRUE:ONLYHOST_FALSE).append(NEWLINE);
 
-        builder.append(token).append(NEWLINE);
-        builder.append(onlyHost?ONLYHOST_TRUE:ONLYHOST_FALSE).append(NEWLINE);
-
-        try{
-          Files.write(path,builder.toString().getBytes());
-          lastModified = path.toFile().lastModified();
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
+            try{
+              Files.write(path,builder.toString().getBytes());
+              lastModified = path.toFile().lastModified();
+            } catch (IOException e) {
+              logger.warn(null,e);
+            }
+          }
+        });
       }
     }
   }
