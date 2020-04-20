@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 public class TokenStore {
-  static final Logger logger = LoggerFactory.getLogger(TokenStore.class);
+  static final Logger LOG = LoggerFactory.getLogger(TokenStore.class);
   public static final String ONLYHOST_TRUE = "1";
   public static final String ONLYHOST_FALSE = "0";
   public static final String NEWLINE = "\n";
@@ -52,35 +52,17 @@ public class TokenStore {
   }
 
   private void checkMount() {
-    Path mounts = Paths.get("/proc/mounts");
-    if(Files.exists(mounts)){
-      try {
-        List<String> lines = Files.readAllLines(mounts, Charset.defaultCharset());
-        if(lines!=null){
-          for(String line : lines){
-            if(line!=null&&line.startsWith("none")&&line.contains(" LeoFS ")){
-              int bindex = 5;
-              int eindex = line.indexOf(" LeoFS ",bindex);
-              if(eindex>bindex){
-                String mount = line.substring(5,eindex).trim()+"/";
-                String arbiterPath = path.toString();
-                if(arbiterPath.startsWith(mount)){
-                  Path parent = Paths.get(arbiterPath).getParent();
-                  if(!Files.exists(parent)){
-                    Files.createDirectories(parent);
-                    break;
-                  }
-                }
-              }
-
-            }
-          }
+    String arbiterPath = path.toString();
+    if(arbiterPath.startsWith(MountPathHolder.H.getMountPath())){
+      Path parent = Paths.get(arbiterPath).getParent();
+      if(!Files.exists(parent)){
+        try {
+          Files.createDirectories(parent);
+        } catch (IOException e) {
+          LOG.error("arbiter directory create failed:", e);
         }
-      } catch (IOException e) {
-        logger.warn(null,e);
       }
     }
-
   }
   private void checkPath(final Path path, final boolean local) {
     timeoutUtil.call(new Runnable() {
@@ -100,7 +82,7 @@ public class TokenStore {
             try {
               path.toFile().createNewFile();
             } catch (IOException e) {
-              logger.warn(null,e);
+              LOG.warn(null,e);
             }
           }
         }
@@ -190,7 +172,7 @@ public class TokenStore {
                 }
 
               } catch (Exception e) {
-                logger.warn(null,e);
+                LOG.warn(null,e);
               }
             }
           }
@@ -216,7 +198,7 @@ public class TokenStore {
               Files.write(path,builder.toString().getBytes());
               lastModified = path.toFile().lastModified();
             } catch (IOException e) {
-              logger.warn(null,e);
+              LOG.warn(null,e);
             }
           }
         });

@@ -1,5 +1,6 @@
 package net.sf.hajdbc.state.health;
 
+import java.io.File;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
@@ -43,6 +44,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile long lastHeartbeat = 0;
   private volatile Member host = null;
   private final Random random = new Random();
+  private FileWatchDog fileWatchDog;
 
   HeartBeatCommand beatCommand = new HeartBeatCommand();
   NodeHealthCommand healthCommand = new NodeHealthCommand();
@@ -56,11 +58,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     this.stateManager.getDatabaseCluster().addListener(this);
     executorService = Executors.newFixedThreadPool(2,HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
+    fileWatchDog = new FileWatchDog(new File("/proc/mounts"), MountPathHolder.H);
     arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
   }
 
   @Override
   public void start(){
+    fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
     arbiter.setLocal(localIp);
     elect();
@@ -466,6 +470,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void run() {
+    fileWatchDog.watch();
     try {
       if(NodeState.host.equals(state)){
         if(findOtherHost()){
