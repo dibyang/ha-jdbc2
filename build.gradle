@@ -1,9 +1,42 @@
-
-
-plugins {
-    id 'java'
-    id 'maven-publish'
+buildscript {
+    repositories {
+        maven {
+            name "REPO_NEXUS"
+            url "http://${nexus_host}:8081/repository/maven-public/"
+        }
+    }
+    dependencies {
+        classpath 'net.researchgate:gradle-release:2.6.0'
+    }
 }
+
+apply plugin: 'maven'
+apply plugin: 'java'
+apply plugin: 'net.researchgate.release'
+
+
+release {
+    failOnUnversionedFiles = true
+    failOnCommitNeeded = true
+    failOnPublishNeeded = true
+    failOnSnapshotDependencies = false
+    failOnUpdateNeeded = true
+    revertOnFail = true
+    tagTemplate = 'v${version}'
+    scmAdapters = [
+            net.researchgate.release.GitAdapter
+    ]
+
+    git {
+        requireBranch = 'master|v0.3.x|v0.5.x'
+        pushToRemote = 'origin'
+        pushToBranchPrefix = ''
+        commitVersionFileOnly = false
+        signTag = false
+    }
+
+}
+
 
 repositories {
     mavenLocal()
@@ -55,10 +88,4 @@ java {
     withSourcesJar()
 }
 
-publishing {
-    publications {
-        maven(MavenPublication) {
-            from(components.java)
-        }
-    }
-}
+
