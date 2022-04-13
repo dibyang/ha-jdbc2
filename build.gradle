@@ -84,6 +84,15 @@ targetCompatibility = project.jdkVersion
 configurations.all {
 }
 
+import org.apache.tools.ant.filters.ReplaceTokens
+
+processResources {
+    from('src/main/java') {
+        include '**/*.properties'
+    }
+    filter(ReplaceTokens, tokens: [version: project.version])
+}
+
 java {
     withSourcesJar()
 }

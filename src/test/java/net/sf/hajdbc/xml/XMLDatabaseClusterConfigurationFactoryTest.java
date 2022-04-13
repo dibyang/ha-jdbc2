@@ -48,16 +48,19 @@ import net.sf.hajdbc.state.StateManagerFactory;
 import net.sf.hajdbc.state.sql.SQLStateManagerFactory;
 import net.sf.hajdbc.sync.DifferentialSynchronizationStrategy;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class XMLDatabaseClusterConfigurationFactoryTest
 {
+	@Ignore
 	@Test
 	public void createDriverBasedConfiguration() throws SQLException
 	{
 		createConfiguration(DriverDatabaseClusterConfiguration.class, "jdbc:mock:db1", "jdbc:mock:db2");
 	}
-	
+
+	@Ignore
 	@Test
 	public void createDataSourceBasedConfiguration() throws SQLException
 	{

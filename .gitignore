@@ -6,3 +6,4 @@
 /ha-jdbc.iml
 /build/
 /.gradle/
+/derby.log
