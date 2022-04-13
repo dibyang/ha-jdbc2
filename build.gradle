@@ -1,0 +1,64 @@
+
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+repositories {
+    mavenLocal()
+    maven {
+        url = "http://${nexus_host}:8081/repository/maven-snapshots/"
+    }
+
+    maven {
+        url = "http://${nexus_host}:8081/repository/maven-releases/"
+    }
+
+    maven {
+        url = "http://${nexus_host}:8081/repository/maven-public/"
+    }
+
+    maven {
+        url = 'http://repo.maven.apache.org/maven2'
+    }
+}
+
+dependencies {
+    implementation 'joda-time:joda-time:2.10.1'
+    implementation 'org.jgroups:jgroups:3.6.20.Final'
+    implementation 'org.slf4j:slf4j-api:1.7.7'
+    implementation 'commons-logging:commons-logging:1.2'
+    implementation 'org.jboss.logging:jboss-logging:3.1.4.GA'
+    implementation 'commons-pool:commons-pool:1.6'
+    implementation 'com.sleepycat:je:6.0.11'
+    implementation 'org.tmatesoft.sqljet:sqljet:1.1.10'
+    implementation 'commons-codec:commons-codec:1.9'
+    implementation 'com.h2database:h2:1.4.181'
+    testImplementation 'junit:junit:4.11'
+    testImplementation 'org.mockito:mockito-core:1.10.8'
+    testImplementation 'org.hsqldb:hsqldb:2.3.2'
+    testImplementation 'org.apache.derby:derby:10.11.1.1'
+}
+
+group = 'net.sf.ha-jdbc'
+description = 'HA-JDBC'
+
+
+sourceCompatibility = project.jdkVersion
+targetCompatibility = project.jdkVersion
+
+configurations.all {
+}
+
+java {
+    withSourcesJar()
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            from(components.java)
+        }
+    }
+}
