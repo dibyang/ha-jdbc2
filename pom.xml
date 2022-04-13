@@ -23,7 +23,7 @@
 
 	<groupId>net.sf.ha-jdbc</groupId>
 	<artifactId>ha-jdbc</artifactId>
-	<version>3.5.1</version>
+	<version>3.6.5</version>
 	<packaging>jar</packaging>
 	
 	<name>HA-JDBC</name>
@@ -40,14 +40,14 @@
 		<pluginRepository>
 			<id>repo_inner</id>
 			<name>repo_inner</name>
-			<url>http://13.15.21.5:8081/repository/maven-public/</url>
+			<url>http://nexus.doob.net.cn:8081/repository/maven-public/</url>
 		</pluginRepository>
 	</pluginRepositories>
 	<repositories>
 		<repository>
 			<id>repo_inner</id>
 			<name>repo_inner</name>
-			<url>http://13.15.21.5:8081/repository/maven-public/</url>
+			<url>http://nexus.doob.net.cn:8081/repository/maven-public/</url>
 		</repository>
 	</repositories>
 	
@@ -62,7 +62,7 @@
 		<dependency>
 			<groupId>org.jgroups</groupId>
 			<artifactId>jgroups</artifactId>
-			<version>3.6.19.Final</version>
+			<version>3.6.20.Final</version>
 			<optional>true</optional>
 		</dependency>
 		<!-- Optional logging dependencies -->
@@ -139,26 +139,6 @@
 			<artifactId>derby</artifactId>
 			<version>10.11.1.1</version>
 			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>javax.xml.bind</groupId>
-			<artifactId>jaxb-api</artifactId>
-			<version>2.3.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.sun.xml.bind</groupId>
-			<artifactId>jaxb-impl</artifactId>
-			<version>2.3.0</version>
-		</dependency>
-		<dependency>
-			<groupId>com.sun.xml.bind</groupId>
-			<artifactId>jaxb-core</artifactId>
-			<version>2.3.0</version>
-		</dependency>
-		<dependency>
-			<groupId>javax.activation</groupId>
-			<artifactId>activation</artifactId>
-			<version>1.1.1</version>
 		</dependency>
 	</dependencies>
 	
@@ -515,12 +495,12 @@
 		<snapshotRepository>
 			<id>snapshots</id>
 			<name>Snapshots</name>
-			<url>http://13.15.21.5:8081/repository/maven-snapshots/</url>
+			<url>http://nexus.doob.net.cn:8081/repository/maven-snapshots/</url>
 		</snapshotRepository> 
 		<repository>  
 			<id>releases</id>
 			<name>Internal Releases</name>  
-			<url>http://13.15.21.5:8081/repository/maven-releases/</url>
+			<url>http://nexus.doob.net.cn:8081/repository/maven-releases/</url>
 		</repository>
 	</distributionManagement>
 
