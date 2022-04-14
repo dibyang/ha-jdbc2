@@ -29,7 +29,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int HEARTBEAT_LOST_MAX = 4;
+  public static final int HEARTBEAT_LOST_MAX = 3;
   public static final int MAX_TRY_LOCK = 10;
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
@@ -71,7 +71,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    /* if(state.equals(NodeState.offline)){
       throw new RuntimeException("not find host node.");
     }*/
-    scheduledService.scheduleWithFixedDelay(this,4000,2000, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this,2000,1000, TimeUnit.MILLISECONDS);
   }
 
 

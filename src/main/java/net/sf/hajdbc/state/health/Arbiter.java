@@ -1,13 +1,10 @@
 package net.sf.hajdbc.state.health;
 
 
-import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
+import net.sf.hajdbc.state.health.observer.Observer;
+
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.List;
-import net.sf.hajdbc.state.health.observer.Observer;
 
 public class Arbiter {
   private final LocalTokenStore local;
