@@ -207,18 +207,5 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 
 	boolean isAlive(D database, Level level);
 
-	/**
-	 * Returns database support restore or not.
-	 * @return database support restore or not.
-	 */
-	boolean isSupportRestore();
-
-	boolean backup(D database,File backup);
-
-	boolean restore(D database,File backup);
-
-	boolean beforeRestore(Database<Z> database);
-	void afterRestored(Database<Z> database);
-
 	int getNodeCount();
 }

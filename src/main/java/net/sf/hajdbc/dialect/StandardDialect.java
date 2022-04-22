@@ -1069,18 +1069,4 @@ public class StandardDialect implements Dialect, SequenceSupport, IdentityColumn
 		}
 	}
 
-	@Override
-	public boolean isSupportRestore() {
-		return false;
-	}
-
-	@Override
-	public <Z, D extends Database<Z>> boolean backup(D database, File backup, Decoder decoder)  {
-    return false;
-	}
-
-	@Override
-	public <Z, D extends Database<Z>> boolean restore(D database, File backup, Decoder decoder) {
-    return false;
-	}
 }

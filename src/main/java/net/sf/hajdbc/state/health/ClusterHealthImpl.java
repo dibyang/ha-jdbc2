@@ -490,13 +490,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
                 updateNewToken();
               }
             });
-            executorService.submit(new Runnable() {
-              @Override
-              public void run() {
-                restoreDatabaseForReady();
-              }
-            });
-
           }
         }
 
@@ -577,49 +570,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       }
     }
     return false;
-  }
-  DatabaseRestoreCommand cmd= new DatabaseRestoreCommand();
-
-  private void restoreDatabaseForReady() {
-    DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-    synchronized (databaseCluster){
-      if(databaseCluster.getDialect().isSupportRestore()){
-        Database database = databaseCluster.getLocalDatabase();
-        if(stateManager.getActiveDatabases().size()>0
-            &&stateManager.getMembers().size()>1){
-          Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand,stateManager.getLocal());
-          removeInvalidReceiveByState(all, NodeState.ready);
-          if(all.size()>0){
-            Lock lock = databaseCluster.getLockManager().writeLock(null);
-            try {
-              lock.lockInterruptibly();
-              Path path = PathHelper.helper.get("backup.bak");
-              if(Files.exists(path)){
-                Files.delete(path);
-              }
-              databaseCluster.backup(database,path.toFile());
-
-              if(Files.exists(path)){
-                cmd.setBytes(Files.readAllBytes(path));
-                Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-                if(iterator.hasNext()){
-                  Member member = iterator.next().getKey();
-                  String dbId = (String)stateManager.execute(cmd,member);
-                  if(dbId!=null){
-                    databaseCluster.activate(databaseCluster.getDatabase(dbId), databaseCluster.getStateManager());
-                  }
-                }
-              }
-            }catch (Exception e){
-              logger.warn("",e);
-            }finally {
-              lock.unlock();
-            }
-          }
-        }
-      }
-    }
-
   }
 
   private void remveInvalidReceive(Map<Member, NodeHealth> all) {

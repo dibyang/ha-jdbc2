@@ -259,14 +259,6 @@ public interface Dialect
 	
 	<Z, D extends Database<Z>> ConnectionProperties getConnectionProperties(D database, Decoder decoder) throws SQLException;
 
-	/**
-	 * Returns database support restore or not.
-	 * @return database support restore or not.
-	 */
-	boolean isSupportRestore();
 
-	<Z, D extends Database<Z>> boolean backup(D database, File backup,Decoder decoder);
-
-	<Z, D extends Database<Z>> boolean restore(D database,File backup,Decoder decoder);
 
 }

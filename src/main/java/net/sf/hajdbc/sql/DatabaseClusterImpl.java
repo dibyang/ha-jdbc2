@@ -965,41 +965,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
-	@Override
-	public boolean isSupportRestore() {
-		return dialect.isSupportRestore();
-	}
-
-	@Override
-	public boolean backup(D database, File backup) {
-		return dialect.backup(database,backup,getDecoder());
-	}
-
-	@Override
-	public boolean restore(D database, File backup) {
-		return dialect.restore(database,backup,getDecoder());
-	}
-
-	@Override
-	public boolean beforeRestore(Database<Z> database) {
-		Iterator<NodeDatabaseRestoreListener> iterator = nodeDatabaseRestoreListeners.iterator();
-		while (iterator.hasNext()){
-			NodeDatabaseRestoreListener listener = iterator.next();
-			if(!listener.beforeRestore(database)){
-				return false;
-			}
-		}
-		return true;
-	}
-
-	@Override
-	public void afterRestored(Database<Z> database) {
-		Iterator<NodeDatabaseRestoreListener> iterator = nodeDatabaseRestoreListeners.iterator();
-		while (iterator.hasNext()){
-			NodeDatabaseRestoreListener listener = iterator.next();
-			listener.afterRestored(database);
-		}
-	}
 
 	@Override
 	public int getNodeCount() {
@@ -1117,9 +1082,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
-				if(DatabaseClusterImpl.this.isSupportRestore()){
-					return;
-				}
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}

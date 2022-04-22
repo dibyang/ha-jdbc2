@@ -27,11 +27,9 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.SequenceProperties;
-import net.sf.hajdbc.SequencePropertiesFactory;
-import net.sf.hajdbc.SequenceSupport;
+import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.dialect.ConnectionProperties;
 import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
@@ -39,12 +37,14 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.DatabaseClusterImpl;
 import net.sf.hajdbc.util.Resources;
 import org.h2.tools.Restore;
+import org.h2.tools.RunScript;
+import org.h2.tools.Script;
 
 /**
  * Dialect for <a href="http://www.h2database.com">H2 Database Engine</a>.
  * @author Paul Ferraro
  */
-public class H2Dialect extends StandardDialect
+public class H2Dialect extends StandardDialect implements DumpRestoreSupport
 {
 	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
@@ -165,47 +165,32 @@ public class H2Dialect extends StandardDialect
 	}
 
 	@Override
-	public boolean isSupportRestore() {
-		return true;
+	public DumpRestoreSupport getDumpRestoreSupport()
+	{
+		return this;
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> boolean backup(D database, File backup, Decoder decoder) {
-
-		Connection connection = null;
-		try
-		{
-			connection = database.connect(database.getConnectionSource(), database.decodePassword(decoder));
-			Statement statement = connection.createStatement();
-			statement.execute("BACKUP TO '"+backup.getPath()+"'");
-			return true;
-		}catch (Exception e){
-			logger.log(Level.WARN,e);
-		}finally {
-			if(connection!=null){
-				Resources.close(connection);
-			}
-		}
-		return false;
+	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
+		StringBuilder url = new StringBuilder("jdbc:h2:tcp://");
+		url.append(properties.getHost())
+				.append(":")
+				.append(properties.getPort())
+				.append(properties.getDatabase());
+		logger.log(Level.INFO,"h2 dump url={} path={}",url.toString(),file.getPath());
+		Script.main("-url", url.toString(),"-user",properties.getUser(),"-password",properties.getPassword(),"-script", file.getPath(), "-options", "compression", "zip");
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> boolean restore(D database, File backup, Decoder decoder) {
-		try {
-			String location = database.getLocation();
-			location=location.substring(14);
-			int index = location.indexOf("/");
-			location =location.substring(index+1);
-			index = location.lastIndexOf("/");
-
-			String dir=location.substring(0,index);
-			String db=location.substring(index+1);
-			logger.log(Level.INFO,"h2 restore dir="+dir+" db="+db);
-			Restore.execute(backup.getPath(), dir, db);
-			return true;
-		}catch (Exception e){
-			logger.log(Level.WARN,e);
-		}
-		return false;
+	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
+		StringBuilder url = new StringBuilder("jdbc:h2:tcp://");
+		url.append(properties.getHost())
+				.append(":")
+				.append(properties.getPort())
+				.append(properties.getDatabase());
+		logger.log(Level.INFO,"h2 restore url={} path={}",url.toString(),file.getPath());
+		RunScript.main("-url", url.toString(),"-user",properties.getUser(),"-password",properties.getPassword(),"-script", file.getPath(), "-options", "compression", "zip");
 	}
 }
