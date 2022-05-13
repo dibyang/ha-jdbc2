@@ -29,17 +29,8 @@ import java.sql.SQLNonTransientConnectionException;
 import java.sql.SQLTransientConnectionException;
 import java.sql.Statement;
 import java.text.MessageFormat;
-import java.util.AbstractMap;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1062,6 +1053,24 @@ public class StandardDialect implements Dialect, SequenceSupport, IdentityColumn
 					return password;
 				}
 			};
+		}
+		finally
+		{
+			connection.close();
+		}
+	}
+
+	public <Z, D extends Database<Z>> Properties getDatabaseProperties(D database, String password) throws SQLException
+	{
+		Connection connection = database.connect(database.getConnectionSource(), password);
+		try
+		{
+			Properties properties = new Properties();
+			DatabaseMetaData metaData = connection.getMetaData();
+			properties.put("userName",metaData.getUserName());
+			properties.put("password",password);
+			properties.put("url",metaData.getURL());
+			return properties;
 		}
 		finally
 		{

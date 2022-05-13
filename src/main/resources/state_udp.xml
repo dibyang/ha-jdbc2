@@ -43,7 +43,7 @@
 
 	<PING timeout="2000" num_initial_members="20"/>
 	<MERGE3 />
-	<FD_SOCK/>
+<!--	<FD_SOCK/>-->
 	<FD_ALL/>
 	<VERIFY_SUSPECT timeout="1500"/>
 	<pbcast.NAKACK2 xmit_interval="500"

@@ -18,14 +18,11 @@
 package net.sf.hajdbc.dialect.h2;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.sql.*;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
@@ -172,25 +169,26 @@ public class H2Dialect extends StandardDialect implements DumpRestoreSupport
 
 	@Override
 	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
-		StringBuilder url = new StringBuilder("jdbc:h2:tcp://");
-		url.append(properties.getHost())
-				.append(":")
-				.append(properties.getPort())
-				.append(properties.getDatabase());
-		logger.log(Level.INFO,"h2 dump url={} path={}",url.toString(),file.getPath());
-		Script.main("-url", url.toString(),"-user",properties.getUser(),"-password",properties.getPassword(),"-script", file.getPath(), "-options", "compression", "zip");
+		final String password = database.decodePassword(decoder);
+		Properties properties = this.getDatabaseProperties(database, password);
+		String url = properties.getProperty("url");
+		String userName = properties.getProperty("userName");
+		logger.log(Level.INFO,"h2 dump url={0} path={1}",url,file.getPath());
+		Script.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
 	}
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
-		StringBuilder url = new StringBuilder("jdbc:h2:tcp://");
-		url.append(properties.getHost())
-				.append(":")
-				.append(properties.getPort())
-				.append(properties.getDatabase());
-		logger.log(Level.INFO,"h2 restore url={} path={}",url.toString(),file.getPath());
-		RunScript.main("-url", url.toString(),"-user",properties.getUser(),"-password",properties.getPassword(),"-script", file.getPath(), "-options", "compression", "zip");
+		final String password = database.decodePassword(decoder);
+		Properties properties = this.getDatabaseProperties(database, password);
+		String url = properties.getProperty("url");
+		String userName = properties.getProperty("userName");
+		logger.log(Level.INFO,"h2 restore url={0} path={1}",url,file.getPath());
+		Path target = Paths.get("/root/h2/", file.getName());
+		if(!target.toFile().getParentFile().exists()){
+			target.toFile().getParentFile().mkdirs();
+		}
+		Files.copy(file.toPath(), target);
+		RunScript.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
 	}
 }
