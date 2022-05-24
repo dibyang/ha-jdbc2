@@ -17,31 +17,37 @@
  */
 package net.sf.hajdbc.dialect.h2;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.sql.*;
-import java.util.*;
-
 import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
-import net.sf.hajdbc.dialect.ConnectionProperties;
 import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.DatabaseClusterImpl;
 import net.sf.hajdbc.util.Resources;
-import org.h2.tools.Restore;
+import org.h2.engine.Constants;
+import org.h2.message.DbException;
+import org.h2.store.fs.FileUtils;
 import org.h2.tools.RunScript;
 import org.h2.tools.Script;
+import org.h2.util.IOUtils;
+import org.h2.util.ScriptReader;
+import org.h2.util.StringUtils;
+
+import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.sql.*;
+import java.util.*;
+
 
 /**
  * Dialect for <a href="http://www.h2database.com">H2 Database Engine</a>.
  * @author Paul Ferraro
  */
-public class H2Dialect extends StandardDialect implements DumpRestoreSupport
+public class H2Dialect extends StandardDialect
+		implements DumpRestoreSupport
 {
 	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
@@ -161,6 +167,7 @@ public class H2Dialect extends StandardDialect implements DumpRestoreSupport
 		return failureCodes.contains(code);
 	}
 
+
 	@Override
 	public DumpRestoreSupport getDumpRestoreSupport()
 	{
@@ -175,20 +182,66 @@ public class H2Dialect extends StandardDialect implements DumpRestoreSupport
 		String userName = properties.getProperty("userName");
 		logger.log(Level.INFO,"h2 dump url={0} path={1}",url,file.getPath());
 		Script.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
+
 	}
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
-		Properties properties = this.getDatabaseProperties(database, password);
-		String url = properties.getProperty("url");
-		String userName = properties.getProperty("userName");
-		logger.log(Level.INFO,"h2 restore url={0} path={1}",url,file.getPath());
-		Path target = Paths.get("/root/h2/", file.getName());
-		if(!target.toFile().getParentFile().exists()){
-			target.toFile().getParentFile().mkdirs();
+		Connection connection = database.connect(database.getConnectionSource(), password);
+		Charset charset = Charset.forName("utf-8");
+		try
+		{
+			dropAllObjects(connection);
+			BufferedReader reader = Files.newBufferedReader(file.toPath());
+			try {
+				process(connection, true, file.getParent(), reader, charset);
+			} finally {
+				IOUtils.closeSilently(reader);
+			}
 		}
-		Files.copy(file.toPath(), target);
-		RunScript.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
+		finally
+		{
+			connection.close();
+		}
 	}
+
+
+
+	void dropAllObjects(Connection conn) throws SQLException {
+		Statement s = conn.createStatement();
+		s.execute("DROP ALL OBJECTS");
+		s.close();
+	}
+
+
+	private void process(Connection conn, boolean continueOnError, String path,
+											 Reader reader, Charset charset) throws SQLException, IOException {
+		Statement stat = conn.createStatement();
+		ScriptReader r = new ScriptReader(reader);
+		while (true) {
+			String sql = r.readStatement();
+			if (sql == null) {
+				break;
+			}
+			String trim = sql.trim();
+			if (trim.isEmpty()) {
+				continue;
+			}
+			try {
+				if (!trim.startsWith("-->")) {
+					logger.log(Level.DEBUG,sql + ";");
+				}
+				stat.execute(sql);
+			} catch (Exception e) {
+				if (continueOnError) {
+					logger.log(Level.WARN,e);
+				} else {
+					throw DbException.toSQLException(e);
+				}
+			}
+		}
+	}
+
+	//*/
 }
