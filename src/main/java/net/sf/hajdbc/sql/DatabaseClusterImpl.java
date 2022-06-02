@@ -67,6 +67,7 @@ import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeHealth;
 import net.sf.hajdbc.state.health.NodeStateListener;
+import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.sync.SynchronizationContextImpl;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
@@ -971,6 +972,14 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		return configuration.getDatabaseMap().size();
 	}
 
+	@Override
+	public SyncMgr getSyncMgr() {
+		if(stateManager instanceof  DistributedStateManager) {
+			return ((DistributedStateManager) stateManager).getSyncMgr();
+		}
+		return null;
+	}
+
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException
 	{
 		if (!this.isAlive(database, Level.DEBUG)||!stateManager.isValid(database)) {
@@ -985,53 +994,66 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}else {
 			return false;
 		}
-		
-		Lock lock = this.lockManager.writeLock(null);
-		
-		lock.lockInterruptibly();
-		
-		try
-		{
-			if (this.balancer.contains(database)) {
-				return false;
-			}
-			
-			if (!this.balancer.isEmpty())
+
+		//无锁同步基准数据
+		if (this.balancer.contains(database)) {
+			return false;
+		}
+		if (!this.balancer.isEmpty()) {
+			SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
+			try
 			{
-				SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
-				
+				//logger.log(Level.INFO, Messages.DATABASE_RESTORE_START.getMessage(this, database));
+
+//				for (NodeDatabaseRestoreListener listener: this.nodeDatabaseRestoreListeners)
+//				{
+//					listener.beforeRestore(database);
+//				}
+
+				//strategy.dbRestore(context);
+
+//				for (NodeDatabaseRestoreListener listener: this.nodeDatabaseRestoreListeners)
+//				{
+//					listener.afterRestored(database);
+//				}
+				//logger.log(Level.INFO, Messages.DATABASE_RESTORE_END.getMessage(this, database));
+
+				Lock lock = this.lockManager.writeLock(null);
+
+				lock.lockInterruptibly();
 				try
 				{
 					DatabaseEvent event = new DatabaseEvent(database);
-					
+
 					logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
-					
+
 					for (SynchronizationListener listener: this.synchronizationListeners)
 					{
 						listener.beforeSynchronization(event);
 					}
-					
+
 					strategy.synchronize(context);
-	
+
 					logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
-					
+
 					for (SynchronizationListener listener: this.synchronizationListeners)
 					{
 						listener.afterSynchronization(event);
 					}
+
+					return this.activate(database, this.stateManager);
 				}
 				finally
 				{
-					context.close();
+					lock.unlock();
 				}
 			}
-			
-			return this.activate(database, this.stateManager);
+			finally
+			{
+				context.close();
+			}
 		}
-		finally
-		{
-			lock.unlock();
-		}
+		return false;
 	}
 
 	class FailureDetectionTask implements Runnable

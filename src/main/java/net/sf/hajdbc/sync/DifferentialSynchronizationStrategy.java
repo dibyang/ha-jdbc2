@@ -115,6 +115,11 @@ public class DifferentialSynchronizationStrategy implements SynchronizationStrat
 	}
 
 	@Override
+	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
+
+	}
+
+	@Override
 	public <Z, D extends Database<Z>> void dropConstraints(SynchronizationContext<Z, D> context) throws SQLException
 	{
 		SynchronizationSupport support = context.getSynchronizationSupport();

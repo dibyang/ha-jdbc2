@@ -21,6 +21,8 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.SynchronizationStrategy;
 
+import java.sql.SQLException;
+
 /**
  * Trivial {@link SynchronizationStrategy} implementation that assumes that the inactive database is already in sync.
  * 
@@ -62,5 +64,10 @@ public class PassiveSynchronizationStrategy implements SynchronizationStrategy
 	@Override
 	public <Z, D extends Database<Z>> void destroy(DatabaseCluster<Z, D> cluster)
 	{
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
+
 	}
 }

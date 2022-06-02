@@ -23,21 +23,16 @@ import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.sql.DatabaseClusterImpl;
+import net.sf.hajdbc.state.sync.SyncMgr;
+import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
-import org.h2.engine.Constants;
 import org.h2.message.DbException;
-import org.h2.store.fs.FileUtils;
-import org.h2.tools.RunScript;
-import org.h2.tools.Script;
-import org.h2.util.IOUtils;
 import org.h2.util.ScriptReader;
-import org.h2.util.StringUtils;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.Reader;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.sql.*;
 import java.util.*;
 
@@ -47,9 +42,9 @@ import java.util.*;
  * @author Paul Ferraro
  */
 public class H2Dialect extends StandardDialect
-		implements DumpRestoreSupport
+		implements DBRestoreSupport
 {
-	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
+	static final Logger logger = LoggerFactory.getLogger(H2Dialect.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
 	
 	/**
@@ -175,43 +170,69 @@ public class H2Dialect extends StandardDialect
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+	public <Z, D extends Database<Z>> void backupDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
-		Properties properties = this.getDatabaseProperties(database, password);
-		String url = properties.getProperty("url");
-		String userName = properties.getProperty("userName");
-		logger.log(Level.INFO,"h2 dump url={0} path={1}",url,file.getPath());
-		Script.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
+		logger.log(Level.INFO,"h2 dump path={0}", file.getPath());
+		try(Connection connection = database.connect(database.getConnectionSource(), password))
+		{
+			backup(connection,file);
+		}
 
 	}
 
+	private void backup(Connection connection,File file) throws SQLException {
+		executeSql(connection, "BACKUP TO  '" + file.getPath() + "'");
+	}
+
 	@Override
-	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		final String password = database.decodePassword(decoder);
-		Connection connection = database.connect(database.getConnectionSource(), password);
-		Charset charset = Charset.forName("utf-8");
-		try
-		{
-			dropAllObjects(connection);
-			BufferedReader reader = Files.newBufferedReader(file.toPath());
-			try {
-				process(connection, true, file.getParent(), reader, charset);
-			} finally {
-				IOUtils.closeSilently(reader);
+	public <Z, D extends Database<Z>> void restoreDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+		if(syncMgr.sync(database,file)){
+			logger.log(Level.INFO,"h2 sync file path={0}", file.getPath());
+			final String password = database.decodePassword(decoder);
+			logger.log(Level.INFO,"h2 dump path={0}", file.getPath());
+			try(Connection connection = database.connect(database.getConnectionSource(), password);
+					Statement statTarget = connection.createStatement())
+			{
+				statTarget.execute("SET EXCLUSIVE 2");
+				try {
+					statTarget.execute("DROP ALL OBJECTS DELETE FILES");
+					String location = database.getLocation();
+					location = location.substring(location.indexOf("//") + 2);
+					location = location.substring(location.indexOf("/") + 1);
+					int index = location.indexOf(";");
+					if (index > 0) {
+						location = location.substring(0, index);
+					}
+					index = location.lastIndexOf("/");
+					String dir = location.substring(0, index);
+					String db = location.substring(index + 1);
+					logger.log(Level.INFO, "h2 location ={0} dir ={1} db ={2}", location, dir, db);
+					H2RestoreCommand cmd = new H2RestoreCommand();
+					cmd.setPath(file.getPath());
+					cmd.setDir(dir);
+					cmd.setDb(db);
+					syncMgr.execute(database, cmd);
+				}finally {
+					// switch back to the regular mode
+					statTarget.execute("SET EXCLUSIVE FALSE");
+					statTarget.execute("SET EXCLUSIVE FALSE");
+				}
 			}
 		}
-		finally
-		{
-			connection.close();
-		}
+
 	}
 
 
 
 	void dropAllObjects(Connection conn) throws SQLException {
-		Statement s = conn.createStatement();
-		s.execute("DROP ALL OBJECTS");
-		s.close();
+		executeSql(conn, "DROP ALL OBJECTS");
+	}
+
+	private void executeSql(Connection conn, String sql) throws SQLException {
+		try(Statement s = conn.createStatement()) {
+			s.execute(sql);
+		}
 	}
 
 
@@ -241,6 +262,16 @@ public class H2Dialect extends StandardDialect
 				}
 			}
 		}
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+
+	}
+
+	@Override
+	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		//
 	}
 
 	//*/

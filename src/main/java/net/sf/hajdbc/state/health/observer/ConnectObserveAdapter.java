@@ -9,7 +9,7 @@ import java.net.Socket;
  */
 public abstract class ConnectObserveAdapter implements ObserveAdapter {
 
-  public static final int TIME_OUT = 200;
+  public static final int TIME_OUT = 500;
 
   public abstract int getPort();
 

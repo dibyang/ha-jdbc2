@@ -17,10 +17,6 @@
  */
 package net.sf.hajdbc;
 
-import java.io.File;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
-
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
@@ -35,7 +31,11 @@ import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeStateListener;
+import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
+
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 /**
  * @author Paul Ferraro
@@ -208,4 +208,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	boolean isAlive(D database, Level level);
 
 	int getNodeCount();
+
+	SyncMgr getSyncMgr();
 }
