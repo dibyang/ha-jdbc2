@@ -78,6 +78,7 @@ group = 'net.sf.ha-jdbc'
 description = 'HA-JDBC'
 
 
+
 sourceCompatibility = project.jdkVersion
 targetCompatibility = project.jdkVersion
 
@@ -112,3 +113,6 @@ uploadArchives {
     }
 }
 
+test {
+    exclude 'net/sf/hajdbc/**'
+}
