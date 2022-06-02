@@ -1019,32 +1019,20 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			return false;
 		}
 
-		//无锁同步基准数据
-		if (this.balancer.contains(database)) {
-			return false;
-		}
-		if (!this.balancer.isEmpty()) {
-			SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
-			try
+		Lock lock = this.lockManager.writeLock(null);
+
+		lock.lockInterruptibly();
+
+		try
+		{
+			if (this.balancer.contains(database)) {
+				return false;
+			}
+
+			if (!this.balancer.isEmpty())
 			{
-				//logger.log(Level.INFO, Messages.DATABASE_RESTORE_START.getMessage(this, database));
+				SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
 
-//				for (NodeDatabaseRestoreListener listener: this.nodeDatabaseRestoreListeners)
-//				{
-//					listener.beforeRestore(database);
-//				}
-
-				//strategy.dbRestore(context);
-
-//				for (NodeDatabaseRestoreListener listener: this.nodeDatabaseRestoreListeners)
-//				{
-//					listener.afterRestored(database);
-//				}
-				//logger.log(Level.INFO, Messages.DATABASE_RESTORE_END.getMessage(this, database));
-
-				Lock lock = this.lockManager.writeLock(null);
-
-				lock.lockInterruptibly();
 				try
 				{
 					DatabaseEvent event = new DatabaseEvent(database);
@@ -1064,20 +1052,19 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					{
 						listener.afterSynchronization(event);
 					}
-
-					return this.activate(database, this.stateManager);
 				}
 				finally
 				{
-					lock.unlock();
+					context.close();
 				}
 			}
-			finally
-			{
-				context.close();
-			}
+
+			return this.activate(database, this.stateManager);
 		}
-		return false;
+		finally
+		{
+			lock.unlock();
+		}
 	}
 
 	class FailureDetectionTask implements Runnable
@@ -1123,15 +1110,21 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	
 	class AutoActivationTask implements Runnable
 	{
+
+		private volatile boolean running = false;
+
 		@Override
 		public void run()
 		{
 			try
 			{
+				if(running){
+					return;
+				}
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
-
+				running = true;
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 				
 				if (!activeDatabases.isEmpty())
@@ -1158,6 +1151,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			catch (InterruptedException e)
 			{
 				logger.log(Level.WARN,e);
+			}finally {
+				running = false;
 			}
 		}
 	}

@@ -97,11 +97,6 @@ public class FullSynchronizationStrategy implements SynchronizationStrategy, Tab
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
-		this.strategy.dbRestore(context);
-	}
-
-	@Override
 	public <Z, D extends Database<Z>> void synchronize(SynchronizationContext<Z, D> context, TableProperties table) throws SQLException
 	{
 		final String tableName = table.getName().getDMLName();

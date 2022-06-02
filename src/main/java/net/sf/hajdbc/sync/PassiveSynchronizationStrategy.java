@@ -66,8 +66,4 @@ public class PassiveSynchronizationStrategy implements SynchronizationStrategy
 	{
 	}
 
-	@Override
-	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
-
-	}
 }

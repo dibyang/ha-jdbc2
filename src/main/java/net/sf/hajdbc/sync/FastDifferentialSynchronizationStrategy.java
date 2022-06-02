@@ -68,8 +68,4 @@ public class FastDifferentialSynchronizationStrategy implements SynchronizationS
 	{
 	}
 
-	@Override
-	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
-
-	}
 }

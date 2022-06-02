@@ -55,11 +55,6 @@ public class PerTableSynchronizationStrategy implements SynchronizationStrategy
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
-		// Do nothing
-	}
-
-	@Override
 	public <Z, D extends Database<Z>> void synchronize(SynchronizationContext<Z, D> context) throws SQLException
 	{
 		Connection sourceConnection = context.getConnection(context.getSourceDatabase());

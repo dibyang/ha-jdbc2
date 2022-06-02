@@ -70,41 +70,6 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 	{
 	}
 
-	@Override
-	public <Z, D extends Database<Z>> void dbRestore(SynchronizationContext<Z, D> context) throws SQLException {
-		Dialect dialect = context.getDialect();
-		Decoder decoder = context.getDecoder();
-		DumpRestoreSupport support = dialect.getDumpRestoreSupport();
-
-		if (support == null)
-		{
-			throw new SQLException(Messages.DUMP_RESTORE_UNSUPPORTED.getMessage(dialect));
-		}
-		if(support instanceof DBRestoreSupport){
-			DBRestoreSupport support2 = (DBRestoreSupport)support;
-			try
-			{
-				File file = Files.createTempFile(DUMP_FILE_SUFFIX);
-
-				try
-				{
-					support2.backupDB(context, context.getSourceDatabase(), decoder, file, this.dataOnly);
-					support2.restoreDB(context, context.getTargetDatabase(), decoder, file, this.dataOnly);
-				}
-				finally
-				{
-					Files.delete(file);
-				}
-			}
-			catch (Exception e)
-			{
-				throw ExceptionType.SQL.<SQLException>getExceptionFactory().createException(e);
-			}
-		}
-
-
-	}
-
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.SynchronizationStrategy#synchronize(net.sf.hajdbc.sync.SynchronizationContext)

@@ -196,7 +196,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    */
   private boolean isLostHeartBeat(){
     int count = counter.incrementAndGet();
-    logger.info("heart beat is lost. count = "+count);
+    logger.debug("heart beat is lost. count = "+count);
     if(count>= HEARTBEAT_LOST_MAX){
       counter.set(0);
       Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);

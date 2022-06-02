@@ -1,6 +1,7 @@
 package net.sf.hajdbc.dialect.h2;
 
 import net.sf.hajdbc.Database;
+import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -15,6 +16,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -25,8 +28,6 @@ public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z
   static final Logger logger = LoggerFactory.getLogger(H2RestoreCommand.class);
 
   private String path;
-  private String dir;
-  private String db;
 
   public String getPath() {
     return path;
@@ -36,25 +37,30 @@ public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z
     this.path = path;
   }
 
-  public String getDir() {
-    return dir;
-  }
-
-  public void setDir(String dir) {
-    this.dir = dir;
-  }
-
-  public String getDb() {
-    return db;
-  }
-
-  public void setDb(String db) {
-    this.db = db;
-  }
-
   @Override
   public Boolean execute(StateCommandContext<Z, D> context) {
     try {
+      D database = context.getDatabaseCluster().getLocalDatabase();
+      Decoder decoder = context.getDatabaseCluster().getDecoder();
+      final String password = database.decodePassword(decoder);
+      try(Connection connection = database.connect(database.getConnectionSource(), password);
+          Statement statTarget = connection.createStatement())
+      {
+        statTarget.execute("SHUTDOWN IMMEDIATELY");
+      }catch (Exception e){
+        //ignore Exception
+      }
+      String location = database.getLocation();
+      location = location.substring(location.indexOf("//") + 2);
+      location = location.substring(location.indexOf("/") + 1);
+      int index = location.indexOf(";");
+      if (index > 0) {
+        location = location.substring(0, index);
+      }
+      index = location.lastIndexOf("/");
+      String dir = location.substring(0, index);
+      String db = location.substring(index + 1);
+
       execute(path, dir, db);
       logger.log(Level.INFO,"H2 Restore dir={0} db={1} from {2}",dir,db,path);
       return true;

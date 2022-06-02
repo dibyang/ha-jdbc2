@@ -48,8 +48,6 @@ public enum Messages
 	DATABASE_NOT_ACTIVE("database-not-active"),
 	DATABASE_NOT_ALIVE("database-not-alive"),
 	DATABASE_STILL_ACTIVE("database-still-active"),
-	DATABASE_RESTORE_END("database-restore-end"),
-	DATABASE_RESTORE_START("database-restore-start"),
 	DATABASE_SYNC_END("database-sync-end"),
 	DATABASE_SYNC_START("database-sync-start"),
 	DELETE_COUNT("delete-count"),

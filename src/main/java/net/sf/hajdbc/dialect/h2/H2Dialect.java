@@ -26,6 +26,7 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
+import net.sf.hajdbc.util.StopWatch;
 import org.h2.message.DbException;
 import org.h2.util.ScriptReader;
 
@@ -172,12 +173,13 @@ public class H2Dialect extends StandardDialect
 	@Override
 	public <Z, D extends Database<Z>> void backupDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
-		logger.log(Level.INFO,"h2 dump path={0}", file.getPath());
+		StopWatch stopWatch = StopWatch.createStarted();
 		try(Connection connection = database.connect(database.getConnectionSource(), password))
 		{
 			backup(connection,file);
 		}
-
+		stopWatch.stop();
+		logger.log(Level.INFO,"h2 backup time={0} path={1}", stopWatch.toString(),file.getPath());
 	}
 
 	private void backup(Connection connection,File file) throws SQLException {
@@ -187,38 +189,17 @@ public class H2Dialect extends StandardDialect
 	@Override
 	public <Z, D extends Database<Z>> void restoreDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+		StopWatch stopWatch = StopWatch.createStarted();
 		if(syncMgr.sync(database,file)){
-			logger.log(Level.INFO,"h2 sync file path={0}", file.getPath());
-			final String password = database.decodePassword(decoder);
-			logger.log(Level.INFO,"h2 dump path={0}", file.getPath());
-			try(Connection connection = database.connect(database.getConnectionSource(), password);
-					Statement statTarget = connection.createStatement())
-			{
-				statTarget.execute("SET EXCLUSIVE 2");
-				try {
-					statTarget.execute("DROP ALL OBJECTS DELETE FILES");
-					String location = database.getLocation();
-					location = location.substring(location.indexOf("//") + 2);
-					location = location.substring(location.indexOf("/") + 1);
-					int index = location.indexOf(";");
-					if (index > 0) {
-						location = location.substring(0, index);
-					}
-					index = location.lastIndexOf("/");
-					String dir = location.substring(0, index);
-					String db = location.substring(index + 1);
-					logger.log(Level.INFO, "h2 location ={0} dir ={1} db ={2}", location, dir, db);
-					H2RestoreCommand cmd = new H2RestoreCommand();
-					cmd.setPath(file.getPath());
-					cmd.setDir(dir);
-					cmd.setDb(db);
-					syncMgr.execute(database, cmd);
-				}finally {
-					// switch back to the regular mode
-					statTarget.execute("SET EXCLUSIVE FALSE");
-					statTarget.execute("SET EXCLUSIVE FALSE");
-				}
-			}
+
+			logger.log(Level.INFO,"h2 sync file  time={0} path={1}", stopWatch.toString(), file.getPath());
+
+			H2RestoreCommand cmd = new H2RestoreCommand();
+			cmd.setPath(file.getPath());
+			syncMgr.execute(database, cmd);
+			stopWatch.stop();
+
+			logger.log(Level.INFO,"h2 restore  time={0}", stopWatch.toString());
 		}
 
 	}
