@@ -239,28 +239,34 @@ public class H2Dialect extends StandardDialect
 	private void process(Connection conn, boolean continueOnError, String path,
 											 Reader reader, Charset charset) throws SQLException, IOException {
 		Statement stat = conn.createStatement();
-		ScriptReader r = new ScriptReader(reader);
-		while (true) {
-			String sql = r.readStatement();
-			if (sql == null) {
-				break;
-			}
-			String trim = sql.trim();
-			if (trim.isEmpty()) {
-				continue;
-			}
-			try {
-				if (!trim.startsWith("-->")) {
-					logger.log(Level.DEBUG,sql + ";");
+		try {
+			stat.execute("SET EXCLUSIVE 2");
+			ScriptReader r = new ScriptReader(reader);
+			while (true) {
+				String sql = r.readStatement();
+				if (sql == null) {
+					break;
 				}
-				stat.execute(sql);
-			} catch (Exception e) {
-				if (continueOnError) {
-					logger.log(Level.WARN,e);
-				} else {
-					throw DbException.toSQLException(e);
+				String trim = sql.trim();
+				if (trim.isEmpty()) {
+					continue;
+				}
+				try {
+					if (!trim.startsWith("-->")) {
+						logger.log(Level.DEBUG, sql + ";");
+					}
+					stat.execute(sql);
+				} catch (Exception e) {
+					if (continueOnError) {
+						logger.log(Level.WARN, e);
+					} else {
+						throw DbException.toSQLException(e);
+					}
 				}
 			}
+		}finally{
+			stat.execute("SET EXCLUSIVE FALSE");
+			stat.close();
 		}
 	}
 

@@ -356,7 +356,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			if(database==null){
 				D db = (D)execute(getDatabaseCommand, member);
 				if(db!=null){
-					db.checkLocal();
+					db.setLocal(false);
 					cluster.addDatabase(db);
 				}
 			}
