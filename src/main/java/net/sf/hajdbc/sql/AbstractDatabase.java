@@ -338,11 +338,6 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 
 	public void setIp(String ip) {
 		this.ip = ip;
-		checkLocal();
-	}
-
-	public void checkLocal() {
-		setLocal(LocalHost.getAllIp().contains(ip));
 	}
 
 	/**
