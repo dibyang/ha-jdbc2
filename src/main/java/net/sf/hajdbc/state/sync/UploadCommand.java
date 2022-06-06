@@ -51,10 +51,13 @@ public class UploadCommand <Z, D extends Database<Z>> implements SyncCommand<Z, 
       if(offset==0&&file.exists()){
         file.delete();
       }
-      file.createNewFile();
+      if(!file.exists()){
+        file.createNewFile();
+      }
     } catch (IOException e) {
-      e.printStackTrace();
+      logger.log(Level.WARN,e);
     }
+
     try (RandomAccessFile raf = new RandomAccessFile(file,"rws")){
       raf.seek(offset);
       raf.write(data);

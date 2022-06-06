@@ -28,12 +28,15 @@ import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
 import org.h2.message.DbException;
+import org.h2.util.IOUtils;
 import org.h2.util.ScriptReader;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
 import java.sql.*;
 import java.util.*;
 
@@ -179,28 +182,26 @@ public class H2Dialect extends StandardDialect
 			backup(connection,file);
 		}
 		stopWatch.stop();
-		logger.log(Level.INFO,"h2 backup time={0} path={1}", stopWatch.toString(),file.getPath());
+		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(),file.getPath());
 	}
 
 	private void backup(Connection connection,File file) throws SQLException {
-		executeSql(connection, "BACKUP TO  '" + file.getPath() + "'");
+		executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
 	}
 
 	@Override
 	public <Z, D extends Database<Z>> void restoreDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 		StopWatch stopWatch = StopWatch.createStarted();
+		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 		if(syncMgr.sync(database,file)){
-			H2RestoreCommand cmd = new H2RestoreCommand();
+			H2RunScriptCommand cmd = new H2RunScriptCommand();
 			cmd.setPath(file.getPath());
 			syncMgr.execute(database, cmd);
 			stopWatch.stop();
-			logger.log(Level.INFO,"h2 restore  time={0}", stopWatch.toString());
+			logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
 		}
 
 	}
-
-
 
 	void dropAllObjects(Connection conn) throws SQLException {
 		executeSql(conn, "DROP ALL OBJECTS");

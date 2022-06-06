@@ -19,6 +19,7 @@ import java.security.MessageDigest;
 public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D> {
   static final Logger logger = LoggerFactory.getLogger(UploadedCommand.class);
   public static final String TMP_FILE_SUFFIX = ".tmp";
+  public static final int BUFFER_SIZE = 4 * 1024;
   private String path;
   private long size;
   private String md5;
@@ -55,7 +56,7 @@ public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z,
 
       if(file.length()==size){
         MessageDigest md = MD5.newInstance();
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[BUFFER_SIZE];
         int len = 0;
         try (FileInputStream fis = new FileInputStream(file)) {
           while ((len = fis.read(buffer)) != -1) {

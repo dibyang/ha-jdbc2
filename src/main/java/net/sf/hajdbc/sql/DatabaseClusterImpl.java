@@ -985,7 +985,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 		catch (SQLException e)
 		{
-			logger.log(level, e);
+			logger.log(level, e.getMessage());
 			return false;
 		}
 	}

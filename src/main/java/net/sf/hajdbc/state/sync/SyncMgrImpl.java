@@ -60,7 +60,7 @@ public class SyncMgrImpl implements SyncMgr{
         logger.log(Level.INFO,"sync file path={0} size={1} r={2} time={3}", file.getPath(),file.length(), r, stopWatch.toString());
         return r;
       } catch (IOException e) {
-        e.printStackTrace();
+        logger.log(Level.WARN,e);
       }
     }
     return false;
