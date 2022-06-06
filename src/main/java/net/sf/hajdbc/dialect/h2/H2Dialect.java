@@ -191,14 +191,10 @@ public class H2Dialect extends StandardDialect
 		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 		StopWatch stopWatch = StopWatch.createStarted();
 		if(syncMgr.sync(database,file)){
-
-			logger.log(Level.INFO,"h2 sync file  time={0} path={1}", stopWatch.toString(), file.getPath());
-
 			H2RestoreCommand cmd = new H2RestoreCommand();
 			cmd.setPath(file.getPath());
 			syncMgr.execute(database, cmd);
 			stopWatch.stop();
-
 			logger.log(Level.INFO,"h2 restore  time={0}", stopWatch.toString());
 		}
 

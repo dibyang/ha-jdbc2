@@ -8,6 +8,7 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.util.MD5;
+import net.sf.hajdbc.util.StopWatch;
 
 
 import java.io.File;
@@ -17,7 +18,7 @@ import java.security.MessageDigest;
 
 public class SyncMgrImpl implements SyncMgr{
   static final Logger logger = LoggerFactory.getLogger(SyncMgr.class);
-  public static final int BLOCK_SIZE = 8 * 1024;
+  public static final int BLOCK_SIZE = 256 * 1024;
 
   private DistributedStateManager stateManager;
 
@@ -29,6 +30,7 @@ public class SyncMgrImpl implements SyncMgr{
   public boolean sync(Database db, File file) {
     Member target = this.getMember(db);
     if(target!=null) {
+      StopWatch stopWatch = StopWatch.createStarted();
       MessageDigest md = MD5.newInstance();
       try (FileInputStream fis = new FileInputStream(file)) {
         byte[] buffer = new byte[BLOCK_SIZE];
@@ -54,7 +56,8 @@ public class SyncMgrImpl implements SyncMgr{
         cmd2.setSize(file.length());
         cmd2.setMd5(MD5.md5DigestToString(md.digest()));
         boolean r = execute(target, cmd2);
-        logger.log(Level.INFO,"sync file path={0} size={1} r={2}", file.getPath(),file.length(), r);
+        stopWatch.stop();
+        logger.log(Level.INFO,"sync file path={0} size={1} r={2} time={3}", file.getPath(),file.length(), r, stopWatch.toString());
         return r;
       } catch (IOException e) {
         e.printStackTrace();
