@@ -455,7 +455,7 @@ public class StopWatch {
     return formatDuration(getSplitNanoTime());
   }
 
-  String formatDuration(long nanos){
+  public static String formatDuration(long nanos){
     TimeUnit unit = chooseUnit(nanos);
     double value = (double) nanos / NANOSECONDS.convert(1, unit);
 

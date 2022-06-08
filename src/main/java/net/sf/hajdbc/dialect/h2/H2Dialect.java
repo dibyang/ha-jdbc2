@@ -28,15 +28,12 @@ import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
 import org.h2.message.DbException;
-import org.h2.util.IOUtils;
 import org.h2.util.ScriptReader;
 
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.sql.*;
 import java.util.*;
 
@@ -46,7 +43,7 @@ import java.util.*;
  * @author Paul Ferraro
  */
 public class H2Dialect extends StandardDialect
-		implements DBRestoreSupport
+		implements DumpRestoreSupport
 {
 	static final Logger logger = LoggerFactory.getLogger(H2Dialect.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
@@ -173,24 +170,27 @@ public class H2Dialect extends StandardDialect
 		return this;
 	}
 
+	private void executeSql(Connection conn, String sql) throws SQLException {
+		try(Statement s = conn.createStatement()) {
+			s.execute(sql);
+		}
+	}
+
+
 	@Override
-	public <Z, D extends Database<Z>> void backupDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
 		StopWatch stopWatch = StopWatch.createStarted();
 		try(Connection connection = database.connect(database.getConnectionSource(), password))
 		{
-			backup(connection,file);
+			executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
 		}
 		stopWatch.stop();
 		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(),file.getPath());
 	}
 
-	private void backup(Connection connection,File file) throws SQLException {
-		executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
-	}
-
 	@Override
-	public <Z, D extends Database<Z>> void restoreDB(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		StopWatch stopWatch = StopWatch.createStarted();
 		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 		if(syncMgr.sync(database,file)){
@@ -200,63 +200,6 @@ public class H2Dialect extends StandardDialect
 			stopWatch.stop();
 			logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
 		}
-
 	}
 
-	void dropAllObjects(Connection conn) throws SQLException {
-		executeSql(conn, "DROP ALL OBJECTS");
-	}
-
-	private void executeSql(Connection conn, String sql) throws SQLException {
-		try(Statement s = conn.createStatement()) {
-			s.execute(sql);
-		}
-	}
-
-
-	private void process(Connection conn, boolean continueOnError, String path,
-											 Reader reader, Charset charset) throws SQLException, IOException {
-		Statement stat = conn.createStatement();
-		try {
-			stat.execute("SET EXCLUSIVE 2");
-			ScriptReader r = new ScriptReader(reader);
-			while (true) {
-				String sql = r.readStatement();
-				if (sql == null) {
-					break;
-				}
-				String trim = sql.trim();
-				if (trim.isEmpty()) {
-					continue;
-				}
-				try {
-					if (!trim.startsWith("-->")) {
-						logger.log(Level.DEBUG, sql + ";");
-					}
-					stat.execute(sql);
-				} catch (Exception e) {
-					if (continueOnError) {
-						logger.log(Level.WARN, e);
-					} else {
-						throw DbException.toSQLException(e);
-					}
-				}
-			}
-		}finally{
-			stat.execute("SET EXCLUSIVE FALSE");
-			stat.close();
-		}
-	}
-
-	@Override
-	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-
-	}
-
-	@Override
-	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		//
-	}
-
-	//*/
 }

@@ -55,6 +55,7 @@ public class SyncMgrImpl implements SyncMgr{
         cmd2.setPath(file.getPath());
         cmd2.setSize(file.length());
         cmd2.setMd5(MD5.md5DigestToString(md.digest()));
+        cmd2.setNanos(stopWatch.getNanoTime());
         boolean r = execute(target, cmd2);
         stopWatch.stop();
         logger.log(Level.INFO,"sync file path={0} size={1} r={2} time={3}", file.getPath(),file.length(), r, stopWatch.toString());

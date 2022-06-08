@@ -31,6 +31,7 @@ import net.sf.hajdbc.DumpRestoreSupport;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.ConnectionProperties;
 import net.sf.hajdbc.dialect.StandardDialect;
+import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Processes;
 import net.sf.hajdbc.util.Strings;
 
@@ -207,7 +208,7 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception
+	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
 		ProcessBuilder builder = new ProcessBuilder("mysqldump");
@@ -227,7 +228,7 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 	}
 
 	@Override
-	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception
+	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
 		ProcessBuilder builder = new ProcessBuilder("mysql");

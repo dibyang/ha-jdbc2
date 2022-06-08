@@ -7,6 +7,7 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 import net.sf.hajdbc.util.MD5;
+import net.sf.hajdbc.util.StopWatch;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -19,10 +20,11 @@ import java.security.MessageDigest;
 public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D> {
   static final Logger logger = LoggerFactory.getLogger(UploadedCommand.class);
   public static final String TMP_FILE_SUFFIX = ".tmp";
-  public static final int BUFFER_SIZE = 4 * 1024;
+  public static final int BUFFER_SIZE = 64 * 1024;
   private String path;
   private long size;
   private String md5;
+  private long nanos;
 
   public String getPath() {
     return path;
@@ -48,6 +50,14 @@ public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z,
     this.md5 = md5;
   }
 
+  public long getNanos() {
+    return nanos;
+  }
+
+  public void setNanos(long nanos) {
+    this.nanos = nanos;
+  }
+
   @Override
   public Boolean execute(StateCommandContext<Z, D> context) {
     String path2 = path + TMP_FILE_SUFFIX;
@@ -64,7 +74,7 @@ public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z,
           }
           String digest = MD5.md5DigestToString(md.digest());
           if(digest.equals(md5)){
-            logger.log(Level.INFO,"uploaded file size={0} path={1}",size,path);
+            logger.log(Level.INFO,"uploaded file size={0} path={1} use time {2}",size,path, StopWatch.formatDuration(nanos));
             Files.move(file.toPath(), Paths.get(path), StandardCopyOption.REPLACE_EXISTING);
             return true;
           }else{

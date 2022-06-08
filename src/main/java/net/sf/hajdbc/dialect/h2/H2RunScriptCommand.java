@@ -7,6 +7,7 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 import net.sf.hajdbc.state.sync.SyncCommand;
+import net.sf.hajdbc.util.StopWatch;
 
 import java.sql.Connection;
 import java.sql.Statement;
@@ -28,6 +29,7 @@ public class H2RunScriptCommand<Z, D extends Database<Z>> implements SyncCommand
   @Override
   public Boolean execute(StateCommandContext<Z, D> context) {
     try {
+      StopWatch stopWatch = StopWatch.createStarted();
       D database = context.getDatabaseCluster().getLocalDatabase();
       Decoder decoder = context.getDatabaseCluster().getDecoder();
       final String password = database.decodePassword(decoder);
@@ -36,7 +38,8 @@ public class H2RunScriptCommand<Z, D extends Database<Z>> implements SyncCommand
       {
         statTarget.execute("DROP ALL OBJECTS");
         statTarget.execute("RUNSCRIPT FROM '"+path+"'");
-        logger.log(Level.INFO,"H2 Run Script from {0}",path);
+        stopWatch.stop();
+        logger.log(Level.INFO,"H2 Run Script use time {0} from {1}", stopWatch.toString(), path);
       }catch (Exception e){
         //ignore Exception
       }

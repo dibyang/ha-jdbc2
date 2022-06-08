@@ -92,14 +92,8 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 			
 			try
 			{
-				if(support instanceof DBRestoreSupport) {
-					DBRestoreSupport support2 = (DBRestoreSupport) support;
-					support2.backupDB(context, context.getSourceDatabase(), decoder, file, this.dataOnly);
-					support2.restoreDB(context, context.getTargetDatabase(), decoder, file, this.dataOnly);
-				}else {
-					support.dump(context.getSourceDatabase(), decoder, file, this.dataOnly);
-					support.restore(context.getTargetDatabase(), decoder, file, this.dataOnly);
-				}
+				support.dump(context, context.getSourceDatabase(), decoder, file, this.dataOnly);
+				support.restore(context, context.getTargetDatabase(), decoder, file, this.dataOnly);
 			}
 			finally
 			{
