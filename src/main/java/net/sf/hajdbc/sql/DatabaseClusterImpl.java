@@ -17,27 +17,7 @@
  */
 package net.sf.hajdbc.sql;
 
-import java.io.File;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.locks.Lock;
-
-import javax.management.JMException;
-
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.DatabaseCluster;
-import net.sf.hajdbc.DatabaseClusterConfiguration;
-import net.sf.hajdbc.DatabaseClusterConfigurationListener;
-import net.sf.hajdbc.DatabaseClusterListener;
-import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.SynchronizationListener;
-import net.sf.hajdbc.SynchronizationStrategy;
-import net.sf.hajdbc.TransactionMode;
-import net.sf.hajdbc.Version;
+import net.sf.hajdbc.*;
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.codec.Decoder;
@@ -53,11 +33,7 @@ import net.sf.hajdbc.lock.distributed.DistributedLockManager;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.management.Description;
-import net.sf.hajdbc.management.MBean;
-import net.sf.hajdbc.management.MBeanRegistrar;
-import net.sf.hajdbc.management.ManagedAttribute;
-import net.sf.hajdbc.management.ManagedOperation;
+import net.sf.hajdbc.management.*;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
@@ -73,8 +49,18 @@ import net.sf.hajdbc.sync.SynchronizationContextImpl;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 import net.sf.hajdbc.util.LocalHost;
 import net.sf.hajdbc.util.Resources;
+import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
+
+import javax.management.JMException;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.locks.Lock;
 
 /**
  * @author paul
@@ -1004,66 +990,62 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		return null;
 	}
 
-	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException
-	{
-		if (!this.isAlive(database, Level.DEBUG)||!stateManager.isValid(database)) {
-			return false;
-		}
-		Member find = getDistributedManager(). getMember(database.getIp());
-		if(find!=null){
-			NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
-			if(nodeHealth==null){
+
+	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
+		synchronized (database) {
+			if (!this.isAlive(database, Level.DEBUG) || !stateManager.isValid(database)) {
 				return false;
 			}
-		}else {
-			return false;
-		}
+			Member find = getDistributedManager().getMember(database.getIp());
+			if (find != null) {
+				NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
+				if (nodeHealth == null) {
+					return false;
+				}
+			} else {
+				return false;
+			}
 
-		Lock lock = this.lockManager.writeLock(null);
-
-		lock.lockInterruptibly();
-
-		try
-		{
 			if (this.balancer.contains(database)) {
 				return false;
 			}
 
-			if (!this.balancer.isEmpty())
-			{
-				SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
+			StopWatch stopWatch = StopWatch.createStarted();
+			Lock lock = this.lockManager.writeLock(null);
 
-				try
-				{
-					DatabaseEvent event = new DatabaseEvent(database);
+			lock.lockInterruptibly();
 
-					logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
+			try {
+				if (!this.balancer.isEmpty()) {
+					SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
 
-					for (SynchronizationListener listener: this.synchronizationListeners)
-					{
-						listener.beforeSynchronization(event);
-					}
+					try {
+						DatabaseEvent event = new DatabaseEvent(database);
 
-					strategy.synchronize(context);
+						logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
 
-					logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
+						for (SynchronizationListener listener : this.synchronizationListeners) {
+							listener.beforeSynchronization(event);
+						}
 
-					for (SynchronizationListener listener: this.synchronizationListeners)
-					{
-						listener.afterSynchronization(event);
+						strategy.synchronize(context);
+
+						logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
+
+						for (SynchronizationListener listener : this.synchronizationListeners) {
+							listener.afterSynchronization(event);
+						}
+					} finally {
+						context.close();
 					}
 				}
-				finally
-				{
-					context.close();
-				}
+
+				return this.activate(database, this.stateManager);
+			} finally {
+				lock.unlock();
+				stopWatch.stop();
+				logger.log(Level.INFO, "db activate lock time {0}", stopWatch.toString());
 			}
-
-			return this.activate(database, this.stateManager);
-		}
-		finally
-		{
-			lock.unlock();
 		}
 	}
 
@@ -1111,22 +1093,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	class AutoActivationTask implements Runnable
 	{
 
-		private volatile boolean running = false;
 
 		@Override
 		public void run()
 		{
 			try
 			{
-				if(running){
-					return;
-				}
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
-				running = true;
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
-				
+
 				if (!activeDatabases.isEmpty())
 				{
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
@@ -1151,8 +1128,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			catch (InterruptedException e)
 			{
 				logger.log(Level.WARN,e);
-			}finally {
-				running = false;
 			}
 		}
 	}
