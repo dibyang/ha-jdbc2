@@ -41,6 +41,7 @@ public enum MountPathHolder implements FileObserver {
                 String mount = line.substring(5, eindex).trim() + "/";
                 if (mount != null && !mount.isEmpty()) {
                   this.mountPath = mount;
+                  break;
                 }
               }
             }
