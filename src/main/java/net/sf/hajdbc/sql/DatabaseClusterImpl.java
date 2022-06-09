@@ -1006,16 +1006,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				return false;
 			}
 
-			if (this.balancer.contains(database)) {
-				return false;
-			}
-
 			StopWatch stopWatch = StopWatch.createStarted();
 			Lock lock = this.lockManager.writeLock(null);
 
 			lock.lockInterruptibly();
 
 			try {
+
+				if (this.balancer.contains(database)) {
+					return false;
+				}
+
 				if (!this.balancer.isEmpty()) {
 					SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
 
