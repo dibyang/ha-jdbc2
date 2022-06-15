@@ -27,13 +27,8 @@ import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
-import org.h2.message.DbException;
-import org.h2.util.ScriptReader;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.charset.Charset;
 import java.sql.*;
 import java.util.*;
 

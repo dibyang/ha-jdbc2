@@ -27,16 +27,16 @@ public class FileWatchDog {
   private final FileObserver observer;
 
   public FileWatchDog(File file, FileObserver observer) {
-    if (!file.exists()) {
-      throw new IllegalArgumentException("File '" + file + "' does not exist");
-    } else {
-      this.file = file;
-      this.observer = observer;
-    }
+    this.file = file;
+    this.observer = observer;
   }
 
   public void watch() {
-    long modified = this.file.lastModified();
+
+    long modified = 0;
+    if(this.file.exists()){
+      modified = this.file.lastModified();
+    }
     if (this.modified != modified) {
       this.modified = modified;
       this.observer.fileChanged(this.file);
