@@ -60,7 +60,7 @@ dependencies {
     testImplementation 'org.apache.derby:derby:10.11.1.1'
 }
 
-group = 'net.sf.ha-jdbc'
+group = 'net.xdob.ha-jdbc2'
 description = 'HA-JDBC'
 
 
