@@ -1,9 +1,8 @@
 buildscript {
     repositories {
-        maven {
-            name "REPO_NEXUS"
-            url "http://${nexus_host}:8081/repository/maven-public/"
-        }
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        mavenLocal()
+        mavenCentral()
     }
     dependencies {
         classpath 'net.researchgate:gradle-release:2.6.0'
@@ -39,22 +38,9 @@ release {
 
 
 repositories {
+    maven { url 'https://maven.aliyun.com/repository/public/' }
     mavenLocal()
-    maven {
-        url = "http://${nexus_host}:8081/repository/maven-snapshots/"
-    }
-
-    maven {
-        url = "http://${nexus_host}:8081/repository/maven-releases/"
-    }
-
-    maven {
-        url = "http://${nexus_host}:8081/repository/maven-public/"
-    }
-
-    maven {
-        url = 'http://repo.maven.apache.org/maven2'
-    }
+    mavenCentral()
 }
 
 dependencies {
@@ -74,7 +60,7 @@ dependencies {
     testImplementation 'org.apache.derby:derby:10.11.1.1'
 }
 
-group = 'net.sf.ha-jdbc'
+group = 'net.xdob.ha-jdbc2'
 description = 'HA-JDBC'
 
 
