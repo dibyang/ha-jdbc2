@@ -1,0 +1,10 @@
+/.classpath
+/.project
+/.settings
+/target
+/.idea
+/ha-jdbc.iml
+/build/
+/.gradle/
+/derby.log
+signing.properties

@@ -1,0 +1,195 @@
+buildscript {
+    repositories {
+        mavenLocal()
+        maven { url 'https://maven.aliyun.com/repository/public/' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.researchgate:gradle-release:2.6.0'
+    }
+    //skip Test tasks
+    gradle.taskGraph.whenReady {
+        tasks.each { task ->
+            if (task.name.contains("test")) {
+                task.enabled = false
+            }
+        }
+    }
+}
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'signing'
+apply plugin: 'net.researchgate.release'
+
+File signing_cfg = new File("$project.rootDir/signing.properties")
+if(signing_cfg.exists()) {
+    Properties props = new Properties()
+    props.load(new FileInputStream(signing_cfg))
+    props.each { prop ->
+        project.ext.set(prop.key, prop.value)
+    }
+
+    // 将构建的包签名
+    signing {
+        sign configurations.archives
+    }
+}
+
+
+release {
+    failOnUnversionedFiles = true
+    failOnCommitNeeded = true
+    failOnPublishNeeded = true
+    failOnSnapshotDependencies = false
+    failOnUpdateNeeded = true
+    revertOnFail = true
+    tagTemplate = 'v${version}'
+    scmAdapters = [
+            net.researchgate.release.GitAdapter
+    ]
+
+    git {
+        requireBranch = 'master|v3.6.x'
+        pushToRemote = 'origin'
+        pushToBranchPrefix = ''
+        commitVersionFileOnly = false
+        signTag = false
+    }
+
+}
+
+repositories {
+    mavenLocal()
+    maven { url 'https://maven.aliyun.com/repository/public/' }
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'joda-time:joda-time:2.10.1'
+    implementation 'org.jgroups:jgroups:3.6.20.Final'
+    implementation 'org.slf4j:slf4j-api:1.7.7'
+    implementation 'commons-logging:commons-logging:1.2'
+    implementation 'org.jboss.logging:jboss-logging:3.1.4.GA'
+    implementation 'commons-pool:commons-pool:1.6'
+    implementation 'com.sleepycat:je:6.0.11'
+    implementation 'org.tmatesoft.sqljet:sqljet:1.1.10'
+    implementation 'commons-codec:commons-codec:1.9'
+    implementation 'net.xdob.h2db:h2:2.0.0'
+    testImplementation 'junit:junit:4.11'
+    testImplementation 'org.mockito:mockito-core:1.10.8'
+    testImplementation 'org.hsqldb:hsqldb:2.3.2'
+    testImplementation 'org.apache.derby:derby:10.11.1.1'
+}
+
+group = 'net.xdob.ha-jdbc2'
+description = 'HA-JDBC2'
+
+
+
+sourceCompatibility = project.jdkVersion
+targetCompatibility = project.jdkVersion
+
+afterReleaseBuild.dependsOn uploadArchives
+
+
+configurations.all {
+    resolutionStrategy {
+        // cache dynamic versions for 10 seconds
+        cacheDynamicVersionsFor 10, 'seconds'
+        // don't cache changing modules at all
+        cacheChangingModulesFor 0, 'seconds'
+    }
+}
+
+import org.apache.tools.ant.filters.ReplaceTokens
+
+processResources {
+    from('src/main/java') {
+        include '**/*.properties'
+    }
+    filter(ReplaceTokens, tokens: [version: project.version])
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+//对于典型的 Java 项目，您可以添加一个javadocJar以及一个 sourcesJar任务
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+// javadoc 配置，这里是自定义了 java doc 的一些配置
+javadoc {
+    description = "Generates project-level javadoc for use in -javadoc jar"
+
+    options.memberLevel = org.gradle.external.javadoc.JavadocMemberLevel.PROTECTED
+    options.author = true
+    options.version = true
+    options.header = project.name
+    options.addStringOption('Xdoclint:none', '-quiet')
+
+    // suppress warnings due to cross-module @see and @link references;
+    // note that global 'api' task does display all warnings.
+    logging.captureStandardError LogLevel.INFO
+    logging.captureStandardOutput LogLevel.INFO // suppress "## warnings" message
+    options.encoding = "UTF-8"  //编码一定要配置否则直接出错
+    options.charSet = 'UTF-8'
+}
+
+// 并将它们与项目 jar 本身一起连接到 artifacts 集合中：
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: findProperty("ossrhUsername")?:"", password: findProperty("ossrhPassword")?:"")
+            }
+
+            snapshotRepository(url: "https://s01.oss.sonatype.org/content/repositories/snapshots/") {
+                authentication(userName: findProperty("ossrhUsername")?:"", password: findProperty("ossrhPassword")?:"")
+            }
+
+            pom.project {
+                name 'ha-jdbc2'
+                packaging 'jar'
+                // optionally artifactId can be defined here
+                description "High-Availability JDBC"
+                url 'https://github.com/dibyang/ha-jdbc2'
+
+                scm {
+                    connection 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
+                    developerConnection 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
+                    url 'https://github.com/dibyang/ha-jdbc2.git'
+                }
+
+                licenses {
+                    license {
+                        name 'GNU Lesser General Public License v3.0'
+                        url 'https://github.com/dibyang/ha-jdbc2/blob/master/LICENSE'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id 'yangzj'
+                        name 'Yang zhijian'
+                        email '3227817@qq.com'
+                    }
+                }
+            }
+        }
+    }
+}

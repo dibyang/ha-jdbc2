@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+	HA-JDBC: High-Availability JDBC
+	Copyright (C) 2012  Paul Ferraro
+	
+	This program is free software: you can redistribute it and/or modify
+	it under the terms of the GNU Lesser General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	This program is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU Lesser General Public License for more details.
+
+	You should have received a copy of the GNU Lesser General Public License
+	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<project xmlns="http://maven.apache.org/DECORATION/1.3.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/DECORATION/1.3.0 http://maven.apache.org/xsd/decoration-1.3.0.xsd">
+	<bannerLeft>
+		<name>HA-JDBC</name>
+		<src>images/logo.png</src>
+		<href>http://ha-jdbc.github.com</href>
+	</bannerLeft>
+	<publishDate position="right"/>
+	<body>
+		<menu name="About">
+			<item name="Overview" href="index.html"/>
+			<item name="Documentation" href="doc.html"/>
+			<item name="XML Schemas" href="schemas.html"/>
+			<item name="Building" href="build.html"/>
+			<item name="Downloads" href="${project.distributionManagement.downloadUrl}"/>
+			<item name="Examples" href="https://github.com/ha-jdbc/ha-jdbc/wiki"/>
+			<item name="Forums" href="http://sourceforge.net/projects/ha-jdbc/forums"/>
+		</menu>
+		<menu ref="reports"/>
+	</body>
+	<poweredBy>
+		<logo name="Maven" href="http://maven.apache.org/" img="http://maven.apache.org/images/logos/maven-feather.png"/>
+		<logo name="SourceForge.net" href="http://sourceforge.net" img="http://sourceforge.net/sflogo.php?group_id=111957&amp;type=1"/>
+		<logo name="Open Source Initiative" href="http://opensource.org" img="http://opensource.org/trademarks/opensource/web/opensource-75x65.png"/>
+		<logo name="Friends of the JBoss Community" href="http://community.jboss.org" img="https://community.jboss.org/servlet/JiveServlet/showImage/102-16392-8-11218/jbosscommunity-friend_badge-82x.png"/>
+	</poweredBy>
+	<skin>
+		<groupId>org.apache.maven.skins</groupId>
+		<artifactId>maven-fluido-skin</artifactId>
+	</skin>
+	<custom>
+		<fluidoSkin>
+			<sourceLineNumbersEnabled>true</sourceLineNumbersEnabled>
+			<gitHub>
+				<projectId>ha-jdbc/ha-jdbc</projectId>
+				<ribbonOrientation>right</ribbonOrientation>
+				<ribbonColor>black</ribbonColor>
+			</gitHub>
+		</fluidoSkin>
+	</custom>
+</project>
