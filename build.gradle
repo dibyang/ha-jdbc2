@@ -178,7 +178,7 @@ uploadArchives {
                 licenses {
                     license {
                         name 'GNU Lesser General Public License v3.0'
-                        url 'https://github.com/dibyang/ha-jdbc2/blob/master/LICENSE'
+                        url 'https://www.gnu.org/licenses/lgpl.html'
                     }
                 }
 

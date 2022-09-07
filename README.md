@@ -1,6 +1,6 @@
-# HA-JDBC: High-Availability JDBC
+# HA-JDBC2: High-Availability JDBC
 
-<http://ha-jdbc.github.com>
+<https://github.com/dibyang/ha-jdbc2>
 
 ## License
 
