@@ -23,21 +23,12 @@ import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
-import net.sf.hajdbc.sql.DatabaseClusterImpl;
+import net.sf.hajdbc.state.sync.SyncMgr;
+import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
-import org.h2.engine.Constants;
-import org.h2.message.DbException;
-import org.h2.store.fs.FileUtils;
-import org.h2.tools.RunScript;
-import org.h2.tools.Script;
-import org.h2.util.IOUtils;
-import org.h2.util.ScriptReader;
-import org.h2.util.StringUtils;
+import net.sf.hajdbc.util.StopWatch;
 
-import java.io.*;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
+import java.io.File;
 import java.sql.*;
 import java.util.*;
 
@@ -49,7 +40,7 @@ import java.util.*;
 public class H2Dialect extends StandardDialect
 		implements DumpRestoreSupport
 {
-	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
+	static final Logger logger = LoggerFactory.getLogger(H2Dialect.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
 	
 	/**
@@ -174,74 +165,36 @@ public class H2Dialect extends StandardDialect
 		return this;
 	}
 
-	@Override
-	public <Z, D extends Database<Z>> void dump(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		final String password = database.decodePassword(decoder);
-		Properties properties = this.getDatabaseProperties(database, password);
-		String url = properties.getProperty("url");
-		String userName = properties.getProperty("userName");
-		logger.log(Level.INFO,"h2 dump url={0} path={1}",url,file.getPath());
-		Script.main("-url", url,"-user",userName,"-password",password,"-script", file.getPath());
-
+	private void executeSql(Connection conn, String sql) throws SQLException {
+		try(Statement s = conn.createStatement()) {
+			s.execute(sql);
+		}
 	}
+
 
 	@Override
-	public <Z, D extends Database<Z>> void restore(D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
-		Connection connection = database.connect(database.getConnectionSource(), password);
-		Charset charset = Charset.forName("utf-8");
-		try
+		StopWatch stopWatch = StopWatch.createStarted();
+		try(Connection connection = database.connect(database.getConnectionSource(), password))
 		{
-			dropAllObjects(connection);
-			BufferedReader reader = Files.newBufferedReader(file.toPath());
-			try {
-				process(connection, true, file.getParent(), reader, charset);
-			} finally {
-				IOUtils.closeSilently(reader);
-			}
+			executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
 		}
-		finally
-		{
-			connection.close();
-		}
+		stopWatch.stop();
+		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(),file.getPath());
 	}
 
-
-
-	void dropAllObjects(Connection conn) throws SQLException {
-		Statement s = conn.createStatement();
-		s.execute("DROP ALL OBJECTS");
-		s.close();
-	}
-
-
-	private void process(Connection conn, boolean continueOnError, String path,
-											 Reader reader, Charset charset) throws SQLException, IOException {
-		Statement stat = conn.createStatement();
-		ScriptReader r = new ScriptReader(reader);
-		while (true) {
-			String sql = r.readStatement();
-			if (sql == null) {
-				break;
-			}
-			String trim = sql.trim();
-			if (trim.isEmpty()) {
-				continue;
-			}
-			try {
-				if (!trim.startsWith("-->")) {
-					logger.log(Level.DEBUG,sql + ";");
-				}
-				stat.execute(sql);
-			} catch (Exception e) {
-				if (continueOnError) {
-					logger.log(Level.WARN,e);
-				} else {
-					throw DbException.toSQLException(e);
-				}
-			}
+	@Override
+	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		StopWatch stopWatch = StopWatch.createStarted();
+		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+		if(syncMgr.sync(database,file)){
+			H2RunScriptCommand cmd = new H2RunScriptCommand();
+			cmd.setPath(file.getPath());
+			syncMgr.execute(database, cmd);
+			stopWatch.stop();
+			logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
 		}
 	}
 
-	//*/
 }

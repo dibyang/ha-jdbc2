@@ -90,5 +90,5 @@ public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 
 	String getIp();
 
-	void checkLocal();
+	void setLocal(boolean local);
 }

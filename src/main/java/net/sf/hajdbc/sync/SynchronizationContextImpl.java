@@ -206,4 +206,9 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 		
 		this.executor.shutdown();
 	}
+
+	@Override
+	public DatabaseCluster<Z, D> getDatabaseCluster() {
+		return cluster;
+	}
 }

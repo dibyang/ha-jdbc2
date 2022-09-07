@@ -39,5 +39,6 @@ public interface SynchronizationStrategy extends Identifiable, Serializable
 	 */
 	<Z, D extends Database<Z>> void synchronize(SynchronizationContext<Z, D> context) throws SQLException;
 	
-	<Z, D extends Database<Z>> void destroy(DatabaseCluster<Z, D> cluster);	
+	<Z, D extends Database<Z>> void destroy(DatabaseCluster<Z, D> cluster);
+
 }

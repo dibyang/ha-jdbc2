@@ -45,6 +45,8 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.*;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.ClusterHealthImpl;
+import net.sf.hajdbc.state.sync.SyncMgr;
+import net.sf.hajdbc.state.sync.SyncMgrImpl;
 
 /**
  * @author Paul Ferraro
@@ -66,6 +68,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
   private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
   private final Map<String,Object> extContexts = new HashMap<>();
 	private final ClusterHealth health;
+	private final SyncMgr syncMgr;
 
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
@@ -75,13 +78,18 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
     this.health = new ClusterHealthImpl(this);
+		this.syncMgr = new SyncMgrImpl(this);
 	}
 
   public ClusterHealth getHealth() {
     return health;
   }
 
-  /**
+	public SyncMgr getSyncMgr() {
+		return syncMgr;
+	}
+
+	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#getActiveDatabases()
 	 */
@@ -348,7 +356,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			if(database==null){
 				D db = (D)execute(getDatabaseCommand, member);
 				if(db!=null){
-					db.checkLocal();
+					db.setLocal(false);
 					cluster.addDatabase(db);
 				}
 			}

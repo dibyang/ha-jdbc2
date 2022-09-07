@@ -17,9 +17,13 @@
  */
 package net.sf.hajdbc.sync;
 
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.DatabaseCluster;
-import net.sf.hajdbc.SynchronizationStrategy;
+import net.sf.hajdbc.*;
+import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.dialect.Dialect;
+import net.sf.hajdbc.util.Files;
+
+import java.io.File;
+import java.sql.SQLException;
 
 /**
  * Work in progress...
@@ -29,10 +33,11 @@ public class FastDifferentialSynchronizationStrategy implements SynchronizationS
 {
 	private static final long serialVersionUID = 2556031934309008750L;
 
+
 	@Override
 	public String getId()
 	{
-		return "delta";
+		return "fast";
 	}
 
 	/**
@@ -42,8 +47,7 @@ public class FastDifferentialSynchronizationStrategy implements SynchronizationS
 	@Override
 	public <Z, D extends Database<Z>> void init(DatabaseCluster<Z, D> cluster)
 	{
-//		"UPDATE changes.table SET new_flag = $1 WHERE id = NEW.id;";
-//		"INSERT INTO changes.table (id, new_flag) SELECT NEW.id, $1 WHERE NOT EXISTS (SELECT 1 FROM changes.table WHERE id = NEW.id);";
+
 	}
 
 	/**
@@ -63,4 +67,5 @@ public class FastDifferentialSynchronizationStrategy implements SynchronizationS
 	public <Z, D extends Database<Z>> void destroy(DatabaseCluster<Z, D> cluster)
 	{
 	}
+
 }

@@ -28,7 +28,7 @@ public enum MountPathHolder implements FileObserver {
 
   @Override
   public void fileChanged(File file) {
-    Path mounts = Paths.get("/proc/mounts");
+    Path mounts = file.toPath();
     if (Files.exists(mounts)) {
       try {
         List<String> lines = Files.readAllLines(mounts, Charset.defaultCharset());
@@ -41,6 +41,7 @@ public enum MountPathHolder implements FileObserver {
                 String mount = line.substring(5, eindex).trim() + "/";
                 if (mount != null && !mount.isEmpty()) {
                   this.mountPath = mount;
+                  break;
                 }
               }
             }

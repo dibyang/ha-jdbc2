@@ -154,6 +154,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       NodeState old  = this.state;
       this.state = state;
       changeState(old,this.state);
+      //避免数据同步时间过长导致的心跳丢失
+      counter.set(0);
     }
   }
 
@@ -182,10 +184,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * Send heartbeat.
    */
   private void sendHeartbeat(){
-    logger.debug("host send heart beat.");
     stateManager.executeAll(beatCommand.preSend(),stateManager.getLocal());
     logger.debug("host send heart beat end.");
-
   }
 
 
@@ -196,6 +196,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    */
   private boolean isLostHeartBeat(){
     int count = counter.incrementAndGet();
+    logger.debug("heart beat is lost. count = "+count);
     if(count>= HEARTBEAT_LOST_MAX){
       counter.set(0);
       Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
@@ -457,7 +458,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * @return Does it need to be down?
    */
   private boolean isNeedDown(){
-    if(!isUp()||!arbiter.isObservable()||!stateManager.getDatabaseCluster().getLocalDatabase().isActive()){
+    boolean up = isUp();
+    boolean observable = arbiter.isObservable();
+    Database database = stateManager.getDatabaseCluster().getLocalDatabase();
+    boolean active = database.isActive();
+    if(!up ||!observable ||!active){
+      logger.warn("node need down. up={}, observable={}, db active={} db={}",up,observable,active,database.getId());
       return true;
     }
     return false;
