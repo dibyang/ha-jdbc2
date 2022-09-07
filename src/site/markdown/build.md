@@ -24,6 +24,6 @@ See the [Dependencies](dependencies.html) documentation to download any optional
 
 The generated documentation resides in the `target/site` directory.
 
-[tags]: http://github.com/ha-jdbc/ha-jdbc/tags "HA-JDBC source code archive"
+[tags]: https://github.com/dibyang/ha-jdbc2/tags "HA-JDBC source code archive"
 [jdk]: http://www.oracle.com/technetwork/java/javase/downloads/index.html "Java SE"
 [maven]: http://maven.apache.org/download.html "Apache Maven Project"
