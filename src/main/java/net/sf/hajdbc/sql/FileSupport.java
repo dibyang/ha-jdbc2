@@ -31,6 +31,7 @@ import java.sql.SQLException;
  * @version $Revision: 1612 $
  * @since   1.0
  */
+@Deprecated
 public interface FileSupport<E extends Throwable> extends Closeable
 {
 	/**

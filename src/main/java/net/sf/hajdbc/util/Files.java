@@ -47,9 +47,10 @@ public class Files
 			@Override
 			public Void run()
 			{
-				if (!file.delete())
-				{
-					file.deleteOnExit();
+				try {
+					java.nio.file.Files.deleteIfExists(file.toPath());
+				} catch (IOException e) {
+					//ignore e.printStackTrace();
 				}
 				return null;
 			}

@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.io.Closeable;
+import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.sql.SQLException;
@@ -28,6 +30,7 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.ExceptionFactory;
 import net.sf.hajdbc.invocation.Invoker;
 import net.sf.hajdbc.io.InputSinkChannel;
+import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.reflect.Methods;
 
 /**
@@ -65,16 +68,22 @@ public class InputSinkRegistryInvocationHandler<Z, D extends Database<Z>, P, T, 
 							public R invoke(D database, T object) throws SQLException
 							{
 								List<Object> parameterList = new ArrayList<Object>(Arrays.asList(parameters));
-								
+								X data = null;
 								try
 								{
-									parameterList.set(parameterIndex, channel.read(sink));
+									data = channel.read(sink);
+									parameterList.set(parameterIndex, data);
 									
 									return Methods.<R, SQLException>invoke(method, exceptionFactory, object, parameterList.toArray());
 								}
 								catch (IOException e)
 								{
 									throw exceptionFactory.createException(e);
+								}finally {
+									if(data instanceof Closeable){
+										Resources.close((Closeable)data);
+									}
+									parameterList.clear();
 								}
 							}
 						};

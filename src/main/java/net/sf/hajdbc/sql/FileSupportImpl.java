@@ -44,6 +44,7 @@ import net.sf.hajdbc.util.Resources;
  * @author  Paul Ferraro
  * @since   1.0
  */
+@Deprecated
 public class FileSupportImpl<E extends Exception> implements FileSupport<E>
 {
 	private static final String TEMP_FILE_SUFFIX = ".lob";
@@ -182,9 +183,10 @@ public class FileSupportImpl<E extends Exception> implements FileSupport<E>
 	{
 		for (File file: this.files)
 		{
-			if (!file.delete())
-			{
-				file.deleteOnExit();
+			try {
+				java.nio.file.Files.deleteIfExists(file.toPath());
+			} catch (IOException e) {
+				//ignore e.printStackTrace();
 			}
 		}
 		this.files.clear();
