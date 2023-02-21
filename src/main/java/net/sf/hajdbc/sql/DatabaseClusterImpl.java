@@ -52,6 +52,7 @@ import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
+import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 
 import javax.management.JMException;
 import java.sql.Connection;
@@ -957,19 +958,10 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	@Override
 	public boolean isAlive(D database, Level level)
 	{
-		try
+		try(Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.decoder)))
 		{
-			Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.decoder));
-			try
-			{
-				return this.dialect.isValid(connection);
-			}
-			finally
-			{
-				Resources.close(connection);
-			}
-		}
-		catch (SQLException e)
+			return this.dialect.isValid(connection);
+		}catch (SQLException e)
 		{
 			logger.log(level, e.getMessage());
 			return false;
@@ -993,7 +985,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
 		synchronized (database) {
-			if (!this.isAlive(database, Level.DEBUG) || !stateManager.isValid(database)) {
+			if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 				return false;
 			}
 			Member find = getDistributedManager().getMember(database.getIp());
