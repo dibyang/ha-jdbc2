@@ -165,16 +165,27 @@ public class TokenStore {
               try {
                 List<String> lines = Files.readAllLines(path, Charset.defaultCharset());
                 if (lines.size() > 0) {
-                  token = Long.parseLong(lines.get(0));
-                  if(lines.size() > 1){
-                    onlyHost = ONLYHOST_TRUE.equals(lines.get(1));
+                  Long token = parseLong(lines.get(0));
+                  if (token != null) {
+                    TokenStore.this.token = token;
+                    if (lines.size() > 1) {
+                      onlyHost = ONLYHOST_TRUE.equals(lines.get(1));
+                    }
                   }
                 }
-
               } catch (Exception e) {
                 LOG.warn(null,e);
               }
             }
+          }
+          return null;
+        }
+
+        private Long parseLong(String value) {
+          try {
+            return Long.parseLong(value);
+          }catch (NumberFormatException e){
+           //ignore  NumberFormatException
           }
           return null;
         }
