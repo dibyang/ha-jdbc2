@@ -4,8 +4,6 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
@@ -31,6 +29,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   public static final int HEARTBEAT_LOST_MAX = 3;
   public static final int MAX_TRY_LOCK = 10;
+  public static final int MAX_INACTIVATED = 5;
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -453,6 +452,27 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return find;
   }
 
+  private final AtomicInteger dbInActivated = new AtomicInteger();
+
+  /**
+   * 5以上次才认为数据库不是活的
+   * @param database
+   * @return
+   */
+  private boolean isActiveLocalDb(Database database){
+    boolean active = true;
+    if(database!=null&&!database.isActive()){
+      dbInActivated.incrementAndGet();
+    }else{
+      dbInActivated.set(0);
+    }
+    if(dbInActivated.get()> MAX_INACTIVATED){
+      active = false;
+      dbInActivated.set(0);
+    }
+    return active;
+  }
+
   /**
    * Does it need to be down.
    * @return Does it need to be down?
@@ -461,9 +481,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     boolean up = isUp();
     boolean observable = arbiter.isObservable();
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
-    boolean active = database.isActive();
+    boolean active = isActiveLocalDb(database);
     if(!up ||!observable ||!active){
-      logger.warn("node need down. up={}, observable={}, db active={} db={}",up,observable,active,database.getId());
+      String db = database!=null?database.getId():"";
+      logger.warn("node need down. up={}, observable={}, db active={} db={}",up,observable,active, db);
       return true;
     }
     return false;
