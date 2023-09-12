@@ -617,7 +617,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
 
   private  boolean isUp(){
-    return isUp(stateManager.getLocalIp());
+    return isUp(stateManager.getLocalIp(), 1);
   }
 
   private  NetworkInterface getNic(String ip) {
@@ -631,16 +631,35 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return nic;
   }
 
-  private  boolean isUp(String ip){
+  /**
+   *
+   * @param ip 对应的IP
+   * @param failedTryCount 失败后的尝试次数
+   * @return
+   */
+  private  boolean isUp(String ip, int failedTryCount){
     NetworkInterface nic = getNic(ip);
     if(nic!=null){
       try {
         return nic.isUp();
       } catch (SocketException e) {
-        e.printStackTrace();
+        logger.warn("is up fail.", e);
+        return true;
+      }
+    }else{
+      logger.info("not find nic for ip {}", ip);
+      if(failedTryCount>1) {
+        try {
+          Thread.sleep(1000);
+          return isUp(ip, failedTryCount-1);
+        } catch (InterruptedException e) {
+          //e.printStackTrace();
+          return false;
+        }
+      }else{
+        return false;
       }
     }
-    return false;
   }
 
   private void checkActiveDatabases(Set<String> activeDatabases) {
