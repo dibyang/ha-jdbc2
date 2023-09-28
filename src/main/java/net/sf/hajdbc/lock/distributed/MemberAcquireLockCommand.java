@@ -48,15 +48,15 @@ public class MemberAcquireLockCommand implements Command<Boolean, LockCommandCon
 		
 		boolean locked = lock.tryLock();
 		
-		if (locked)
-		{
-			Map<LockDescriptor, Lock> lockMap = context.getRemoteLocks(this.descriptor);
-			
-			synchronized (lockMap)
-			{
-				lockMap.put(this.descriptor, lock);
-			}
-		}
+//		if (locked)
+//		{
+//			Map<LockDescriptor, Lock> lockMap = context.getRemoteLocks(this.descriptor);
+//
+//			synchronized (lockMap)
+//			{
+//				lockMap.put(this.descriptor, lock);
+//			}
+//		}
 		
 		return locked;
 	}

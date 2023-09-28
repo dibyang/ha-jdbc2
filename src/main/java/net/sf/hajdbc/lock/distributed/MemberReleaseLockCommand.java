@@ -44,23 +44,24 @@ public class MemberReleaseLockCommand implements Command<Void, LockCommandContex
 	@Override
 	public Void execute(LockCommandContext context)
 	{
-		Map<LockDescriptor, Lock> locks = context.getRemoteLocks(this.descriptor);
-		
-		if (locks != null)
-		{
-			Lock lock = null;
-			
-			synchronized (locks)
-			{
-				lock = locks.remove(this.descriptor);
-			}
-			
-			if (lock != null)
-			{
-				lock.unlock();
-			}
-		}
-
+//		Map<LockDescriptor, Lock> locks = context.getRemoteLocks(this.descriptor);
+//
+//		if (locks != null)
+//		{
+//			Lock lock = null;
+//
+//			synchronized (locks)
+//			{
+//				lock = locks.remove(this.descriptor);
+//			}
+//
+//			if (lock != null)
+//			{
+//				lock.unlock();
+//			}
+//		}
+		Lock lock = context.getLock(descriptor);
+		lock.unlock();
 		return null;
 	}
 

@@ -20,6 +20,7 @@ package net.sf.hajdbc.lock.distributed;
 import java.util.Map;
 import java.util.concurrent.locks.Lock;
 
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.Remote;
 
 /**
@@ -33,4 +34,6 @@ public interface LockCommandContext
 	Lock getLock(LockDescriptor descriptor);
 	
 	Map<LockDescriptor, Lock> getRemoteLocks(Remote remote);
+
+	Map<Member, Map<LockDescriptor, Lock>> getAllLocks();
 }

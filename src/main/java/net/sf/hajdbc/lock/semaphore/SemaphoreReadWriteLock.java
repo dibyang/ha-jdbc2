@@ -35,11 +35,13 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 {
 	private final Lock readLock;
 	private final Lock writeLock;
+	private final String key;
 	
-	public SemaphoreReadWriteLock(Semaphore semaphore)
+	public SemaphoreReadWriteLock(Semaphore semaphore, String key)
 	{
-		this.readLock = new SemaphoreLock(semaphore);
-		this.writeLock = new SemaphoreWriteLock(semaphore);
+		this.key = key;
+		this.readLock = new SemaphoreLock(semaphore, key);
+		this.writeLock = new SemaphoreWriteLock(semaphore, key);
 	}
 	
 	/**
@@ -60,15 +62,19 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		return this.writeLock;
 	}
 	
-	private static class SemaphoreWriteLock implements Lock
+	private static class SemaphoreWriteLock implements WriteLock
 	{
-		private final Semaphore semaphore;
-		private final int permits;
+		private transient final Semaphore semaphore;
+		private transient final int permits;
+		private volatile boolean locked;
 
-		SemaphoreWriteLock(Semaphore semaphore)
+		private final String key;
+
+		SemaphoreWriteLock(Semaphore semaphore, String key)
 		{
 			this.semaphore = semaphore;
 			this.permits = semaphore.availablePermits();
+			this.key = key;
 		}
 		
 		/**
@@ -92,6 +98,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 			{
 				this.semaphore.acquireUninterruptibly(this.permits - drained);
 			}
+			locked = true;
 		}
 
 		/**
@@ -118,6 +125,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 					throw e;
 				}
 			}
+			locked = true;
 		}
 
 		/**
@@ -127,7 +135,11 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		public boolean tryLock()
 		{
 			// This will barge the fairness queue, so there's no need to drain permits
-			return this.semaphore.tryAcquire(this.permits);
+			boolean acquired = this.semaphore.tryAcquire(this.permits);
+			if(acquired){
+				locked = true;
+			}
+			return acquired;
 		}
 
 		/**
@@ -136,24 +148,24 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		@Override
 		public boolean tryLock(long timeout, TimeUnit unit) throws InterruptedException
 		{
+			boolean acquired = false;
 			int drained = this.drainPermits();
 			
-			if (drained == this.permits) return true;
-			
-			boolean acquired = false;
-			
-			try
-			{
-				acquired = this.semaphore.tryAcquire(this.permits - drained, timeout, unit);
+			if (drained == this.permits){
+				acquired = true;
 			}
-			finally
-			{
-				if (!acquired && (drained > 0))
-				{
-					this.semaphore.release(drained);
+			if(!acquired) {
+				try {
+					acquired = this.semaphore.tryAcquire(this.permits - drained, timeout, unit);
+				} finally {
+					if (!acquired && (drained > 0)) {
+						this.semaphore.release(drained);
+					}
 				}
 			}
-			
+			if(acquired){
+				locked = true;
+			}
 			return acquired;
 		}
 
@@ -164,6 +176,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		public void unlock()
 		{
 			this.semaphore.release(this.permits);
+			locked = false;
 		}
 		
 		/**
@@ -173,6 +186,24 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		public Condition newCondition()
 		{
 			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public boolean isLocked() {
+			return locked;
+		}
+
+		@Override
+		public Object getLockObject() {
+			return key;
+		}
+
+		@Override
+		public String toString() {
+			return "{" +
+					" key:'" + key + "'" +
+					", locked:" + locked +
+					'}';
 		}
 	}
 }

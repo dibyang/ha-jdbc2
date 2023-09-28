@@ -19,6 +19,7 @@ package net.sf.hajdbc.lock.semaphore;
 
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
@@ -29,13 +30,17 @@ import java.util.concurrent.locks.Lock;
  * 
  * @author Paul Ferraro
  */
-public class SemaphoreLock implements Lock
+public class SemaphoreLock implements Lock, ShareLock
 {
-	private final Semaphore semaphore;
+	private transient final Semaphore semaphore;
+	private final AtomicInteger shared = new AtomicInteger();
+
+	private final String key;
 	
-	public SemaphoreLock(Semaphore semaphore)
+	public SemaphoreLock(Semaphore semaphore, String key)
 	{
 		this.semaphore = semaphore;
+		this.key = key;
 	}
 	
 	/**
@@ -45,6 +50,7 @@ public class SemaphoreLock implements Lock
 	public void lock()
 	{
 		this.semaphore.acquireUninterruptibly();
+		this.shared.incrementAndGet();
 	}
 
 	/**
@@ -54,6 +60,7 @@ public class SemaphoreLock implements Lock
 	public void lockInterruptibly() throws InterruptedException
 	{
 		this.semaphore.acquire();
+		this.shared.incrementAndGet();
 	}
 
 	/**
@@ -71,7 +78,11 @@ public class SemaphoreLock implements Lock
 	@Override
 	public boolean tryLock()
 	{
-		return this.semaphore.tryAcquire();
+		boolean locked = this.semaphore.tryAcquire();
+		if(locked){
+			this.shared.incrementAndGet();
+		}
+		return locked;
 	}
 
 	/**
@@ -80,7 +91,11 @@ public class SemaphoreLock implements Lock
 	@Override
 	public boolean tryLock(long time, TimeUnit unit) throws InterruptedException
 	{
-		return this.semaphore.tryAcquire(time, unit);
+		boolean locked = this.semaphore.tryAcquire(time, unit);
+		if(locked){
+			this.shared.incrementAndGet();
+		}
+		return locked;
 	}
 
 	/**
@@ -90,5 +105,29 @@ public class SemaphoreLock implements Lock
 	public void unlock()
 	{
 		this.semaphore.release();
+		this.shared.decrementAndGet();
+	}
+
+	@Override
+	public int getShared() {
+		return this.shared.get();
+	}
+
+	@Override
+	public boolean isLocked() {
+		return this.getShared()>0;
+	}
+
+	@Override
+	public Object getLockObject() {
+		return key;
+	}
+
+	@Override
+	public String toString() {
+		return "{" +
+				" key:'" + key + "'" +
+				", shared:" + shared +
+				'}';
 	}
 }

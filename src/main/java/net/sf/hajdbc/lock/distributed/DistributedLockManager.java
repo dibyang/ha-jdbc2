@@ -22,10 +22,7 @@ import java.io.ObjectInput;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +38,9 @@ import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Remote;
 import net.sf.hajdbc.distributed.Stateful;
 import net.sf.hajdbc.lock.LockManager;
+import net.sf.hajdbc.lock.semaphore.Locked;
+import net.sf.hajdbc.lock.semaphore.ShareLock;
+import net.sf.hajdbc.lock.semaphore.WriteLock;
 import net.sf.hajdbc.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,7 +70,10 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	@Override
 	public Lock readLock(String id)
 	{
-		return this.lockManager.readLock(id);
+		//return this.lockManager.readLock(id);
+		RemoteLockDescriptor descriptor = new RemoteLockDescriptorImpl(id, LockType.READ, this.dispatcher.getLocal());
+		return this.getDistibutedLock(descriptor);
+		//return this.getLock(descriptor);
 	}
 
 	/**
@@ -93,11 +96,30 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	 * @see net.sf.hajdbc.lock.distributed.LockCommandContext#getLock(net.sf.hajdbc.lock.distributed.LockDescriptor)
 	 */
 	@Override
-	public Lock getLock(LockDescriptor lock)
+	public Lock getLock(LockDescriptor lockDescriptor)
 	{
-		String id = lock.getId();
-		
-		switch (lock.getType())
+		RemoteLockDescriptor descriptor = (RemoteLockDescriptor) lockDescriptor;
+		Map<LockDescriptor, Lock> locks = this.getLocks(descriptor.getMember());
+		synchronized (locks) {
+			Lock lock = locks.get(descriptor);
+			if(lock==null){
+				Lock rawLock = getRawLock(lockDescriptor);
+				if(rawLock instanceof ShareLock){
+					lock = new NodeShareLock((ShareLock) rawLock);
+				}
+				if(rawLock instanceof WriteLock){
+					lock = new NodeWriteLock((WriteLock) rawLock);
+				}
+				locks.put(descriptor, lock);
+			}
+			return lock;
+		}
+	}
+
+	private Lock getRawLock(LockDescriptor descriptor) {
+		String id = descriptor.getId();
+
+		switch (descriptor.getType())
 		{
 			case READ:
 			{
@@ -153,7 +175,37 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	@Override
 	public Map<LockDescriptor, Lock> getRemoteLocks(Remote remote)
 	{
-		return this.remoteLockDescriptorMap.get(remote.getMember());
+		return getLocks(remote.getMember());
+	}
+
+	private Map<LockDescriptor, Lock> getLocks(Member member) {
+		synchronized (remoteLockDescriptorMap) {
+			Map<LockDescriptor, Lock> locks = this.remoteLockDescriptorMap.get(member);
+			if(locks==null){
+				locks = new ConcurrentHashMap<>();
+				this.remoteLockDescriptorMap.put(member, locks);
+			}
+			return locks;
+		}
+	}
+
+	@Override
+	public Map<Member, Map<LockDescriptor, Lock>> getAllLocks() {
+		Map<Member, Map<LockDescriptor, Lock>> allLocks = new HashMap<>();
+		for (Member member : this.remoteLockDescriptorMap.keySet()) {
+			Map<LockDescriptor, Lock> locks = new HashMap<>();
+			allLocks.put(member,locks);
+			Map<LockDescriptor, Lock> map = this.getLocks(member);
+			for (LockDescriptor descriptor : map.keySet()) {
+				Lock lock = map.get(descriptor);
+				if(lock instanceof Locked){
+					if(((Locked)lock).isLocked()){
+						locks.put(descriptor, lock);
+					}
+				}
+			}
+		}
+		return Collections.unmodifiableMap(allLocks);
 	}
 
 	/**
@@ -199,7 +251,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		{
 			Member member = Objects.readObject(input);
 			
-			Map<LockDescriptor, Lock> map = new HashMap<LockDescriptor, Lock>();
+			//Map<LockDescriptor, Lock> map = new HashMap<LockDescriptor, Lock>();
 			
 			int locks = input.readInt();
 			
@@ -214,10 +266,10 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 				
 				lock.lock();
 				
-				map.put(descriptor, lock);
+				//map.put(descriptor, lock);
 			}
 			
-			this.remoteLockDescriptorMap.put(member, map);
+			//this.remoteLockDescriptorMap.put(member, map);
 		}
 	}
 
@@ -245,6 +297,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			for (Lock lock: locks.values())
 			{
 				lock.unlock();
+				LOG.info("member removed. unlock={}", lock);
 			}
 		}
 	}
@@ -252,7 +305,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 
 	private static class DistributedLock implements Lock
 	{
-		public static final int DEFAULT_LOCK_TIMEOUT = 20;
+		public static final int DEFAULT_LOCK_TIMEOUT = 3;
 		private final RemoteLockDescriptor descriptor;
 		private final Lock lock;
 		private final CommandDispatcher<LockCommandContext> dispatcher;
@@ -273,7 +326,19 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 				locked = tryLock();
 				if (!locked)
 				{
-					Thread.yield();
+					if(lock instanceof LockObject){
+						Object lockObject = ((LockObject) lock).getLockObject();
+
+						synchronized (lockObject){
+							try {
+								lockObject.wait();
+							} catch (InterruptedException e) {
+								//e.printStackTrace();
+								Thread.yield();
+							}
+						}
+					}
+					//Thread.yield();
 				}
 			}
 		}
@@ -294,6 +359,13 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 				
 				if (!locked)
 				{
+					if(lock instanceof LockObject){
+						Object lockObject = ((LockObject) lock).getLockObject();
+
+						synchronized (lockObject){
+							lockObject.wait();
+						}
+					}
 					Thread.yield();
 				}
 			}
@@ -357,7 +429,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			boolean locked = true;
 			LOG.info("lockMembers begin {} => {}",coordinator.toString(),descriptor.getMember().toString());
 			Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), coordinator, descriptor.getMember());
-
+			LOG.info("lockMembers results:{}", results);
 			for (Map.Entry<Member, Boolean> entry : results.entrySet()) {
 				locked &= entry.getValue();
 			}
@@ -371,25 +443,20 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			return locked;
 		}
 		
-		private boolean lockCoordinator(Member coordinator, long timeout)
-		{
+		private boolean lockCoordinator(Member coordinator, long timeout) throws InterruptedException {
 			boolean locked = false;
-			try {
-				if (this.lock.tryLock(timeout, TimeUnit.MILLISECONDS))
-				{
-					LOG.info("lockCoordinator begin {} => {}",coordinator.toString(),descriptor.getMember().toString());
-					Boolean result = this.dispatcher.execute(new CoordinatorAcquireLockCommand(this.descriptor, timeout), coordinator);
-					locked= (result != null) ? result.booleanValue() : false;
-					LOG.info("lockCoordinator end {} => {}  locked:{}",coordinator.toString(),descriptor.getMember().toString(),locked);
-
-				}
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}finally
+			if (this.lock.tryLock(timeout, TimeUnit.MILLISECONDS))
 			{
-				if (!locked)
-				{
-					this.lock.unlock();
+				try {
+					LOG.info("lockCoordinator begin {} => {}", coordinator.toString(), descriptor.getMember().toString());
+					Boolean result = this.dispatcher.execute(new CoordinatorAcquireLockCommand(this.descriptor, timeout), coordinator);
+					locked = (result != null) ? result.booleanValue() : false;
+					LOG.info("lockCoordinator end {} => {}  locked:{}", coordinator.toString(), descriptor.getMember().toString(), locked);
+				}finally {
+					if (!locked)
+					{
+						this.lock.unlock();
+					}
 				}
 			}
 			return locked;
@@ -410,6 +477,7 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			{
 				this.unlockCoordinator(coordinator);
 			}
+
 		}
 		
 		private void unlockMembers(Member coordinator)
@@ -476,29 +544,18 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 			
 			this.type = LockType.values()[in.readByte()];
 		}
-		
-		/**
-		 * {@inheritDoc}
-		 * @see java.lang.Object#equals(java.lang.Object)
-		 */
+
 		@Override
-		public boolean equals(Object object)
-		{
-			if ((object == null) || !(object instanceof RemoteLockDescriptor)) return false;
-			
-			String id = ((RemoteLockDescriptor) object).getId();
-			
-			return ((this.id != null) && (id != null)) ?  this.id.equals(id) : (this.id == id);
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			RemoteLockDescriptorImpl that = (RemoteLockDescriptorImpl) o;
+			return java.util.Objects.equals(id, that.id) && type == that.type && java.util.Objects.equals(member, that.member);
 		}
 
-		/**
-		 * {@inheritDoc}
-		 * @see java.lang.Object#hashCode()
-		 */
 		@Override
-		public int hashCode()
-		{
-			return this.id != null ? this.id.hashCode() : 0;
+		public int hashCode() {
+			return java.util.Objects.hash(id, type, member);
 		}
 
 		/**
@@ -508,7 +565,14 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		@Override
 		public String toString()
 		{
-			return String.format("%sLock(%s)", this.type.name().toLowerCase(), (this.id != null) ? this.id : "");
+			StringBuilder builder = new StringBuilder();
+			builder.append(this.type.name().toLowerCase())
+					.append("Lock(")
+					.append((this.id != null) ? this.id : "")
+					.append(")[")
+					.append(member.toString())
+					.append("]");
+			return builder.toString();
 		}
 	}
 }

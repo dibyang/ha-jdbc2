@@ -20,8 +20,6 @@ package net.sf.hajdbc.lock.semaphore;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
@@ -32,8 +30,8 @@ import net.sf.hajdbc.lock.LockManager;
  */
 public class SemaphoreLockManager implements LockManager
 {
+	public static final String EMPTY = "";
 	private final ConcurrentMap<String, ReadWriteLock> lockMap = new ConcurrentHashMap<String, ReadWriteLock>();
-	private final ConcurrentMap<String, SemaphoreLock> onlyLockMap = new ConcurrentHashMap<String, SemaphoreLock>();
 
 	private final boolean fair;
 	
@@ -48,9 +46,10 @@ public class SemaphoreLockManager implements LockManager
 	@Override
 	public Lock readLock(String object)
 	{
-		Lock lock = this.getReadWriteLock(null).readLock();
+		object = (object!=null)?object:EMPTY;
+		Lock lock = this.getReadWriteLock(EMPTY).readLock();
 		
-		return (object == null) ? lock : new GlobalLock(lock, this.getReadWriteLock(object).readLock());
+		return EMPTY.equals(object) ? lock : new GlobalShareLock((ShareLock)lock, (ShareLock)this.getReadWriteLock(object).readLock());
 	}
 	
 	/**
@@ -59,51 +58,28 @@ public class SemaphoreLockManager implements LockManager
 	@Override
 	public Lock writeLock(String object)
 	{
-		ReadWriteLock readWriteLock = this.getReadWriteLock(null);
+		object = (object!=null)?object:EMPTY;
+		ReadWriteLock readWriteLock = this.getReadWriteLock(EMPTY);
 		
-		return (object == null) ? readWriteLock.writeLock() : new GlobalLock(readWriteLock.readLock(), this.getReadWriteLock(object).writeLock());
+		return EMPTY.equals(object) ? readWriteLock.writeLock() : new GlobalWriteLock((ShareLock) readWriteLock.readLock(), (WriteLock) this.getReadWriteLock(object).writeLock());
 	}
 
 	@Override
 	public Lock onlyLock(String id) {
-
-		Lock lock = this.getOnlyLock(id);
-		return lock;
+		throw new UnsupportedOperationException();
 	}
 
-	private synchronized SemaphoreLock getOnlyLock(String object)
-	{
-		// CHM cannot use a null key
-		String key = (object != null) ? object : "";
-
-
-		SemaphoreLock lock = this.onlyLockMap.get(key);
-
-		if (lock == null)
-		{
-			lock = new SemaphoreLock(new Semaphore(1, this.fair));
-
-			SemaphoreLock existing = this.onlyLockMap.putIfAbsent(key, lock);
-
-			if (existing != null)
-			{
-				lock = existing;
-			}
-		}
-
-		return lock;
-	}
 
 	private synchronized ReadWriteLock getReadWriteLock(String object)
 	{
 		// CHM cannot use a null key
-		String key = (object != null) ? object : "";
+		String key = (object != null) ? object : EMPTY;
 		
 		ReadWriteLock lock = this.lockMap.get(key);
 		
 		if (lock == null)
 		{
-			lock = new SemaphoreReadWriteLock(new Semaphore(Integer.MAX_VALUE, this.fair));
+			lock = new SemaphoreReadWriteLock(new Semaphore(Integer.MAX_VALUE, this.fair), key);
 
 			ReadWriteLock existing = this.lockMap.putIfAbsent(key, lock);
 			
@@ -114,86 +90,6 @@ public class SemaphoreLockManager implements LockManager
 		}
 		
 		return lock;
-	}
-	
-	private static class GlobalLock implements Lock
-	{
-		private Lock globalLock;
-		private Lock lock;
-		
-		GlobalLock(Lock globalLock, Lock lock)
-		{
-			this.globalLock = globalLock;
-			this.lock = lock;
-		}
-		
-		@Override
-		public void lock()
-		{
-			this.globalLock.lock();
-			this.lock.lock();
-		}
-
-		@Override
-		public void lockInterruptibly() throws InterruptedException
-		{
-			this.globalLock.lockInterruptibly();
-			
-			try
-			{
-				this.lock.lockInterruptibly();
-			}
-			catch (InterruptedException e)
-			{
-				this.globalLock.unlock();
-				throw e;
-			}
-		}
-
-		@Override
-		public boolean tryLock()
-		{
-			if (this.globalLock.tryLock())
-			{
-				if (this.lock.tryLock())
-				{
-					return true;
-				}
-
-				this.globalLock.unlock();
-			}
-
-			return false;
-		}
-
-		@Override
-		public boolean tryLock(long time, TimeUnit unit) throws InterruptedException
-		{
-			if (this.globalLock.tryLock(time, unit))
-			{
-				if (this.lock.tryLock(time, unit))
-				{
-					return true;
-				}
-
-				this.globalLock.unlock();
-			}
-
-			return false;
-		}
-
-		@Override
-		public void unlock()
-		{
-			this.lock.unlock();
-			this.globalLock.unlock();
-		}
-
-		@Override
-		public Condition newCondition()
-		{
-			throw new UnsupportedOperationException();
-		}
 	}
 
 	/**
