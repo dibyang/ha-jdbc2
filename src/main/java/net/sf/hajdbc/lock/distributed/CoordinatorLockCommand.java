@@ -25,6 +25,7 @@ import net.sf.hajdbc.distributed.Command;
  * A lock command to be executed on the group coordinator.
  * @author Paul Ferraro
  */
+@Deprecated
 public abstract class CoordinatorLockCommand<R> implements Command<R, LockCommandContext>
 {
 	private static final long serialVersionUID = 5921849426289256348L;

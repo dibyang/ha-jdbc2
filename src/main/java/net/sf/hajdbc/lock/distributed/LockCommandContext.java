@@ -18,6 +18,7 @@
 package net.sf.hajdbc.lock.distributed;
 
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.locks.Lock;
 
 import net.sf.hajdbc.distributed.Member;
@@ -35,5 +36,12 @@ public interface LockCommandContext
 	
 	Map<LockDescriptor, Lock> getRemoteLocks(Remote remote);
 
-	Map<Member, Map<LockDescriptor, Lock>> getAllLocks();
+	/**
+	 *
+	 * @param includeFree 是否包含已释放的锁
+	 * @return
+	 */
+	Map<Member, Map<LockDescriptor, Lock>> getAllLocks(boolean includeFree);
+
+	ExecutorService getRemoteExecutor();
 }

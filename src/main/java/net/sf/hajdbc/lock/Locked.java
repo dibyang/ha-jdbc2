@@ -1,4 +1,4 @@
-package net.sf.hajdbc.lock.semaphore;
+package net.sf.hajdbc.lock;
 
 
 public interface Locked {

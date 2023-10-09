@@ -1,36 +1,36 @@
 package net.sf.hajdbc.lock.distributed;
 
-import net.sf.hajdbc.lock.semaphore.ShareLock;
+import net.sf.hajdbc.lock.ReadLock;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 
-public class NodeShareLock implements ShareLock {
-  private final ShareLock lock;
-  private final AtomicInteger ownerShared = new AtomicInteger();
+public class NodeReadLock implements ReadLock {
+  private final ReadLock lock;
+  private final AtomicInteger ownerReadCount = new AtomicInteger();
 
-  public NodeShareLock(ShareLock lock) {
+  public NodeReadLock(ReadLock lock) {
     this.lock = lock;
   }
 
   @Override
   public synchronized void lock() {
     this.lock.lock();
-    this.ownerShared.incrementAndGet();
+    this.ownerReadCount.incrementAndGet();
   }
 
   @Override
   public synchronized void lockInterruptibly() throws InterruptedException {
     this.lock.lockInterruptibly();
-    this.ownerShared.incrementAndGet();
+    this.ownerReadCount.incrementAndGet();
   }
 
   @Override
   public synchronized boolean tryLock() {
     boolean b = this.lock.tryLock();
     if(b){
-      this.ownerShared.incrementAndGet();
+      this.ownerReadCount.incrementAndGet();
     }
     return b;
   }
@@ -39,16 +39,16 @@ public class NodeShareLock implements ShareLock {
   public synchronized boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
     boolean b = this.lock.tryLock(time, unit);
     if(b){
-      this.ownerShared.incrementAndGet();
+      this.ownerReadCount.incrementAndGet();
     }
     return b;
   }
 
   @Override
   public synchronized void unlock() {
-    if (this.lock.isLocked() && this.ownerShared.get() > 0) {
+    if (this.lock.isLocked() && this.ownerReadCount.get() > 0) {
       this.lock.unlock();
-      this.ownerShared.decrementAndGet();
+      this.ownerReadCount.decrementAndGet();
     }
   }
 
@@ -59,12 +59,12 @@ public class NodeShareLock implements ShareLock {
 
   @Override
   public boolean isLocked() {
-    return this.getShared()>0;
+    return this.getReadCount()>0;
   }
 
   @Override
-  public int getShared() {
-    return ownerShared.get();
+  public int getReadCount() {
+    return ownerReadCount.get();
   }
 
   @Override

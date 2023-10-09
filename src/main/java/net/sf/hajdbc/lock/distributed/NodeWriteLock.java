@@ -1,13 +1,14 @@
 package net.sf.hajdbc.lock.distributed;
 
-import net.sf.hajdbc.lock.semaphore.WriteLock;
+import net.sf.hajdbc.lock.WriteLock;
 
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 
 public class NodeWriteLock implements WriteLock {
   private final WriteLock lock;
-  private volatile boolean ownerLocked;
+  private final AtomicInteger ownerWriteCount = new AtomicInteger();
 
   public NodeWriteLock(WriteLock lock) {
     this.lock = lock;
@@ -15,49 +16,39 @@ public class NodeWriteLock implements WriteLock {
 
   @Override
   public synchronized void lock() {
-    if(!this.ownerLocked) {
-      this.lock.lock();
-      this.ownerLocked = true;
-    }
+    this.lock.lock();
+    this.ownerWriteCount.incrementAndGet();
   }
 
   @Override
   public synchronized void lockInterruptibly() throws InterruptedException {
-    if(!this.ownerLocked) {
-      this.lock.lockInterruptibly();
-      this.ownerLocked = true;
-    }
+    this.lock.lockInterruptibly();
+    this.ownerWriteCount.incrementAndGet();
   }
 
   @Override
   public synchronized boolean tryLock() {
-    if(!this.ownerLocked) {
-      boolean b = this.lock.tryLock();
-      if (b) {
-        this.ownerLocked = true;
-      }
-      return b;
+    boolean b = this.lock.tryLock();
+    if (b) {
+      this.ownerWriteCount.incrementAndGet();
     }
-    return this.ownerLocked;
+    return b;
   }
 
   @Override
   public synchronized boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
-    if(!this.ownerLocked) {
-      boolean b = this.lock.tryLock(time, unit);
-      if (b) {
-        this.ownerLocked = true;
-      }
-      return b;
+    boolean b = this.lock.tryLock(time, unit);
+    if (b) {
+      this.ownerWriteCount.incrementAndGet();
     }
-    return this.ownerLocked;
+    return b;
   }
 
   @Override
   public synchronized void unlock() {
-    if(this.ownerLocked) {
+    if(isLocked()) {
       this.lock.unlock();
-      this.ownerLocked = false;
+      this.ownerWriteCount.decrementAndGet();
     }
   }
 
@@ -68,7 +59,7 @@ public class NodeWriteLock implements WriteLock {
 
   @Override
   public boolean isLocked() {
-    return ownerLocked;
+    return this.ownerWriteCount.get()>0;
   }
 
   @Override
@@ -76,4 +67,8 @@ public class NodeWriteLock implements WriteLock {
     return this.lock.getLockObject();
   }
 
+  @Override
+  public int getWriteHoldCount() {
+    return this.lock.getWriteHoldCount();
+  }
 }

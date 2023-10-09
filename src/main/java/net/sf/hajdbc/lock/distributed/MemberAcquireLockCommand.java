@@ -17,10 +17,12 @@
  */
 package net.sf.hajdbc.lock.distributed;
 
-import java.util.Map;
-import java.util.concurrent.locks.Lock;
-
 import net.sf.hajdbc.distributed.Command;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.concurrent.*;
+import java.util.concurrent.locks.Lock;
 
 /**
  * @author Paul Ferraro
@@ -29,6 +31,7 @@ import net.sf.hajdbc.distributed.Command;
 public class MemberAcquireLockCommand implements Command<Boolean, LockCommandContext>
 {
 	private static final long serialVersionUID = 673191217118566395L;
+	static final Logger LOG = LoggerFactory.getLogger(MemberAcquireLockCommand.class);
 
 	private final RemoteLockDescriptor descriptor;
 	
@@ -46,17 +49,19 @@ public class MemberAcquireLockCommand implements Command<Boolean, LockCommandCon
 	{
 		Lock lock = context.getLock(this.descriptor);
 		
-		boolean locked = lock.tryLock();
-		
-//		if (locked)
-//		{
-//			Map<LockDescriptor, Lock> lockMap = context.getRemoteLocks(this.descriptor);
-//
-//			synchronized (lockMap)
-//			{
-//				lockMap.put(this.descriptor, lock);
-//			}
-//		}
+
+		ExecutorService remoteExecutor = context.getRemoteExecutor();
+		Future<Boolean> future = remoteExecutor.submit(() -> lock.tryLock());
+		boolean locked = false;
+		try {
+			locked = future.get(3, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			LOG.warn("", e);
+		} catch (ExecutionException e) {
+			LOG.warn("", e);
+		} catch (TimeoutException e) {
+			LOG.warn("", e);
+		}
 		
 		return locked;
 	}

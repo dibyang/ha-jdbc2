@@ -23,11 +23,14 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
-import net.sf.hajdbc.lock.LockManager;
+import net.sf.hajdbc.lock.*;
 
 /**
  * @author Paul Ferraro
+ * @deprecated
+ * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
  */
+@Deprecated
 public class SemaphoreLockManager implements LockManager
 {
 	public static final String EMPTY = "";
@@ -49,7 +52,7 @@ public class SemaphoreLockManager implements LockManager
 		object = (object!=null)?object:EMPTY;
 		Lock lock = this.getReadWriteLock(EMPTY).readLock();
 		
-		return EMPTY.equals(object) ? lock : new GlobalShareLock((ShareLock)lock, (ShareLock)this.getReadWriteLock(object).readLock());
+		return EMPTY.equals(object) ? lock : new GlobalReadLock((ReadLock)lock, (ReadLock)this.getReadWriteLock(object).readLock());
 	}
 	
 	/**
@@ -61,7 +64,7 @@ public class SemaphoreLockManager implements LockManager
 		object = (object!=null)?object:EMPTY;
 		ReadWriteLock readWriteLock = this.getReadWriteLock(EMPTY);
 		
-		return EMPTY.equals(object) ? readWriteLock.writeLock() : new GlobalWriteLock((ShareLock) readWriteLock.readLock(), (WriteLock) this.getReadWriteLock(object).writeLock());
+		return EMPTY.equals(object) ? readWriteLock.writeLock() : new GlobalWriteLock((ReadLock) readWriteLock.readLock(), (WriteLock) this.getReadWriteLock(object).writeLock());
 	}
 
 	@Override

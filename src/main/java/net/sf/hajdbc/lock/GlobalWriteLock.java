@@ -1,14 +1,14 @@
-package net.sf.hajdbc.lock.semaphore;
+package net.sf.hajdbc.lock;
 
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 
-class GlobalWriteLock implements WriteLock {
-  private ShareLock globalLock;
+public class GlobalWriteLock implements WriteLock {
+  private ReadLock globalLock;
   private WriteLock lock;
 
-  GlobalWriteLock(ShareLock globalLock, WriteLock lock) {
+  public GlobalWriteLock(ReadLock globalLock, WriteLock lock) {
     this.globalLock = globalLock;
     this.lock = lock;
   }
@@ -37,7 +37,6 @@ class GlobalWriteLock implements WriteLock {
       if (this.lock.tryLock()) {
         return true;
       }
-
       this.globalLock.unlock();
     }
 
@@ -50,7 +49,6 @@ class GlobalWriteLock implements WriteLock {
       if (this.lock.tryLock(time, unit)) {
         return true;
       }
-
       this.globalLock.unlock();
     }
 
@@ -84,4 +82,8 @@ class GlobalWriteLock implements WriteLock {
     return lock.getLockObject();
   }
 
+  @Override
+  public int getWriteHoldCount() {
+    return lock.getWriteHoldCount();
+  }
 }

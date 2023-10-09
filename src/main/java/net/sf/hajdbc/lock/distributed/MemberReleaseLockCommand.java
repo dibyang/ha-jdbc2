@@ -18,9 +18,12 @@
 package net.sf.hajdbc.lock.distributed;
 
 import java.util.Map;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Lock;
 
 import net.sf.hajdbc.distributed.Command;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Release lock command for execution on group member.
@@ -28,6 +31,8 @@ import net.sf.hajdbc.distributed.Command;
  */
 public class MemberReleaseLockCommand implements Command<Void, LockCommandContext>
 {
+	static final Logger LOG = LoggerFactory.getLogger(MemberReleaseLockCommand.class);
+
 	private static final long serialVersionUID = -4088487420468046409L;
 
 	private final RemoteLockDescriptor descriptor;
@@ -44,24 +49,18 @@ public class MemberReleaseLockCommand implements Command<Void, LockCommandContex
 	@Override
 	public Void execute(LockCommandContext context)
 	{
-//		Map<LockDescriptor, Lock> locks = context.getRemoteLocks(this.descriptor);
-//
-//		if (locks != null)
-//		{
-//			Lock lock = null;
-//
-//			synchronized (locks)
-//			{
-//				lock = locks.remove(this.descriptor);
-//			}
-//
-//			if (lock != null)
-//			{
-//				lock.unlock();
-//			}
-//		}
 		Lock lock = context.getLock(descriptor);
-		lock.unlock();
+		ExecutorService remoteExecutor = context.getRemoteExecutor();
+		Future<?> future = remoteExecutor.submit(lock::unlock);
+		try {
+			future.get(3, TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			LOG.warn("", e);
+		} catch (ExecutionException e) {
+			LOG.warn("", e);
+		} catch (TimeoutException e) {
+			LOG.warn("", e);
+		}
 		return null;
 	}
 

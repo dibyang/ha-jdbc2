@@ -24,6 +24,7 @@ import java.util.concurrent.locks.Lock;
  * Acquire lock command for execution on group coordinator.
  * @author Paul Ferraro
  */
+@Deprecated
 public class CoordinatorAcquireLockCommand extends CoordinatorLockCommand<Boolean>
 {
 	private static final long serialVersionUID = 1725113200306907771L;

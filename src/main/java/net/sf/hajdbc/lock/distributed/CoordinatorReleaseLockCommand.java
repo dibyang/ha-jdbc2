@@ -23,6 +23,7 @@ import java.util.concurrent.locks.Lock;
  * Release lock command for execution on group coordinator.
  * @author Paul Ferraro
  */
+@Deprecated
 public class CoordinatorReleaseLockCommand extends CoordinatorLockCommand<Void>
 {
 	private static final long serialVersionUID = -925862880236957178L;

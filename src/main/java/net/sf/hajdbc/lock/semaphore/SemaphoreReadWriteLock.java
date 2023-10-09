@@ -17,8 +17,11 @@
  */
 package net.sf.hajdbc.lock.semaphore;
 
+import net.sf.hajdbc.lock.WriteLock;
+
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -30,7 +33,10 @@ import java.util.concurrent.locks.ReadWriteLock;
  * Lock upgrading and downgrading is not supported; nor are conditions.
  * 
  * @author Paul Ferraro
+ * @deprecated
+ * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
  */
+@Deprecated
 public class SemaphoreReadWriteLock implements ReadWriteLock
 {
 	private final Lock readLock;
@@ -66,7 +72,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 	{
 		private transient final Semaphore semaphore;
 		private transient final int permits;
-		private volatile boolean locked;
+		private final AtomicInteger writeCount = new AtomicInteger();
 
 		private final String key;
 
@@ -98,7 +104,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 			{
 				this.semaphore.acquireUninterruptibly(this.permits - drained);
 			}
-			locked = true;
+			writeCount.incrementAndGet();
 		}
 
 		/**
@@ -125,7 +131,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 					throw e;
 				}
 			}
-			locked = true;
+			writeCount.incrementAndGet();
 		}
 
 		/**
@@ -137,7 +143,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 			// This will barge the fairness queue, so there's no need to drain permits
 			boolean acquired = this.semaphore.tryAcquire(this.permits);
 			if(acquired){
-				locked = true;
+				writeCount.incrementAndGet();
 			}
 			return acquired;
 		}
@@ -164,7 +170,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 				}
 			}
 			if(acquired){
-				locked = true;
+				writeCount.incrementAndGet();
 			}
 			return acquired;
 		}
@@ -175,8 +181,10 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		@Override
 		public void unlock()
 		{
-			this.semaphore.release(this.permits);
-			locked = false;
+			if(isLocked()) {
+				this.semaphore.release(this.permits);
+				writeCount.decrementAndGet();
+			}
 		}
 		
 		/**
@@ -190,7 +198,7 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 
 		@Override
 		public boolean isLocked() {
-			return locked;
+			return writeCount.get()>0;
 		}
 
 		@Override
@@ -202,8 +210,13 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		public String toString() {
 			return "{" +
 					" key:'" + key + "'" +
-					", locked:" + locked +
+					", writeCount:" + writeCount.get() +
 					'}';
+		}
+
+		@Override
+		public int getWriteHoldCount() {
+			return writeCount.get();
 		}
 	}
 }

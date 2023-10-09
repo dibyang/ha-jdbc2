@@ -1,13 +1,13 @@
-package net.sf.hajdbc.lock.semaphore;
+package net.sf.hajdbc.lock;
 
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 
-class GlobalShareLock implements ShareLock {
-  private ShareLock globalLock;
-  private ShareLock lock;
+public class GlobalReadLock implements ReadLock {
+  private ReadLock globalLock;
+  private ReadLock lock;
 
-  GlobalShareLock(ShareLock globalLock, ShareLock lock) {
+  public GlobalReadLock(ReadLock globalLock, ReadLock lock) {
     this.globalLock = globalLock;
     this.lock = lock;
   }
@@ -78,8 +78,8 @@ class GlobalShareLock implements ShareLock {
   }
 
   @Override
-  public int getShared() {
-    return lock.getShared();
+  public int getReadCount() {
+    return lock.getReadCount();
   }
 
   @Override

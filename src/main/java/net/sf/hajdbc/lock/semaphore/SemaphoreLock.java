@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.lock.semaphore;
 
+import net.sf.hajdbc.lock.ReadLock;
+
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,8 +31,11 @@ import java.util.concurrent.locks.Lock;
  * Conditions are not supported.
  * 
  * @author Paul Ferraro
+ * @deprecated
+ * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
  */
-public class SemaphoreLock implements Lock, ShareLock
+@Deprecated
+public class SemaphoreLock implements Lock, ReadLock
 {
 	private transient final Semaphore semaphore;
 	private final AtomicInteger shared = new AtomicInteger();
@@ -109,13 +114,13 @@ public class SemaphoreLock implements Lock, ShareLock
 	}
 
 	@Override
-	public int getShared() {
+	public int getReadCount() {
 		return this.shared.get();
 	}
 
 	@Override
 	public boolean isLocked() {
-		return this.getShared()>0;
+		return this.getReadCount()>0;
 	}
 
 	@Override
