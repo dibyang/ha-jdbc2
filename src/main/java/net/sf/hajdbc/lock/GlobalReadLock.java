@@ -59,12 +59,6 @@ public class GlobalReadLock implements ReadLock {
   public void unlock() {
     this.lock.unlock();
     this.globalLock.unlock();
-    synchronized (this.lock.getLockObject()){
-      this.lock.getLockObject().notifyAll();
-    }
-    synchronized (this.globalLock.getLockObject()){
-      this.globalLock.getLockObject().notifyAll();
-    }
   }
 
   @Override

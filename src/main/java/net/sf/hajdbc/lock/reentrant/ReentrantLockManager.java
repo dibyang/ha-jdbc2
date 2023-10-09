@@ -11,7 +11,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class ReentrantLockManager implements LockManager {
 
-  static final String EMPTY = "";
+  static final String EMPTY = "".intern();
   private final ConcurrentMap<String, ReentrantReadWriteLock> lockMap = new ConcurrentHashMap<>();
 
   private final boolean fair;

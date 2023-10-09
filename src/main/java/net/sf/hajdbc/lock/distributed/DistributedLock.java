@@ -2,13 +2,19 @@ package net.sf.hajdbc.lock.distributed;
 
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.lock.WriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
 class DistributedLock implements Lock {
+  static final Logger LOG = LoggerFactory.getLogger(DistributedLock.class);
   public static final int DEFAULT_LOCK_TIMEOUT = 3;
   private final RemoteLockDescriptor descriptor;
   private final Lock lock;
@@ -87,6 +93,21 @@ class DistributedLock implements Lock {
     return locked;
   }
 
+  private String getKey(){
+    StringBuilder key = new StringBuilder();
+    if(lock instanceof WriteLock){
+      key.append("write");
+    }else{
+      key.append("read");
+    }
+    if(lock instanceof LockObject){
+      key.append("("+((LockObject)lock).getLockObject()+")");
+    }else{
+      key.append("()");
+    }
+    return key.toString();
+  }
+
   /**
    *
    * @param time
@@ -100,13 +121,13 @@ class DistributedLock implements Lock {
 
 //    获取分布式读写锁的分布式互斥锁，必须先获取分布式互斥锁才能获取分布式读写锁。
 //    无论是否获取读写锁成功或失败，结束后都必须要释放该互斥锁
-    DistributedLockManager.LOG.info("tryLock begin {}",  descriptor.getMember().toString());
+    String key = getKey();
+
 
     if (masterLock.tryLock()) {
-      DistributedLockManager.LOG.info("tryLock local. timeout:{}", unit.toMillis(time));
       try {
         if (this.lock.tryLock(time, unit)) {
-          DistributedLockManager.LOG.info("Lock local ok.");
+          //LOG.debug("Lock local ok. key:{}", key);
           try {
             locked = this.lockMembers();
           } finally {
@@ -119,20 +140,21 @@ class DistributedLock implements Lock {
         this.masterLock.unlock();
       }
     }
-    DistributedLockManager.LOG.info("tryLock end {} locked:{}", descriptor.getMember().toString(), locked);
+    LOG.debug("tryLock end {} key:{} locked:{}", descriptor.getMember().toString(), key, locked);
 
     return locked;
   }
 
+
   private boolean lockMembers() {
     boolean locked = true;
-    DistributedLockManager.LOG.info("lockMembers begin {}", descriptor.getMember().toString());
+    LOG.debug("lockMembers begin {}", descriptor.getMember().toString());
     Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), descriptor.getMember());
-    DistributedLockManager.LOG.info("lockMembers results:{}", results);
+    LOG.debug("lockMembers results:{}", results);
     for (Map.Entry<Member, Boolean> entry : results.entrySet()) {
       locked &= entry.getValue();
     }
-    DistributedLockManager.LOG.info("lockMembers end  {} locked:{}", descriptor.getMember().toString(), locked);
+    LOG.debug("lockMembers end  {} locked:{}", descriptor.getMember().toString(), locked);
 
     if (!locked) {
       this.unlockMembers();

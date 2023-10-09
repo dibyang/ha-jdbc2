@@ -184,6 +184,9 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 			if(isLocked()) {
 				this.semaphore.release(this.permits);
 				writeCount.decrementAndGet();
+				synchronized (this.key){
+					this.key.notifyAll();
+				}
 			}
 		}
 		

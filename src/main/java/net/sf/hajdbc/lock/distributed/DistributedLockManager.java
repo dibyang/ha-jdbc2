@@ -299,14 +299,15 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	public void removed(Member member)
 	{
 		Map<LockDescriptor, Lock> locks = this.remoteLockDescriptorMap.remove(member);
-		
+
 		if (locks != null)
 		{
-			for (Lock lock: locks.values())
-			{
-				lock.unlock();
-				LOG.info("member removed. unlock={}", lock);
-			}
+			this.remoteExecutor.submit(()->{
+				for (Lock lock: locks.values())
+				{
+					lock.unlock();
+				}
+			});
 		}
 	}
 

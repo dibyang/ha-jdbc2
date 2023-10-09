@@ -22,6 +22,14 @@ public class ReentrantReadLock extends ReentrantReadWriteLock.ReadLock implement
   }
 
   @Override
+  public void unlock() {
+    super.unlock();
+    synchronized (this.key){
+      this.key.notifyAll();
+    }
+  }
+
+  @Override
   public Object getLockObject() {
     return key;
   }

@@ -111,6 +111,9 @@ public class SemaphoreLock implements Lock, ReadLock
 	{
 		this.semaphore.release();
 		this.shared.decrementAndGet();
+		synchronized (this.key){
+			this.key.notifyAll();
+		}
 	}
 
 	@Override
