@@ -1,20 +1,3 @@
-/*
- * HA-JDBC: High-Availability JDBC
- * Copyright (C) 2012  Paul Ferraro
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 package net.sf.hajdbc.lock.semaphore;
 
 import net.sf.hajdbc.lock.WriteLock;
@@ -27,16 +10,6 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 
 
-/**
- * Simple {@link java.util.concurrent.locks.ReadWriteLock} implementation that uses a semaphore.
- * A read lock requires 1 permit, while a write lock requires all the permits.
- * Lock upgrading and downgrading is not supported; nor are conditions.
- * 
- * @author Paul Ferraro
- * @deprecated
- * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
- */
-@Deprecated
 public class SemaphoreReadWriteLock implements ReadWriteLock
 {
 	private final Lock readLock;
@@ -70,8 +43,8 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 	
 	private static class SemaphoreWriteLock implements WriteLock
 	{
-		private transient final Semaphore semaphore;
-		private transient final int permits;
+		private final Semaphore semaphore;
+		private final int permits;
 		private final AtomicInteger writeCount = new AtomicInteger();
 
 		private final String key;
@@ -181,13 +154,18 @@ public class SemaphoreReadWriteLock implements ReadWriteLock
 		@Override
 		public void unlock()
 		{
-			if(isLocked()) {
-				this.semaphore.release(this.permits);
-				writeCount.decrementAndGet();
-				synchronized (this.key){
-					this.key.notifyAll();
+			int expect = this.writeCount.get();
+			while(expect>0) {
+				if(this.writeCount.compareAndSet(expect,expect-1)) {
+					this.semaphore.release(this.permits);
+					synchronized (this.key) {
+						this.key.notifyAll();
+					}
+				}else{
+					expect = this.writeCount.get();
 				}
 			}
+
 		}
 		
 		/**

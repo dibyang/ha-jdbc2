@@ -1,20 +1,3 @@
-/*
- * HA-JDBC: High-Availability JDBC
- * Copyright (C) 2012  Paul Ferraro
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 package net.sf.hajdbc.lock.semaphore;
 
 import net.sf.hajdbc.lock.ReadLock;
@@ -25,20 +8,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 
-/**
- * An implementation of {@link java.util.concurrent.locks.Lock} using a binary semaphore.
- * Unlike the {@link java.util.concurrent.locks.ReentrantLock} this lock can be locked and unlocked by different threads.
- * Conditions are not supported.
- * 
- * @author Paul Ferraro
- * @deprecated
- * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
- */
-@Deprecated
+
 public class SemaphoreLock implements Lock, ReadLock
 {
-	private transient final Semaphore semaphore;
-	private final AtomicInteger shared = new AtomicInteger();
+	private final Semaphore semaphore;
+	private final AtomicInteger readCount = new AtomicInteger();
 
 	private final String key;
 	
@@ -55,7 +29,7 @@ public class SemaphoreLock implements Lock, ReadLock
 	public void lock()
 	{
 		this.semaphore.acquireUninterruptibly();
-		this.shared.incrementAndGet();
+		this.readCount.incrementAndGet();
 	}
 
 	/**
@@ -65,7 +39,7 @@ public class SemaphoreLock implements Lock, ReadLock
 	public void lockInterruptibly() throws InterruptedException
 	{
 		this.semaphore.acquire();
-		this.shared.incrementAndGet();
+		this.readCount.incrementAndGet();
 	}
 
 	/**
@@ -85,7 +59,7 @@ public class SemaphoreLock implements Lock, ReadLock
 	{
 		boolean locked = this.semaphore.tryAcquire();
 		if(locked){
-			this.shared.incrementAndGet();
+			this.readCount.incrementAndGet();
 		}
 		return locked;
 	}
@@ -98,7 +72,7 @@ public class SemaphoreLock implements Lock, ReadLock
 	{
 		boolean locked = this.semaphore.tryAcquire(time, unit);
 		if(locked){
-			this.shared.incrementAndGet();
+			this.readCount.incrementAndGet();
 		}
 		return locked;
 	}
@@ -109,16 +83,22 @@ public class SemaphoreLock implements Lock, ReadLock
 	@Override
 	public void unlock()
 	{
-		this.semaphore.release();
-		this.shared.decrementAndGet();
-		synchronized (this.key){
-			this.key.notifyAll();
+		int expect = this.readCount.get();
+		while(expect>0) {
+			if(this.readCount.compareAndSet(expect,expect-1)) {
+				this.semaphore.release();
+				synchronized (this.key) {
+					this.key.notifyAll();
+				}
+			}else{
+				expect = this.readCount.get();
+			}
 		}
 	}
 
 	@Override
 	public int getReadCount() {
-		return this.shared.get();
+		return this.readCount.get();
 	}
 
 	@Override
@@ -135,7 +115,7 @@ public class SemaphoreLock implements Lock, ReadLock
 	public String toString() {
 		return "{" +
 				" key:'" + key + "'" +
-				", shared:" + shared +
+				", readCount:" + readCount +
 				'}';
 	}
 }

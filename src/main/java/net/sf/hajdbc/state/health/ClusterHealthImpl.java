@@ -29,7 +29,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   public static final int HEARTBEAT_LOST_MAX = 3;
   public static final int MAX_TRY_LOCK = 10;
-  public static final int MAX_INACTIVATED = 5;
+  public static final int MAX_INACTIVATED = 3;
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -455,7 +455,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final AtomicInteger dbInActivated = new AtomicInteger();
 
   /**
-   * 5以上次才认为数据库不是活的
+   * 2以上次才认为数据库不是活的
    * @param database
    * @return
    */

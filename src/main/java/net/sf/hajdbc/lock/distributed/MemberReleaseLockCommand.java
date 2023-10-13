@@ -50,17 +50,7 @@ public class MemberReleaseLockCommand implements Command<Void, LockCommandContex
 	public Void execute(LockCommandContext context)
 	{
 		Lock lock = context.getLock(descriptor);
-		ExecutorService remoteExecutor = context.getRemoteExecutor();
-		Future<?> future = remoteExecutor.submit(lock::unlock);
-		try {
-			future.get(3, TimeUnit.SECONDS);
-		} catch (InterruptedException e) {
-			LOG.warn("", e);
-		} catch (ExecutionException e) {
-			LOG.warn("", e);
-		} catch (TimeoutException e) {
-			LOG.warn("", e);
-		}
+		lock.unlock();
 		return null;
 	}
 

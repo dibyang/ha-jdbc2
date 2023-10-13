@@ -25,12 +25,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 
 import net.sf.hajdbc.lock.*;
 
-/**
- * @author Paul Ferraro
- * @deprecated
- * @see net.sf.hajdbc.lock.reentrant.ReentrantLockManager
- */
-@Deprecated
+
 public class SemaphoreLockManager implements LockManager
 {
 	public static final String EMPTY = "";

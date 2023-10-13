@@ -15,19 +15,19 @@ public class NodeWriteLock implements WriteLock {
   }
 
   @Override
-  public synchronized void lock() {
+  public void lock() {
     this.lock.lock();
     this.ownerWriteCount.incrementAndGet();
   }
 
   @Override
-  public synchronized void lockInterruptibly() throws InterruptedException {
+  public void lockInterruptibly() throws InterruptedException {
     this.lock.lockInterruptibly();
     this.ownerWriteCount.incrementAndGet();
   }
 
   @Override
-  public synchronized boolean tryLock() {
+  public boolean tryLock() {
     boolean b = this.lock.tryLock();
     if (b) {
       this.ownerWriteCount.incrementAndGet();
@@ -36,7 +36,7 @@ public class NodeWriteLock implements WriteLock {
   }
 
   @Override
-  public synchronized boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+  public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
     boolean b = this.lock.tryLock(time, unit);
     if (b) {
       this.ownerWriteCount.incrementAndGet();
@@ -45,11 +45,16 @@ public class NodeWriteLock implements WriteLock {
   }
 
   @Override
-  public synchronized void unlock() {
-    if(isLocked()) {
-      this.lock.unlock();
-      this.ownerWriteCount.decrementAndGet();
+  public void unlock() {
+    int expect = this.ownerWriteCount.get();
+    while(expect>0) {
+      if (this.ownerWriteCount.compareAndSet(expect, expect-1)) {
+        this.lock.unlock();
+      }else{
+        expect = this.ownerWriteCount.get();
+      }
     }
+
   }
 
   @Override

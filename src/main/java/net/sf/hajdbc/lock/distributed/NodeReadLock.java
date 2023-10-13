@@ -15,19 +15,19 @@ public class NodeReadLock implements ReadLock {
   }
 
   @Override
-  public synchronized void lock() {
+  public void lock() {
     this.lock.lock();
     this.ownerReadCount.incrementAndGet();
   }
 
   @Override
-  public synchronized void lockInterruptibly() throws InterruptedException {
+  public void lockInterruptibly() throws InterruptedException {
     this.lock.lockInterruptibly();
     this.ownerReadCount.incrementAndGet();
   }
 
   @Override
-  public synchronized boolean tryLock() {
+  public boolean tryLock() {
     boolean b = this.lock.tryLock();
     if(b){
       this.ownerReadCount.incrementAndGet();
@@ -36,7 +36,7 @@ public class NodeReadLock implements ReadLock {
   }
 
   @Override
-  public synchronized boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
+  public boolean tryLock(long time, TimeUnit unit) throws InterruptedException {
     boolean b = this.lock.tryLock(time, unit);
     if(b){
       this.ownerReadCount.incrementAndGet();
@@ -45,10 +45,14 @@ public class NodeReadLock implements ReadLock {
   }
 
   @Override
-  public synchronized void unlock() {
-    if (this.lock.isLocked() && this.ownerReadCount.get() > 0) {
-      this.lock.unlock();
-      this.ownerReadCount.decrementAndGet();
+  public void unlock() {
+    int expect = this.ownerReadCount.get();
+    while(expect>0) {
+      if (this.ownerReadCount.compareAndSet(expect, expect-1)) {
+        this.lock.unlock();
+      }else{
+        expect = this.ownerReadCount.get();
+      }
     }
   }
 

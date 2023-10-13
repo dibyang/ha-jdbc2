@@ -55,14 +55,14 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	
 	private final LockManager lockManager;
 	private final ConcurrentMap<Member, Map<LockDescriptor, Lock>> remoteLockDescriptorMap = new ConcurrentHashMap<Member, Map<LockDescriptor, Lock>>();
-	private final ExecutorService remoteExecutor;
+
 
 	public <Z, D extends Database<Z>> DistributedLockManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
 	{
 		this.lockManager = cluster.getLockManager();
 		LockCommandContext context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".lock", context, this, this);
-		remoteExecutor = Executors.newSingleThreadExecutor();
+
 	}
 	
 	/**
@@ -211,11 +211,6 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		return Collections.unmodifiableMap(allLocks);
 	}
 
-	@Override
-	public ExecutorService getRemoteExecutor() {
-		return remoteExecutor;
-	}
-
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.distributed.Stateful#writeState(java.io.ObjectOutput)
@@ -258,7 +253,6 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		for (int i = 0; i < size; ++i)
 		{
 			Member member = Objects.readObject(input);
-			
 			//Map<LockDescriptor, Lock> map = new HashMap<LockDescriptor, Lock>();
 			
 			int locks = input.readInt();
@@ -302,12 +296,11 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 
 		if (locks != null)
 		{
-			this.remoteExecutor.submit(()->{
-				for (Lock lock: locks.values())
-				{
-					lock.unlock();
-				}
-			});
+			for (Lock lock: locks.values())
+			{
+				lock.unlock();
+			}
+
 		}
 	}
 

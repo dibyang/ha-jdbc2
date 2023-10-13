@@ -48,21 +48,9 @@ public class MemberAcquireLockCommand implements Command<Boolean, LockCommandCon
 	public Boolean execute(LockCommandContext context)
 	{
 		Lock lock = context.getLock(this.descriptor);
-		
 
-		ExecutorService remoteExecutor = context.getRemoteExecutor();
-		Future<Boolean> future = remoteExecutor.submit(() -> lock.tryLock());
-		boolean locked = false;
-		try {
-			locked = future.get(3, TimeUnit.SECONDS);
-		} catch (InterruptedException e) {
-			LOG.warn("", e);
-		} catch (ExecutionException e) {
-			LOG.warn("", e);
-		} catch (TimeoutException e) {
-			LOG.warn("", e);
-		}
-		
+		boolean locked = lock.tryLock();
+
 		return locked;
 	}
 

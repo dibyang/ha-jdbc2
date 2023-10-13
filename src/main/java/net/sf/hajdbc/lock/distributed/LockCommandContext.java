@@ -43,5 +43,4 @@ public interface LockCommandContext
 	 */
 	Map<Member, Map<LockDescriptor, Lock>> getAllLocks(boolean includeFree);
 
-	ExecutorService getRemoteExecutor();
 }

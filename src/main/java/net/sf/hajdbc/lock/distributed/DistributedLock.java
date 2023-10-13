@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -127,7 +129,7 @@ class DistributedLock implements Lock {
     if (masterLock.tryLock()) {
       try {
         if (this.lock.tryLock(time, unit)) {
-          //LOG.debug("Lock local ok. key:{}", key);
+          logInfo("Lock local ok. key:{}", key);
           try {
             locked = this.lockMembers();
           } finally {
@@ -140,21 +142,30 @@ class DistributedLock implements Lock {
         this.masterLock.unlock();
       }
     }
-    LOG.debug("tryLock end {} key:{} locked:{}", descriptor.getMember().toString(), key, locked);
-
+    logInfo("tryLock end {} key:{} locked:{}", descriptor.getMember().toString(), key, locked);
     return locked;
   }
 
+  private void logInfo(String msg, Object... arguments) {
+    if(isTrace()){
+      LOG.info(msg,arguments);
+    }
+  }
+
+  private boolean isTrace(){
+    return Files.exists(Paths.get("/etc/ha-jdbc/trace/lock"));
+  }
 
   private boolean lockMembers() {
     boolean locked = true;
-    LOG.debug("lockMembers begin {}", descriptor.getMember().toString());
+    logInfo("lockMembers begin {}", descriptor.getMember().toString());
+
     Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), descriptor.getMember());
-    LOG.debug("lockMembers results:{}", results);
+    logInfo("lockMembers results:{}", results);
     for (Map.Entry<Member, Boolean> entry : results.entrySet()) {
       locked &= entry.getValue();
     }
-    LOG.debug("lockMembers end  {} locked:{}", descriptor.getMember().toString(), locked);
+    logInfo("lockMembers end  {} locked:{}", descriptor.getMember().toString(), locked);
 
     if (!locked) {
       this.unlockMembers();

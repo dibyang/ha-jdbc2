@@ -371,6 +371,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void removed(Member member)
 	{
+		logger.log(Level.INFO,"DSM member removed:"+member);
 		if (this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator()))
 		{
 			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.remoteInvokerMap.remove(member);
@@ -379,10 +380,13 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 			{
 				this.cluster.getDurability().recover(invokers);
 			}
-
 		}
 		members.remove(member);
-    Iterator<MembershipListener> iterator = membershipListeners.iterator();
+
+		D database = this.cluster.getDatabaseByIp(getIp(member));
+		this.cluster.deactivate(database, this);
+
+		Iterator<MembershipListener> iterator = membershipListeners.iterator();
     while(iterator.hasNext()){
       try {
         iterator.next().removed(member);
@@ -393,8 +397,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
     }
   }
 
-
-  /**
+	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.state.StateManager#recover()
 	 */
