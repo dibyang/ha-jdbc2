@@ -1,10 +1,11 @@
 package net.sf.hajdbc.state.health;
 
-import net.sf.hajdbc.Database;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.MembershipListener;
+import net.sf.hajdbc.distributed.Stateful;
 import net.sf.hajdbc.state.distributed.NodeState;
 
-public interface ClusterHealth {
+public interface ClusterHealth extends MembershipListener {
 
   void start();
 

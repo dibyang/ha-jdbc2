@@ -61,6 +61,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 
 /**
@@ -89,6 +90,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	
 	private boolean active = false;
 	private String localDbId = null;
+
 	
 	private final List<DatabaseClusterConfigurationListener<Z, D>> configurationListeners = new CopyOnWriteArrayList<DatabaseClusterConfigurationListener<Z, D>>();	
 	private final List<DatabaseClusterListener> clusterListeners = new CopyOnWriteArrayList<DatabaseClusterListener>();
@@ -549,19 +551,38 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		this.configuration.getDatabaseMap().putIfAbsent(database.getId(),database);
 	}
 
+	private void checkLocalDb() throws InterruptedException {
+		while(this.localDbId==null) {
+			for (D db : this.configuration.getDatabaseMap().values()) {
+				if (LocalHost.getAllIp().contains(db.getIp())) {
+					this.localDbId = db.getId();
+					break;
+				}
+			}
+			logger.log(Level.WARN,"checkLocalDb not find local db. all db: {0}",this.configuration.getDatabaseMap().values());
+			Thread.sleep(1000);
+		}
+	}
 	/**
 	 *
 	 * @see DatabaseCluster#getLocalDatabase()
 	 */
 	@Override
-	public D getLocalDatabase() {
+	public synchronized D getLocalDatabase() {
 		D local = null;
-		Iterator<D> iterator = this.configuration.getDatabaseMap().values().iterator();
-		while (iterator.hasNext()){
-			D database = iterator.next();
-			if(database.getId().equals(localDbId)){
-				local = database;
-				break;
+		try {
+			checkLocalDb();
+		} catch (InterruptedException e) {
+			//ignore InterruptedException
+		}
+		if(localDbId!=null) {
+			Iterator<D> iterator = this.configuration.getDatabaseMap().values().iterator();
+			while (iterator.hasNext()) {
+				D database = iterator.next();
+				if (database.getId().equals(localDbId)) {
+					local = database;
+					break;
+				}
 			}
 		}
 		return local;
@@ -773,9 +794,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		this.lockManager.start();
 		this.stateManager.start();
 
-		checkLocalDb();
-
-		if(localDbId!=null) {
+		if(this.getLocalDatabase()!=null) {
 			recoverDatabase();
 
 			scheduleDetection();
@@ -786,23 +805,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
-	private void checkLocalDb() {
-		int fails = 0;
-		while(this.localDbId==null&&fails<20) {
-			for (D db : this.configuration.getDatabaseMap().values()) {
-				if (LocalHost.getAllIp().contains(db.getIp())) {
-					this.localDbId = db.getId();
-					break;
-				}
-			}
-			fails += 1;
-			try {
-				Thread.sleep(2000);
-			} catch (InterruptedException e) {
-				//ignore  InterruptedException;
-			}
-		}
-	}
+
 
 	/**
 	 * Recover all active databases.

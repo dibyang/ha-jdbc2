@@ -1,20 +1,3 @@
-/*
- * HA-JDBC: High-Availability JDBC
- * Copyright (C) 2012  Paul Ferraro
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 package net.sf.hajdbc.state.distributed;
 
 import java.io.IOException;
@@ -47,6 +30,7 @@ import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.ClusterHealthImpl;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.state.sync.SyncMgrImpl;
+import net.sf.hajdbc.util.StopWatch;
 
 /**
  * @author Paul Ferraro
@@ -79,6 +63,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
     this.health = new ClusterHealthImpl(this);
 		this.syncMgr = new SyncMgrImpl(this);
+		this.addMembershipListener(this.health);
 	}
 
   public ClusterHealth getHealth() {
@@ -127,9 +112,10 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void deactivated(DatabaseEvent event)
 	{
+		StopWatch stopWatch = StopWatch.createStarted();
 		this.stateManager.deactivated(event);
 		this.dispatcher.executeAll(new DeactivationCommand<Z, D>(event), this.dispatcher.getLocal());
-
+		logger.log(Level.INFO,"{0} deactivated cost time:{1}", event.getSource(), stopWatch.toString());
 	}
 
 	/**
@@ -325,6 +311,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void added(Member member)
 	{
+
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
 
@@ -338,6 +325,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         logger.log(Level.WARN,e);
       }
     }
+
 	}
 
 	/*
@@ -372,6 +360,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	public void removed(Member member)
 	{
 		logger.log(Level.INFO,"DSM member removed:"+member);
+
 		if (this.dispatcher.getLocal().equals(this.dispatcher.getCoordinator()))
 		{
 			Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.remoteInvokerMap.remove(member);
@@ -381,10 +370,8 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 				this.cluster.getDurability().recover(invokers);
 			}
 		}
-		members.remove(member);
 
-		D database = this.cluster.getDatabaseByIp(getIp(member));
-		this.cluster.deactivate(database, this);
+		members.remove(member);
 
 		Iterator<MembershipListener> iterator = membershipListeners.iterator();
     while(iterator.hasNext()){
@@ -393,9 +380,22 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
       }catch (Exception e){
         logger.log(Level.WARN,e);
       }
-
     }
+		//removeNodeDatabase(member);
   }
+
+	private void removeNodeDatabase(Member member) {
+		StopWatch stopWatch = StopWatch.createStarted();
+		D database = this.cluster.getDatabaseByIp(getIp(member));
+		if(database.getLocation().startsWith("jdbc:h2:")) {
+			try {
+				this.cluster.deactivate(database, this.cluster.getStateManager());
+				logger.log(Level.INFO, "remove NodeDatabase, cost time: {0}", stopWatch.toString());
+			} catch (Exception e) {
+				logger.log(Level.WARN, e, "remove NodeDatabase fail, cost time {0}:", stopWatch.toString());
+			}
+		}
+	}
 
 	/**
 	 * {@inheritDoc}

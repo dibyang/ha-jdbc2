@@ -11,6 +11,7 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -163,7 +164,7 @@ class DistributedLock implements Lock {
     Map<Member, Boolean> results = this.dispatcher.executeAll(new MemberAcquireLockCommand(this.descriptor), descriptor.getMember());
     logInfo("lockMembers results:{}", results);
     for (Map.Entry<Member, Boolean> entry : results.entrySet()) {
-      locked &= entry.getValue();
+      locked &= Optional.ofNullable(entry.getValue()).orElse(false);
     }
     logInfo("lockMembers end  {} locked:{}", descriptor.getMember().toString(), locked);
 
