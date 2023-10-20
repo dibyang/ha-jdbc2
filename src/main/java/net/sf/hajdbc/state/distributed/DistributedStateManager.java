@@ -37,6 +37,9 @@ import net.sf.hajdbc.util.StopWatch;
  */
 public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, DistributedManager<Z,D>, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
+	public static final String JGROUPS_STATE_RM_DB_ENABLE = "jgroups.state.rm_db.enable";
+	public static final String TRUE = "true";
+	public static final String FALSE = "false";
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final DatabaseCluster<Z, D> cluster;
 	private final StateManager stateManager;
@@ -381,7 +384,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         logger.log(Level.WARN,e);
       }
     }
-		//removeNodeDatabase(member);
+		if(TRUE.equalsIgnoreCase(System.getProperty(JGROUPS_STATE_RM_DB_ENABLE, FALSE))){
+			removeNodeDatabase(member);
+		}
   }
 
 	private void removeNodeDatabase(Member member) {

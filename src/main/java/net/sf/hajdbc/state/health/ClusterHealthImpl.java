@@ -41,9 +41,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
   private volatile long offsetTime = 0;
-  private volatile long lastHeartbeat = 0;
   private volatile Member host = null;
-  private final Random random = new Random();
   private FileWatchDog fileWatchDog;
 
   HeartBeatCommand beatCommand = new HeartBeatCommand();
@@ -105,7 +103,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public void receiveHeartbeat(long sendTime){
     logger.debug("receive host heart beat.");
     counter.set(0);
-    lastHeartbeat = sendTime;
     DateTime now = new DateTime();
     long offset = ((sendTime - now.getMillis())/1000)*1000;
     if(offset!=offsetTime) {
@@ -186,28 +183,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
 
-
-  /**
-   * Does it lost heart beat.
-   * @return Does it lost heart beat
-   */
-//  private boolean isLostHeartBeat(){
-//    int count = counter.incrementAndGet();
-//    logger.debug("heart beat is lost. count = "+count);
-//    if(count>= HEARTBEAT_LOST_MAX){
-//      counter.set(0);
-////      Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
-////
-////      //delete invalid data.
-////      remveInvalidReceive(all);
-////      Entry<Member, NodeHealth> host = findNodeByState(all, NodeState.host);
-//      boolean lost = true;//(host == null);
-//      logger.info("lost heart beat = "+lost);
-//      return lost;
-//    }
-//    return false;
-//  }
-
   private boolean isLostHost(){
     boolean lost = (host == null);
     return lost;
@@ -218,7 +193,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * @return Can it elect.
    */
   private boolean canElect(){
-    if(isUp()){
+    if(isUp()&&isLostHost()){
       if(arbiter.isObservable()){
         DatabaseCluster cluster = stateManager.getDatabaseCluster();
         Database database = cluster.getLocalDatabase();
@@ -232,14 +207,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return false;
   }
 
-  private void delayTryLock() {
-    try {
-      Thread.sleep(200+100*random.nextInt(20));
-    } catch (InterruptedException e) {
-      //ignore InterruptedException
-    }
-  }
-
   /**
    * start elect host node.
    */
@@ -247,32 +214,34 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(HOST_ELECT);
     lock.lockInterruptibly();
     try{
-      logger.info("host elect begin.");
-      StopWatch stopWatch = StopWatch.createStarted();
-      long waitTime = 2;
-      long beginElectTime = System.nanoTime();
-      Entry<Member, NodeHealth> host = doElect(beginElectTime);
-      while(host==null&&unattended){
-        host = doElect(beginElectTime);
-        if(host==null){
-          logger.info("can not elect host node. try elect again after "+waitTime+"s");
-          Thread.sleep(waitTime*1000);
-          if(waitTime<16){
-            waitTime=waitTime*2;
+      if(isLostHost()) {
+        logger.info("host elect begin.");
+        StopWatch stopWatch = StopWatch.createStarted();
+        long waitTime = 2;
+        long beginElectTime = System.nanoTime();
+        Entry<Member, NodeHealth> host = doElect(beginElectTime);
+        while (host == null && unattended) {
+          host = doElect(beginElectTime);
+          if (host == null) {
+            logger.info("can not elect host node. try elect again after " + waitTime + "s");
+            Thread.sleep(waitTime * 1000);
+            if (waitTime < 16) {
+              waitTime = waitTime * 2;
+            }
+          } else {
+            break;
           }
-        }else{
-          break;
         }
+        if (host != null) {
+          logger.info("host elect:{}. cost time:{}", host.getKey(), stopWatch.toString());
+          this.host(host.getKey(), host.getValue().getLocal());
+          HostCommand hostCommand = new HostCommand();
+          hostCommand.setHost(host.getKey());
+          hostCommand.setToken(host.getValue().getLocal());
+          stateManager.executeAll(hostCommand, host.getKey());
+        }
+        logger.info("host elect end. cost time:{}", stopWatch.toString());
       }
-      if(host!=null){
-        logger.info("host elect:{}. cost time:{}", host.getKey(), stopWatch.toString());
-        this.host(host.getKey(), host.getValue().getLocal());
-        HostCommand hostCommand = new HostCommand();
-        hostCommand.setHost(host.getKey());
-        hostCommand.setToken(host.getValue().getLocal());
-        stateManager.executeAll(hostCommand, host.getKey());
-      }
-      logger.info("host elect end. cost time:{}", stopWatch.toString());
     }catch (Exception e){
       logger.warn("",e);
     }finally {

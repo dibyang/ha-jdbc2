@@ -44,7 +44,7 @@
 	<PING timeout="2000" num_initial_members="20"/>
 	<MERGE3 />
 	<FD_SOCK/>
-	<FD_ALL/>
+	<FD_ALL timeout="${jgroups.fd_all.timeout:10000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
 	<VERIFY_SUSPECT timeout="1500"/>
 	<pbcast.NAKACK2 xmit_interval="500"
 					xmit_table_num_rows="100"
