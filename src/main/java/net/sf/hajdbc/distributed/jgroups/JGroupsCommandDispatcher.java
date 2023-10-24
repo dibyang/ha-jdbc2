@@ -105,7 +105,19 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		channel.setDiscardOwnMessages(false);
 		
 		// Connect and fetch state
-		channel.connect(this.id, null, 0);
+		int failCount = 0;
+		boolean connected = false;
+		while(!connected) {
+			try {
+				channel.connect(this.id, null, 2000);
+				connected = true;
+			}catch (Exception e){
+				failCount++;
+				if(failCount>=5){
+					throw e;
+				}
+			}
+		}
 	}
 
 	/**

@@ -193,7 +193,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * @return Can it elect.
    */
   private boolean canElect(){
-    if(isUp()&&isLostHost()){
+    if(isUp()){
       if(arbiter.isObservable()){
         DatabaseCluster cluster = stateManager.getDatabaseCluster();
         Database database = cluster.getLocalDatabase();
