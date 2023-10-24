@@ -145,7 +145,11 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	@Override
 	public Lock getDistibutedLock(RemoteLockDescriptor descriptor)
 	{
-		Lock masterLock = this.onlyLock("masterLock");
+		String id = descriptor.getId();
+		if(id==null){
+			id="";
+		}
+		Lock masterLock = this.onlyLock("masterLock-"+ id);
 		return new DistributedLock(descriptor, this.getLock(descriptor), masterLock, this.dispatcher);
 	}
 
