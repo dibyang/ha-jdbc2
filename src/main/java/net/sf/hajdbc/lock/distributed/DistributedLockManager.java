@@ -74,8 +74,8 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	{
 		//return this.lockManager.readLock(id);
 		RemoteLockDescriptor descriptor = new RemoteLockDescriptorImpl(id, LockType.READ, this.dispatcher.getLocal());
-		return this.getDistibutedLock(descriptor);
-		//return this.getLock(descriptor);
+		//return this.getDistibutedLock(descriptor);
+		return this.getLock(descriptor);
 	}
 
 	/**

@@ -964,7 +964,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		try(Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.decoder)))
 		{
 			return this.dialect.isValid(connection);
-		}catch (SQLException e)
+		}catch (Exception e)
 		{
 			logger.log(level, e.getMessage());
 			return false;

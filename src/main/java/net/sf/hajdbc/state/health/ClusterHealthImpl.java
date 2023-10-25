@@ -28,7 +28,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int MAX_TRY_LOCK = 10;
   public static final int MAX_INACTIVATED = 6;
   public static final String HOST_ELECT = "HOST_ELECT";
   private long maxElectTime = 4 * 60*1000L;
@@ -41,6 +40,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private NodeState state = NodeState.offline;
   private final AtomicInteger counter = new AtomicInteger(0);
   private volatile long offsetTime = 0;
+  //准备选主
+  private volatile boolean readyElect = false;
   private volatile Member host = null;
   private FileWatchDog fileWatchDog;
 
@@ -211,10 +212,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * start elect host node.
    */
   private synchronized void elect() throws InterruptedException {
+    //准备开始选主
+    this.readyElect = true;
     Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(HOST_ELECT);
     lock.lockInterruptibly();
     try{
-      if(isLostHost()) {
+      //如果有别的节点完成选主了的话直接跳过，否者继续选主
+      if(readyElect) {
         logger.info("host elect begin.");
         StopWatch stopWatch = StopWatch.createStarted();
         long waitTime = 2;
@@ -328,7 +332,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }else{
       setState(NodeState.offline);
     }
-
+    //选主结束
+    readyElect = false;
   }
 
   @Override
@@ -673,7 +678,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public void removed(Member member) {
     if(member!=null&&member.equals(host)){
-      host = null;
+      this.host(null,0);
       logger.info("lost Host:{}", member);
 
     }
