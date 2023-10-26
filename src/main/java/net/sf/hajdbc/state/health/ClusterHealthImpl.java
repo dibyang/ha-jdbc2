@@ -238,11 +238,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         }
         if (host != null) {
           logger.info("host elect:{}. cost time:{}", host.getKey(), stopWatch.toString());
-          this.host(host.getKey(), host.getValue().getLocal());
+
           HostCommand hostCommand = new HostCommand();
           hostCommand.setHost(host.getKey());
           hostCommand.setToken(host.getValue().getLocal());
-          stateManager.executeAll(hostCommand, host.getKey());
+          this.host(host.getKey(), host.getValue().getLocal());
+          stateManager.executeAll(hostCommand, stateManager.getLocal());
         }
         logger.info("host elect end. cost time:{}", stopWatch.toString());
       }
