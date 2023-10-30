@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -173,6 +174,8 @@ public class TokenStore {
                     }
                   }
                 }
+              } catch (ClosedByInterruptException e){
+                //ignore ClosedByInterruptException
               } catch (Exception e) {
                 LOG.warn(null,e);
               }
@@ -208,6 +211,8 @@ public class TokenStore {
             try{
               Files.write(path,builder.toString().getBytes());
               lastModified = path.toFile().lastModified();
+            } catch (ClosedByInterruptException e){
+              //ignore ClosedByInterruptException
             } catch (IOException e) {
               LOG.warn(null,e);
             }
