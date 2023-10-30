@@ -82,6 +82,8 @@ public class TokenStore {
           if(!exists()){
             try {
               path.toFile().createNewFile();
+            } catch (ClosedByInterruptException e){
+              //ignore ClosedByInterruptException
             } catch (IOException e) {
               LOG.warn(null,e);
             }
