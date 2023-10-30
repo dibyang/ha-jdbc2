@@ -1,6 +1,7 @@
 package net.sf.hajdbc.state.health;
 
 import net.sf.hajdbc.util.HAThreadFactory;
+import net.sf.hajdbc.util.StopWatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,35 +14,24 @@ import java.util.concurrent.*;
 public class TimeoutUtil {
   static final Logger logger = LoggerFactory.getLogger(TimeoutUtil.class);
 
-  public static final int DEFAULT_TIMEOUT = 1000;
-  private final int timeout;
+  public static final int DEFAULT_TIMEOUT = 200;
+
 
   private final ExecutorService exec;
 
+
   public TimeoutUtil(String name){
-    this(name,DEFAULT_TIMEOUT,2);
+    this(name,2);
   }
 
-  public TimeoutUtil(int timeout){
-    this("TimeoutUtil",timeout,2);
-  }
-
-  public TimeoutUtil(String name, int timeout){
-    this(name,timeout,2);
-  }
-
-  public TimeoutUtil(String name, int timeout,int nThreads) {
-    this.timeout = timeout;
+  public TimeoutUtil(String name, int nThreads) {
     exec= Executors.newFixedThreadPool(nThreads, HAThreadFactory.c(name));
   }
 
-  public int getTimeout() {
-    return timeout;
-  }
 
 
   public void call(final Runnable runnable){
-    call(runnable, timeout,TimeUnit.MILLISECONDS);
+    call(runnable, DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
   }
 
   public void call(final Runnable runnable,long timeout, TimeUnit unit){
@@ -60,7 +50,7 @@ public class TimeoutUtil {
   }
 
   public <V> V call(Callable<V> callable, V defValue){
-    return call(callable,defValue,timeout,TimeUnit.MILLISECONDS);
+    return call(callable, defValue, DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
   }
 
   public <V> V call(final Callable<V> callable, final V defValue, long timeout, TimeUnit unit){
@@ -84,7 +74,7 @@ public class TimeoutUtil {
   }
 
   public <V> V call(final Task<V> task){
-    return call(task,timeout,TimeUnit.MILLISECONDS);
+    return call(task, DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
   }
 
   public <V> V call(final Task<V> task, long timeout, TimeUnit unit){
@@ -94,7 +84,50 @@ public class TimeoutUtil {
       task.success(value);
       return value;
     } catch (Exception e) {
+      future.cancel(true);
       return task.failed(e);
     }
+  }
+
+  public static void main(String[] args) {
+    TimeoutUtil util = new TimeoutUtil("test");
+
+    util.call(()->{
+      StopWatch stopWatch = StopWatch.createStarted();
+      try {
+        Thread.sleep(5000);
+      } catch (InterruptedException e) {
+        //e.printStackTrace();
+      }
+      System.out.println("cost time:"+stopWatch.toString());
+    });
+    util.call(()->{
+      StopWatch stopWatch = StopWatch.createStarted();
+      try {
+        Thread.sleep(5000);
+      } catch (InterruptedException e) {
+        //e.printStackTrace();
+      }
+      System.out.println("cost time:"+stopWatch.toString());
+    });
+    util.call(()->{
+      StopWatch stopWatch = StopWatch.createStarted();
+      try {
+        Thread.sleep(5000);
+      } catch (InterruptedException e) {
+        //e.printStackTrace();
+      }
+      System.out.println("cost time:"+stopWatch.toString());
+    });
+    util.call(()->{
+      StopWatch stopWatch = StopWatch.createStarted();
+      try {
+        Thread.sleep(5000);
+      } catch (InterruptedException e) {
+        //e.printStackTrace();
+      }
+      System.out.println("cost time:"+stopWatch.toString());
+    });
+
   }
 }

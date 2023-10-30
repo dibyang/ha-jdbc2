@@ -40,7 +40,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * 节点是否需要更新token，true：需要，false：不需要
    */
   private final AtomicBoolean nodeUpdated = new AtomicBoolean(false);
-  private volatile boolean unattended = true;
+  //private volatile boolean unattended = true;
   private final ExecutorService executorService;
 
   private NodeState state = NodeState.offline;
@@ -225,10 +225,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       if(readyElect) {
         logger.info("host elect begin.");
         StopWatch stopWatch = StopWatch.createStarted();
-        long waitTime = 2;
+        long waitTime = 1;
         long beginElectTime = System.nanoTime();
         Entry<Member, NodeHealth> host = doElect(beginElectTime);
-        while (host == null && unattended) {
+        while (host == null) {
           host = doElect(beginElectTime);
           if (host == null) {
             logger.info("can not elect host node. try elect again after " + waitTime + "s");
