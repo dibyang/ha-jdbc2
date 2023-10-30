@@ -4,9 +4,12 @@ import java.io.File;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import net.sf.hajdbc.Database;
@@ -33,7 +36,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
-  private volatile int token = 0;
+  /**
+   * 节点是否需要更新token，true：需要，false：不需要
+   */
+  private final AtomicBoolean nodeUpdated = new AtomicBoolean(false);
   private volatile boolean unattended = true;
   private final ExecutorService executorService;
 
@@ -163,9 +169,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void incrementToken(){
-    if(token<=0){
-      token = 1;
-    }
+    nodeUpdated.compareAndSet(false,true);
   }
 
   @Override
@@ -540,11 +544,16 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return active;
   }
 
+  private boolean isTrace(){
+    return Files.exists(Paths.get("/etc/ha-jdbc/trace/health"));
+  }
+
   private void updateNewToken() {
-    if(token>0) {
-      long newToken = arbiter.getLocal().getToken() + token;
-      logger.debug("update newToken=" + newToken);
-      token = 0;
+    if(nodeUpdated.compareAndSet(true, false)) {
+      long newToken = arbiter.getLocal().getToken() + 1;
+      if(isTrace()) {
+        logger.info("update newToken=" + newToken);
+      }
       updateTokenCommand.setToken(newToken);
       stateManager.executeAll(updateTokenCommand);
     }
