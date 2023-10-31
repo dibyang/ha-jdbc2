@@ -46,7 +46,7 @@ class DistributedLock implements Lock {
 
           synchronized (lockObject) {
             try {
-              lockObject.wait(3000);
+              lockObject.wait(1000);
             } catch (InterruptedException e) {
               //e.printStackTrace();
               Thread.yield();
@@ -74,7 +74,7 @@ class DistributedLock implements Lock {
           Object lockObject = ((LockObject) lock).getLockObject();
 
           synchronized (lockObject) {
-            lockObject.wait(3000);
+            lockObject.wait(1000);
           }
         }
         Thread.yield();
@@ -126,7 +126,7 @@ class DistributedLock implements Lock {
 //    无论是否获取读写锁成功或失败，结束后都必须要释放该互斥锁
     String key = getKey();
 
-    if (masterLock.tryLock(time, unit)) {
+    if (masterLock.tryLock(2, TimeUnit.SECONDS)) {
       try {
         if (this.lock.tryLock(time, unit)) {
           logInfo("Lock local ok. key:{}", key);

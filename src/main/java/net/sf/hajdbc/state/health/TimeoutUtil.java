@@ -14,7 +14,7 @@ import java.util.concurrent.*;
 public class TimeoutUtil {
   static final Logger logger = LoggerFactory.getLogger(TimeoutUtil.class);
 
-  public static final int DEFAULT_TIMEOUT = 500;
+  public static final int DEFAULT_TIMEOUT = 1000;
 
 
   private final ExecutorService exec;

@@ -31,7 +31,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int MAX_INACTIVATED = 6;
+  public static final int MAX_INACTIVATED = 10;
   public static final String HOST_ELECT = "HOST_ELECT";
   private long maxElectTime = 4 * 60*1000L;
   private DistributedStateManager stateManager;
@@ -73,7 +73,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     String localIp = stateManager.getLocalIp();
     arbiter.setLocal(localIp);
     this.run();
-    scheduledService.scheduleWithFixedDelay(this,1000,1000, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this,1000,500, TimeUnit.MILLISECONDS);
   }
 
 
@@ -335,7 +335,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         setState(NodeState.ready);
       }
     }else{
-      setState(NodeState.offline);
+      //setState(NodeState.offline);
     }
     //选主结束
     readyElect = false;
