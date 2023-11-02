@@ -18,9 +18,12 @@
 package net.sf.hajdbc.sql;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.invocation.Invoker;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.util.StopWatch;
 
 /**
  * 
@@ -72,9 +75,7 @@ public abstract class AbstractChildProxyFactory<Z, D extends Database<Z>, P, PE 
 		{
 			child.close(database);
 		}
-
 		T object = this.remove(database);
-		
 		if (object != null)
 		{
 			this.close(database, object);

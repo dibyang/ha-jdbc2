@@ -44,7 +44,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final ExecutorService executorService;
 
   private NodeState state = NodeState.offline;
-  private final AtomicInteger counter = new AtomicInteger(0);
   private volatile long offsetTime = 0;
   //准备选主
   private volatile boolean readyElect = false;
@@ -61,7 +60,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
     this.stateManager.getDatabaseCluster().addListener(this);
-    executorService = Executors.newFixedThreadPool(2,HaJdbcThreadFactory.c("cluster-executor-Thread"));
+    executorService = Executors.newFixedThreadPool(3, HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(),this);
     fileWatchDog = new FileWatchDog(new File("/proc/mounts"), MountPathHolder.H);
     arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
@@ -72,8 +71,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
     arbiter.setLocal(localIp);
-    this.run();
-    scheduledService.scheduleWithFixedDelay(this,1000,500, TimeUnit.MILLISECONDS);
+    //this.run();
+    scheduledService.scheduleWithFixedDelay(this,500,500, TimeUnit.MILLISECONDS);
   }
 
 
@@ -109,7 +108,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public void receiveHeartbeat(long sendTime){
     logger.debug("receive host heart beat.");
-    counter.set(0);
     DateTime now = new DateTime();
     long offset = ((sendTime - now.getMillis())/1000)*1000;
     if(offset!=offsetTime) {
@@ -155,8 +153,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       NodeState old  = this.state;
       this.state = state;
       changeState(old,this.state);
-      //避免数据同步时间过长导致的心跳丢失
-      counter.set(0);
     }
   }
 

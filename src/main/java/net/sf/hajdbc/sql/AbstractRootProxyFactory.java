@@ -17,13 +17,17 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.TreeMap;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
+import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.util.StopWatch;
 
 /**
  * 
@@ -62,7 +66,12 @@ public abstract class AbstractRootProxyFactory<Z, D extends Database<Z>> extends
 		
 		for (ChildProxyFactory<Z, D, Z, SQLException, ?, ? extends Exception> child: this.children())
 		{
-			child.close(database);
+			this.getDatabaseCluster().getExecutor().submit(()->{
+				StopWatch stopWatch = StopWatch.createStarted();
+				child.close(database);
+				logger.log(Level.INFO, "child {0} close cost time:{1}", child, stopWatch.toString());
+			});
 		}
 	}
+
 }

@@ -316,11 +316,14 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
   public void changeState(NodeState oldState, NodeState newState) {
     Iterator<NodeStateListener> iterator = nodeStateListeners.iterator();
     while (iterator.hasNext()){
-      try {
-        iterator.next().changeState(oldState, newState);
-      }catch (Exception e){
-        logger.log(Level.WARN,e);
-      }
+			NodeStateListener listener = iterator.next();
+			this.executor.submit(()->{
+				try {
+					listener.changeState(oldState, newState);
+				}catch (Exception e){
+					logger.log(Level.WARN,e);
+				}
+			});
     }
   }
 
