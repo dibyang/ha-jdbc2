@@ -22,6 +22,7 @@ import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
+import org.h2.engine.SysProperties;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.slf4j.Logger;
@@ -31,9 +32,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
-  public static final int MAX_INACTIVATED = 10;
+  public static final int MAX_INACTIVATED = 30;
   public static final String HOST_ELECT = "HOST_ELECT";
-  private long maxElectTime = 4 * 60*1000L;
+  public static final long DEFAULT_MAX_ELECT_TIME = 4 * 60 * 1000L;
+  public static final String MAX_ELECT_TIME = "MAX_ELECT_TIME";
+
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
   /**
@@ -71,7 +74,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
     arbiter.setLocal(localIp);
-    //this.run();
+    this.run();
     scheduledService.scheduleWithFixedDelay(this,500,500, TimeUnit.MILLISECONDS);
   }
 
@@ -293,7 +296,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       if(host==null){
         long time = System.nanoTime() - beginElectTime;
         //选举超时
-        if((TimeUnit.NANOSECONDS.toMillis(time) > maxElectTime)){
+        if((TimeUnit.NANOSECONDS.toMillis(time) > getMaxElectTime())){
           host = findNodeByToken(all);
         }
       }
@@ -305,6 +308,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
     return host;
 
+  }
+
+  @Override
+  public long getMaxElectTime() {
+    long maxElectTime =  DEFAULT_MAX_ELECT_TIME;
+    try {
+      maxElectTime = Long.parseLong(System.getProperty(MAX_ELECT_TIME, String.valueOf(DEFAULT_MAX_ELECT_TIME)));
+    }catch (NumberFormatException e){
+      logger.warn("MAX_ELECT_TIME format is error.", e);
+    }
+    return maxElectTime;
   }
 
   private int getMinNodeCount(){
@@ -678,11 +692,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void added(Member member) {
-
+    logger.info("added node:{}", member);
   }
 
   @Override
   public void removed(Member member) {
+    logger.info("removed node:{}", member);
     if(member!=null&&member.equals(host)){
       this.host(null,0);
       logger.info("lost Host:{}", member);

@@ -58,13 +58,12 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final SyncMgr syncMgr;
 
 
-	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
-	{
+	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception {
 		this.cluster = cluster;
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
-    this.health = new ClusterHealthImpl(this);
+		this.health = new ClusterHealthImpl(this);
 		this.syncMgr = new SyncMgrImpl(this);
 		this.addMembershipListener(this.health);
 	}

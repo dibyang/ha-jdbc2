@@ -36,4 +36,6 @@ public interface ClusterHealth extends MembershipListener {
   void host(Member host, long token);
 
   Member getHost();
+
+  long getMaxElectTime();
 }

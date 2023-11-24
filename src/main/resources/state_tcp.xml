@@ -48,12 +48,13 @@
   <MERGE3 />
 <!--  <FD_SOCK/>-->
 <!--  <FD timeout="${jgroups.fd.timeout:1000}" max_tries="${jgroups.fd.max_tries:3}" />-->
-  <FD_ALL timeout="${jgroups.fd_all.timeout:10000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
-<!--  <VERIFY_SUSPECT timeout="1500"  />-->
+  <FD_ALL2 timeout="${jgroups.fd_all.timeout:10000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
+  <!--  <VERIFY_SUSPECT timeout="${jgroups.verify_suspect.timeout:10000}"  />-->
   <BARRIER />
   <pbcast.NAKACK2 use_mcast_xmit="false"
                   discard_delivered_msgs="true"/>
   <UNICAST3 />
+
   <pbcast.STABLE stability_delay="1000" desired_avg_gossip="50000"
                  max_bytes="4M"/>
   <pbcast.GMS print_local_addr="true" join_timeout="3000"
@@ -61,7 +62,7 @@
   <MFC max_credits="2M"
        min_threshold="0.4"/>
   <FRAG2 frag_size="60K"  />
-  <!--RSVP resend_interval="2000" timeout="10000"/-->
+  <!--  <RSVP resend_interval="2000" timeout="10000"/>-->
   <pbcast.STATE_TRANSFER/>
   <CENTRAL_LOCK use_thread_id_for_lock_owner="false" />
 </config>
