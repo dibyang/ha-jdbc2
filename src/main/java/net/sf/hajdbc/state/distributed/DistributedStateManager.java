@@ -37,7 +37,6 @@ import net.sf.hajdbc.util.StopWatch;
  */
 public class DistributedStateManager<Z, D extends Database<Z>> implements StateManager, DistributedManager<Z,D>, StateCommandContext<Z, D>, MembershipListener, Stateful
 {
-	public static final String JGROUPS_STATE_RM_DB_ENABLE = "jgroups.state.rm_db.enable";
 	public static final String TRUE = "true";
 	public static final String FALSE = "false";
 	private final Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -383,23 +382,8 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         logger.log(Level.WARN,e);
       }
     }
-		if(TRUE.equalsIgnoreCase(System.getProperty(JGROUPS_STATE_RM_DB_ENABLE, FALSE))){
-			removeNodeDatabase(member);
-		}
   }
 
-	private void removeNodeDatabase(Member member) {
-		StopWatch stopWatch = StopWatch.createStarted();
-		D database = this.cluster.getDatabaseByIp(getIp(member));
-		if(database.getLocation().startsWith("jdbc:h2:")) {
-			try {
-				this.cluster.deactivate(database, this.cluster.getStateManager());
-				logger.log(Level.INFO, "remove NodeDatabase, cost time: {0}", stopWatch.toString());
-			} catch (Exception e) {
-				logger.log(Level.WARN, e, "remove NodeDatabase fail, cost time {0}:", stopWatch.toString());
-			}
-		}
-	}
 
 	/**
 	 * {@inheritDoc}
