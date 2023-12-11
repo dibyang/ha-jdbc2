@@ -1,5 +1,7 @@
 package net.sf.hajdbc.state.health.observer;
 
+import java.util.List;
+
 public class Test2ObserveAdapter implements ObserveAdapter {
 
   @Override
@@ -13,7 +15,7 @@ public class Test2ObserveAdapter implements ObserveAdapter {
   }
 
   @Override
-  public boolean isObservable(String ip) {
+  public boolean isObservable(List<String> ips) {
     return false;
   }
 }
