@@ -1,5 +1,7 @@
 package net.sf.hajdbc.state.health.observer;
 
+import java.util.List;
+
 /**
  * Observe adapter
  */
@@ -20,8 +22,8 @@ public interface ObserveAdapter {
 
   /**
    * Return observable or not
-   * @param ip ip address
+   * @param ips ip list
    * @return observable or not
    */
-  boolean isObservable(String ip);
+  boolean isObservable(List<String> ips);
 }

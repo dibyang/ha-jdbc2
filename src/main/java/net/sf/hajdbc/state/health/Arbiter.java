@@ -67,10 +67,8 @@ public class Arbiter {
     if(config.getIps().isEmpty()){
       return true;
     }else{
-      for(String ip : config.getIps()){
-        if(observer.isObservable(ip)){
-          return true;
-        }
+      if(observer.isObservable(config.getIps())){
+        return true;
       }
     }
     return false;

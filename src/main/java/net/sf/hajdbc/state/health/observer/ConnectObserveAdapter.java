@@ -3,6 +3,7 @@ package net.sf.hajdbc.state.health.observer;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.List;
 
 /**
  * Observe adapter for connect
@@ -14,8 +15,13 @@ public abstract class ConnectObserveAdapter implements ObserveAdapter {
   public abstract int getPort();
 
   @Override
-  public boolean isObservable(String ip) {
-    return isConnectable(ip);
+  public boolean isObservable(List<String> ips) {
+    if(ips!=null) {
+      for (String ip : ips) {
+        return isConnectable(ip);
+      }
+    }
+    return false;
   }
 
   public  boolean isConnectable(String host) {
