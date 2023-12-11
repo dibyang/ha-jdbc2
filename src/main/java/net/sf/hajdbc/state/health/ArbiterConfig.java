@@ -16,7 +16,7 @@ public class ArbiterConfig {
   private String arbiterPath = ARBITER_PATH_DEFAULT;
   private final List<String> ips = new CopyOnWriteArrayList<>();
   private volatile short prefixLen = 16;
-  private volatile String local = "";
+  private volatile String localIp = "";
 
 
   public ArbiterConfig() {
@@ -27,13 +27,13 @@ public class ArbiterConfig {
     return MountPathHolder.H.getMountPath() + arbiterPath;
   }
 
-  public String getLocal() {
-    return local;
+  public String getLocalIp() {
+    return localIp;
   }
 
-  public void setLocal(String local) {
-    this.local = local;
-    prefixLen = LocalHost.getPrefixLength(local);
+  public void setLocalIp(String localIp) {
+    this.localIp = localIp;
+    prefixLen = LocalHost.getPrefixLength(localIp);
   }
 
   public List<String> getIps() {

@@ -15,7 +15,7 @@ public abstract class ConnectObserveAdapter implements ObserveAdapter {
   public abstract int getPort();
 
   @Override
-  public boolean isObservable(List<String> ips) {
+  public boolean isObservable(String localIp, List<String> ips) {
     if(ips!=null) {
       for (String ip : ips) {
         return isConnectable(ip);

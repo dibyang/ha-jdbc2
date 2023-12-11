@@ -34,12 +34,13 @@ public class Observer {
 
   /**
    * Return observable or not
+   * @param localIp local ip
    * @param ips ip list
    * @return observable or not
    */
-  public boolean isObservable(List<String> ips){
+  public boolean isObservable(String localIp, List<String> ips){
     for (ObserveAdapter adapter: adapters){
-      if(adapter.isObservable(ips)){
+      if(adapter.isObservable(localIp, ips)){
         return true;
       }
     }

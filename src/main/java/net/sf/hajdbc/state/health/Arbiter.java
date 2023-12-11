@@ -28,7 +28,7 @@ public class Arbiter {
   }
 
 
-  public LocalTokenStore getLocal() {
+  public LocalTokenStore getLocalTokenStore() {
     return local;
   }
 
@@ -37,8 +37,8 @@ public class Arbiter {
     return arbiter;
   }
 
-  public void setLocal(String local) {
-    config.setLocal(local);
+  public void setLocalIp(String local) {
+    config.setLocalIp(local);
   }
 
   private void checkPathChange() {
@@ -67,7 +67,7 @@ public class Arbiter {
     if(config.getIps().isEmpty()){
       return true;
     }else{
-      if(observer.isObservable(config.getIps())){
+      if(observer.isObservable(config.getLocalIp(), config.getIps())){
         return true;
       }
     }

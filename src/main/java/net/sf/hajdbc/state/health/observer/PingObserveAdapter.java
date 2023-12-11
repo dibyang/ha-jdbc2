@@ -23,7 +23,7 @@ public class PingObserveAdapter implements ObserveAdapter {
   }
 
   @Override
-  public boolean isObservable(List<String> ips) {
+  public boolean isObservable(String localIp, List<String> ips) {
     if(ips!=null) {
       for (String ip : ips) {
         return isHostReachable(ip, TIME_OUT);

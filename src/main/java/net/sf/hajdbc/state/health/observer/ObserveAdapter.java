@@ -22,8 +22,9 @@ public interface ObserveAdapter {
 
   /**
    * Return observable or not
+   * @param localIp local ip
    * @param ips ip list
    * @return observable or not
    */
-  boolean isObservable(List<String> ips);
+  boolean isObservable(String localIp, List<String> ips);
 }

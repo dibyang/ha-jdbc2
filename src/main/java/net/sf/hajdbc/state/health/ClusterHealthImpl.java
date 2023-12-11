@@ -22,7 +22,6 @@ import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
-import org.h2.engine.SysProperties;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.slf4j.Logger;
@@ -73,7 +72,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public void start(){
     fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
-    arbiter.setLocal(localIp);
+    arbiter.setLocalIp(localIp);
     this.run();
     scheduledService.scheduleWithFixedDelay(this,500,500, TimeUnit.MILLISECONDS);
   }
@@ -89,8 +88,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public NodeHealth getNodeHealth(){
     NodeHealth health = new NodeHealth();
     health.setState(state);
-    health.setLastOnlyHost(arbiter.getLocal().isOnlyHost());
-    health.setLocal(arbiter.getLocal().getToken());
+    health.setLastOnlyHost(arbiter.getLocalTokenStore().isOnlyHost());
+    health.setLocal(arbiter.getLocalTokenStore().getToken());
     health.setArbiter(arbiter.getArbiter().getToken());
     Set databases = stateManager.getActiveDatabases();
     health.getActiveDBs().retainAll(databases);
@@ -497,7 +496,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         downNode();
       }else
       {
-        arbiter.getLocal().setOnlyHost((stateManager.getActiveDatabases().size()<2));
+        arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size()<2));
         sendHeartbeat();
         executorService.submit(new Runnable() {
           @Override
@@ -512,7 +511,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private void watchNotHostNode() throws InterruptedException {
     DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
     if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
-      arbiter.getLocal().setOnlyHost(false);
+      arbiter.getLocalTokenStore().setOnlyHost(false);
       if(NodeState.backup.equals(state)){
         if(isNeedDown()) {
           downNode();
@@ -560,7 +559,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private void updateNewToken() {
     if(nodeUpdated.compareAndSet(true, false)) {
-      long newToken = arbiter.getLocal().getToken() + 1;
+      long newToken = arbiter.getLocalTokenStore().getToken() + 1;
       if(isTrace()) {
         logger.info("update newToken=" + newToken);
       }
