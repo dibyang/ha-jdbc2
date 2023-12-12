@@ -559,6 +559,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			for (D db : this.configuration.getDatabaseMap().values()) {
 				if (LocalHost.getAllIp().contains(db.getIp())) {
 					this.localDbId = db.getId();
+					db.setLocal(true);
 					break;
 				}
 			}
@@ -1053,9 +1054,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		@Override
 		public void run() {
 			try {
-				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
-					return;
-				}
+//				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+//					return;
+//				}
 
 				Set<D> databases = DatabaseClusterImpl.this.getBalancer();
 
@@ -1065,9 +1066,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					List<D> deadList = new ArrayList<D>(size);
 
 					for (D database : databases) {
-						if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)
-						||!stateManager.isValid(database)) {
-							deadList.add(database);
+						if(database.isLocal()) {
+							if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)
+									|| !stateManager.isValid(database)) {
+								deadList.add(database);
+							}
 						}
 					}
 
@@ -1098,16 +1101,16 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
-				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
-					return;
-				}
+//				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
+//					return;
+//				}
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 
 				if (!activeDatabases.isEmpty())
 				{
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
-						if (!activeDatabases.contains(database))
+						if (database.isLocal()&&!activeDatabases.contains(database))
 						{
 							try
 							{

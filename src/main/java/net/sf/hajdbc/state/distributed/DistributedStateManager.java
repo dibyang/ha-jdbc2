@@ -382,8 +382,19 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         logger.log(Level.WARN,e);
       }
     }
+		removeNodeDatabase(member);
   }
 
+	private void removeNodeDatabase(Member member) {
+		StopWatch stopWatch = StopWatch.createStarted();
+		D database = this.cluster.getDatabaseByIp(getIp(member));
+		try {
+			this.cluster.deactivate(database, this.cluster.getStateManager());
+			logger.log(Level.INFO, "remove NodeDatabase, cost time: {0}", stopWatch.toString());
+		} catch (Exception e) {
+			logger.log(Level.WARN, e, "remove NodeDatabase fail, cost time {0}:", stopWatch.toString());
+		}
+	}
 
 	/**
 	 * {@inheritDoc}

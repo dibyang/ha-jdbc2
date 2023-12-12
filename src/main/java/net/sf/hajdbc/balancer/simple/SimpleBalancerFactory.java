@@ -28,6 +28,7 @@ import net.sf.hajdbc.state.StateManager;
  * Factory for creating a {@link SimpleBalancer}.
  * @author Paul Ferraro
  */
+@Deprecated
 public class SimpleBalancerFactory implements BalancerFactory
 {
 	private static final long serialVersionUID = -5871958980592464011L;
@@ -40,7 +41,7 @@ public class SimpleBalancerFactory implements BalancerFactory
 
 	/**
 	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set, StateManager)
+	 * @see net.sf.hajdbc.balancer.BalancerFactory#createBalancer(Set)
 	 */
 	@Override
 	public <Z, D extends Database<Z>> Balancer<Z, D> createBalancer(Set<D> databases)

@@ -24,12 +24,13 @@ public class PingObserveAdapter implements ObserveAdapter {
 
   @Override
   public boolean isObservable(String localIp, List<String> ips) {
-    if(ips!=null) {
+    if(ips!=null&&!ips.isEmpty()) {
       for (String ip : ips) {
         return isHostReachable(ip, TIME_OUT);
       }
+      return false;
     }
-    return false;
+    return true;
   }
 
   public boolean isHostReachable(String host, Integer timeOut) {

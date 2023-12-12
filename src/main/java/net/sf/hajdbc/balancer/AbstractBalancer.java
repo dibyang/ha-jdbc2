@@ -37,7 +37,7 @@ import net.sf.hajdbc.Database;
  */
 public abstract class AbstractBalancer<Z, D extends Database<Z>> implements Balancer<Z, D>
 {
-	protected abstract Set<D> getDatabases();
+	public abstract Set<D> getDatabases();
 
 	/**
 	 * {@inheritDoc}

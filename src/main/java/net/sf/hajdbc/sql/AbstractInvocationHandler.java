@@ -17,8 +17,10 @@
  */
 package net.sf.hajdbc.sql;
 
+import java.io.File;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.sql.Wrapper;
 import java.util.ArrayList;
@@ -44,6 +46,7 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.serial.SerialLocatorFactories;
 import net.sf.hajdbc.sql.serial.SerialLocatorFactory;
 import net.sf.hajdbc.state.health.ClusterHealth;
+import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.reflect.Methods;
 
 /**
@@ -56,7 +59,8 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 	private static final Method hashCodeMethod = Methods.getMethod(Object.class, "hashCode");
 	private static final Method toStringMethod = Methods.getMethod(Object.class, "toString");
 	private static final Set<Method> wrapperMethods = Methods.findMethods(Wrapper.class, "isWrapperFor", "unwrap");
-	
+	public static final File INVOKE_TRACE = Paths.get("/etc/ha-jdbc/trace/invoke").toFile();
+
 	protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final Class<T> proxyClass;
 	private final F proxyFactory;
@@ -92,9 +96,19 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 
 		Invoker<Z, D, T, R, E> invoker = this.getInvoker(proxy, method, parameters);
 
-		this.logger.log(Level.TRACE, "Invoking {0} using {1}", method, strategy);
+		//this.logger.log(Level.INFO, "Invoking {0} using {1}", method, strategy);
+		StopWatch stopWatch = StopWatch.createStarted();
 		SortedMap<D, R> results = strategy.invoke(this.proxyFactory, invoker);
 
+		if(isTrace()) {
+			List<String> ps = new ArrayList<>();
+			if(parameters!=null){
+				for (Object parameter : parameters) {
+					ps.add(""+parameter);
+				}
+			}
+			this.logger.log(Level.INFO, "cost {0} Invoked {1} using {2} ps={3}", stopWatch, method, strategy, ps);
+		}
 		this.postInvoke(invoker, proxy, method, parameters);
 		
 		@SuppressWarnings("unchecked")
@@ -109,6 +123,10 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		}
 
 		return this.createResult(resultFactory, results);
+	}
+
+	private static boolean isTrace() {
+		return INVOKE_TRACE.exists();
 	}
 
 	private boolean isAllInvoke(InvocationStrategy strategy) {

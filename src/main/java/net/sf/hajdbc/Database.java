@@ -46,6 +46,8 @@ public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 	 * @return a location
 	 */
 	String getLocation();
+
+	String getDbType();
 	
 	/**
 	 * Returns the relative "weight" of this cluster node.

@@ -31,6 +31,9 @@ import javax.xml.bind.annotation.XmlType;
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.logging.Logger;
+import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.management.Description;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
@@ -44,6 +47,9 @@ import net.sf.hajdbc.util.LocalHost;
 @XmlType(propOrder = { "user", "password", "xmlProperties" })
 public abstract class AbstractDatabase<Z> implements Database<Z>
 {
+	static final Logger logger = LoggerFactory.getLogger(AbstractDatabase.class);
+
+
 	@XmlAttribute(name = "id", required = true)
 	private String id;
 	@XmlAttribute(name = "location", required = true)
@@ -118,15 +124,56 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@Override
 	public String getLocation()
 	{
+		if(this.isLocal()){
+			String url = getLocalUrl(this.location);
+			return url;
+		}
 		return this.location;
 	}
 
+	@Description("type for this database")
+	@Override
+	public String getDbType(){
+		return getDbType(this.location);
+	}
+
+	private String getDbType(String url){
+		String type= "h2";
+		if((url!=null)&&(url.length()>5)
+			&&(url.substring(0,5).equalsIgnoreCase("jdbc:"))){
+			int index = url.indexOf(":", 5);
+			if(index>0){
+				type = url.substring(5,index).toLowerCase();
+			}
+		}
+		return type;
+	}
+
+	public static String getLocalUrl(String location) {
+		int index = location.indexOf("://")+3;
+		int end = location.indexOf(":", index);
+		if(end<0){
+			end = location.indexOf("/", index);
+		}
+		StringBuilder urlBuilder = new StringBuilder();
+		urlBuilder.append(location.substring(0, index));
+		urlBuilder.append("127.0.0.1");
+		urlBuilder.append(location.substring(end));
+		String url = urlBuilder.toString();
+		return url;
+	}
+
+	public static void main(String[] args) {
+		String localUrl = getLocalUrl("jdbc:h2:tcp://13.13.14.162:9092//manager/data/db/aiodb");
+		System.out.println("localUrl = " + localUrl);
+	}
+
 	@ManagedAttribute
-	public void setLocation(String name)
+	public void setLocation(String location)
 	{
 		this.assertInactive();
-		this.checkDirty(this.location, name);
-		this.location = name;
+		this.checkDirty(this.location, location);
+		this.location = location;
 	}
 	
 	@ManagedAttribute

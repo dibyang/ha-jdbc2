@@ -11,9 +11,9 @@ import net.sf.hajdbc.sql.ProxyFactory;
 public enum InvocationStrategies implements InvocationStrategy
 {
 	INVOKE_ON_ALL(new InvokeOnManyInvocationStrategy(new AllResultsCollector(new StandardExecutorProvider()))),
-	INVOKE_ON_ANY(new InvokeOnAnyInvocationStrategy(new InvokeOnOneInvocationStrategy(new NextDatabaseSelector()))),
+	INVOKE_ON_ANY(new InvokeOnAnyInvocationStrategy(new InvokeOnOneInvocationStrategy(new LocalDatabaseSelector()))),
 	INVOKE_ON_EXISTING(new InvokeOnManyInvocationStrategy(new ExistingResultsCollector())),
-	INVOKE_ON_NEXT(new InvokeOnOneInvocationStrategy(new NextDatabaseSelector())),
+  INVOKE_ON_NEXT(new InvokeOnOneInvocationStrategy(new LocalDatabaseSelector())),
 	INVOKE_ON_PRIMARY(new InvokeOnOneInvocationStrategy(new PrimaryDatabaseSelector())),
 	TRANSACTION_INVOKE_ON_ALL(new InvokeOnManyInvocationStrategy(new AllResultsCollector(new TransactionalExecutorProvider(false)))),
 	END_TRANSACTION_INVOKE_ON_ALL(new InvokeOnManyInvocationStrategy(new AllResultsCollector(new TransactionalExecutorProvider(true)))),

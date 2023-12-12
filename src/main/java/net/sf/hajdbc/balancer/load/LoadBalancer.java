@@ -111,12 +111,26 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		}
 	}
 
+	@Override
+	public D local() {
+		try
+		{
+			return getDatabases().stream()
+					.filter(e->e.isLocal()).findFirst()
+					.orElse(null);
+		}
+		catch (NoSuchElementException e)
+		{
+			return null;
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.balancer.AbstractBalancer#getDatabases()
 	 */
 	@Override
-	protected Set<D> getDatabases()
+	public Set<D> getDatabases()
 	{
 		return this.databaseMap.keySet();
 	}

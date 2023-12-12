@@ -64,12 +64,8 @@ public class Arbiter {
    * @return observable or not
    */
   public boolean isObservable(){
-    if(config.getIps().isEmpty()){
+    if(observer.isObservable(config.getLocalIp(), config.getIps())){
       return true;
-    }else{
-      if(observer.isObservable(config.getLocalIp(), config.getIps())){
-        return true;
-      }
     }
     return false;
   }

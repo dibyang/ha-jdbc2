@@ -9,7 +9,7 @@
 <config xmlns="urn:org:jgroups"
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/JGroups-3.4.xsd">
-  <TCP_NIO2 bind_addr="${jgroups.bind_addr:127.0.0.1}"
+  <TCP_NIO2 bind_addr="${jgroups.bind_addr:0.0.0.0}"
             bind_port="${jgroups.tcp.bind_port:7800}"
             recv_buf_size="${tcp.recv_buf_size:5M}"
             send_buf_size="${tcp.send_buf_size:5M}"

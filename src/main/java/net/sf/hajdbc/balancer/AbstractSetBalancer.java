@@ -95,12 +95,27 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 		}
 	}
 
+	@Override
+	public D local()
+	{
+		try
+		{
+			return this.getDatabases().stream()
+					.filter(e->e.isLocal()).findFirst()
+					.orElse(null);
+		}
+		catch (NoSuchElementException e)
+		{
+			return null;
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.balancer.AbstractBalancer#getDatabases()
 	 */
 	@Override
-	protected Set<D> getDatabases()
+	public Set<D> getDatabases()
 	{
 		return this.databaseSet;
 	}

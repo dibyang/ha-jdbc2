@@ -16,12 +16,13 @@ public abstract class ConnectObserveAdapter implements ObserveAdapter {
 
   @Override
   public boolean isObservable(String localIp, List<String> ips) {
-    if(ips!=null) {
+    if(ips!=null&&!ips.isEmpty()) {
       for (String ip : ips) {
         return isConnectable(ip);
       }
+      return false;
     }
-    return false;
+    return true;
   }
 
   public  boolean isConnectable(String host) {

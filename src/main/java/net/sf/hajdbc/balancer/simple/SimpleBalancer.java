@@ -17,88 +17,21 @@
  */
 package net.sf.hajdbc.balancer.simple;
 
-import java.util.Collections;
-import java.util.Comparator;
+import net.sf.hajdbc.Database;
+import net.sf.hajdbc.balancer.load.LoadBalancer;
+
 import java.util.Set;
 
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.balancer.AbstractSetBalancer;
-import net.sf.hajdbc.state.StateManager;
-
-/**
- * Trivial balancer implementation whose {@link #next} implementation always returns the database with the highest weight.
- * 
- * @author  Paul Ferraro
- * @param <D> either java.sql.Driver or javax.sql.DataSource
- */
-public class SimpleBalancer<Z, D extends Database<Z>> extends AbstractSetBalancer<Z, D>
+@Deprecated
+public class SimpleBalancer<Z, D extends Database<Z>> extends LoadBalancer<Z, D>
 {
-	private volatile D nextDatabase = null;
-	
-	private Comparator<D> comparator = new Comparator<D>()
-	{
-		@Override
-		public int compare(D database1, D database2)
-		{
-			return database1.getWeight() - database2.getWeight();
-		}
-	};
 
 	/**
-	 * Constructs a new SimpleBalancer
+	 * Constructs a new LoadBalancer
+	 *
 	 * @param databases
 	 */
-	public SimpleBalancer(Set<D> databases)
-	{
+	public SimpleBalancer(Set<D> databases) {
 		super(databases);
-		
-		this.reset();
-	}
-	
-	/**
-	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.Balancer#next()
-	 */
-	@Override
-	public D next()
-	{
-		return this.nextDatabase;
-	}
-
-	/**
-	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.AbstractSetBalancer#added(net.sf.hajdbc.Database)
-	 */
-	@Override
-	protected void added(D database)
-	{
-		this.reset();
-	}
-
-	/**
-	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.AbstractSetBalancer#removed(net.sf.hajdbc.Database)
-	 */
-	@Override
-	protected void removed(D database)
-	{
-		this.reset();
-	}
-	
-	private void reset()
-	{
-		Set<D> databaseSet = this.getDatabases();
-		
-		this.nextDatabase = databaseSet.isEmpty() ? null : Collections.max(databaseSet, this.comparator);
-	}
-
-	/**
-	 * {@inheritDoc}
-	 * @see net.sf.hajdbc.balancer.AbstractSetBalancer#cleared()
-	 */
-	@Override
-	protected void cleared()
-	{
-		this.nextDatabase = null;
 	}
 }
