@@ -31,6 +31,7 @@ import net.sf.hajdbc.state.health.ClusterHealthImpl;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.state.sync.SyncMgrImpl;
 import net.sf.hajdbc.util.StopWatch;
+import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 
 /**
  * @author Paul Ferraro

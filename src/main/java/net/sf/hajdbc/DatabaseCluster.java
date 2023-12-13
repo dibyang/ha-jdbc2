@@ -33,6 +33,7 @@ import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
+import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -93,7 +94,7 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	TransactionMode getTransactionMode();
 	
 	ExecutorService getExecutor();
-	
+
 	/**
 	 * Returns a dialect capable of returning database vendor specific values.
 	 * @return an implementation of <code>Dialect</code>

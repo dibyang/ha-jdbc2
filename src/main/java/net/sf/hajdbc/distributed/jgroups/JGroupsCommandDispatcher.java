@@ -23,23 +23,20 @@ import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.distributed.Command;
-import net.sf.hajdbc.distributed.CommandDispatcher;
-import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.*;
 import net.sf.hajdbc.distributed.MembershipListener;
-import net.sf.hajdbc.distributed.Stateful;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.Objects;
 
+import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
 import org.jgroups.*;
 import org.jgroups.blocks.MessageDispatcher;
 import org.jgroups.blocks.RequestHandler;
@@ -67,6 +64,8 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	private final MembershipListener membershipListener;
 	private final Stateful stateful;
 	private final LockService lockService;
+
+	private volatile CronThreadPoolExecutor cronExecutor;
 	
 	/**
 	 * Constructs a new ChannelCommandDispatcher.
@@ -93,6 +92,25 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		return lockService;
 	}
 
+	@Override
+	public String getActiveIp() {
+		Channel channel = this.dispatcher.getChannel();
+		if(channel instanceof HaExt){
+			return ((HaExt)channel).getActiveIp();
+		}
+		return null;
+	}
+
+	/**
+	 * 检测网络判断是否需要切换网络
+	 */
+	private void detectNetwork() {
+		Channel channel = this.dispatcher.getChannel();
+		if(channel instanceof HaExt){
+			((HaExt)channel).detectNetwork();
+		}
+	}
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.Lifecycle#start()
@@ -111,6 +129,17 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 			try {
 				channel.connect(this.id, null, 2000);
 				connected = true;
+				if(cronExecutor!=null){
+					cronExecutor.shutdownNow();
+					cronExecutor = null;
+				}
+				if(cronExecutor==null){
+					cronExecutor = new CronThreadPoolExecutor(1);
+					cronExecutor.schedule(() -> {
+						detectNetwork();
+					}, 10, TimeUnit.SECONDS);
+				}
+
 			}catch (Exception e){
 				failCount++;
 				if(failCount>=5){
@@ -127,6 +156,10 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	@Override
 	public void stop()
 	{
+		if(cronExecutor!=null){
+			cronExecutor.shutdownNow();
+			cronExecutor = null;
+		}
 		Channel channel = this.dispatcher.getChannel();
 		
 		if (channel.isOpen())

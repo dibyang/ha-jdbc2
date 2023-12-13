@@ -613,8 +613,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     try {
       InetAddress address = InetAddress.getByName(ip);
       nic = NetworkInterface.getByInetAddress(address);
-    }catch (Exception ex){
-      ex.printStackTrace();
+    }catch (Exception e){
+      //ignore logger.warn("getNic error", e);
     }
     return nic;
   }

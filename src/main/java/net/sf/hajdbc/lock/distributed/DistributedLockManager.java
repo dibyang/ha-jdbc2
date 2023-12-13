@@ -42,6 +42,7 @@ import net.sf.hajdbc.lock.Locked;
 import net.sf.hajdbc.lock.ReadLock;
 import net.sf.hajdbc.lock.WriteLock;
 import net.sf.hajdbc.util.Objects;
+import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

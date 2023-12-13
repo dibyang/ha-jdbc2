@@ -17,6 +17,7 @@
  */
 package net.sf.hajdbc.distributed.jgroups;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import net.sf.hajdbc.distributed.CommandDispatcher;
@@ -24,6 +25,7 @@ import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Stateful;
 
+import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
 import org.jgroups.Channel;
 import org.jgroups.JChannel;
 import org.jgroups.conf.ConfiguratorFactory;
@@ -64,8 +66,17 @@ public class JGroupsCommandDispatcherFactory implements CommandDispatcherFactory
 		}else if(id.endsWith(".state")){
 			jstack = "state_"+this.stack;
 		}
+
 		ProtocolStackConfigurator configurator = ConfiguratorFactory.getStackConfigurator(jstack);
-		Channel channel = new JChannel(configurator);
+
+		Channel channel = null;
+		String addr_list = System.getProperty("jgroups.bind_addr_list");
+		if(addr_list!=null){
+			channel = new HaChannel(Arrays.asList(addr_list.split(",")), configurator);
+		}else{
+			channel = new JChannel(configurator);
+		}
+
 		if (this.name != null)
 		{
 			channel.setName(this.name);

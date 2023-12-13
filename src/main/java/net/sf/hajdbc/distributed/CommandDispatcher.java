@@ -62,4 +62,6 @@ public interface CommandDispatcher<C> extends Lifecycle
 	Member getCoordinator();
 
 	LockService getLockService();
+
+	String getActiveIp();
 }
