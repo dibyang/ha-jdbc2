@@ -36,6 +36,13 @@ public class ArbiterConfig {
     prefixLen = LocalHost.getPrefixLength(localIp);
   }
 
+  public void setIps(List<String> ips){
+    this.ips.clear();
+    if(ips!=null&&!ips.isEmpty()){
+      this.ips.addAll(ips);
+    }
+  }
+
   public List<String> getIps() {
     return new ArrayList<>(ips);
   }

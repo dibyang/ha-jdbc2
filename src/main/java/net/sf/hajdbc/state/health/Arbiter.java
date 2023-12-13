@@ -5,6 +5,7 @@ import net.sf.hajdbc.state.health.observer.Observer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 public class Arbiter {
   private final LocalTokenStore local;
@@ -39,6 +40,10 @@ public class Arbiter {
 
   public void setLocalIp(String local) {
     config.setLocalIp(local);
+  }
+
+  public void setIps(List<String> ips){
+    config.setIps(ips);
   }
 
   private void checkPathChange() {

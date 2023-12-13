@@ -42,59 +42,12 @@ public class Observer {
    * @return observable or not
    */
   public boolean isObservable(String localIp, List<String> ips){
-    for (ObserveAdapter adapter: adapters){
-      if(adapter.isObservable(localIp, ips)){
-        return true;
+    for (ObserveAdapter adapter : adapters) {
+      if (!adapter.isObservable(localIp, ips)) {
+        return false;
       }
     }
-    return false;
+    return true;
   }
 
-  public static List<String> getIps(String path){
-    List<String> ips = new ArrayList<>();
-    try {
-      List<String> lines = Files.readAllLines(Paths.get(path));
-      for (String line : lines) {
-        String[] vals = line.split(" ");
-        if(vals.length>4&&vals[3].equals("06")) {
-
-          System.out.println("vals = " + Arrays.asList(vals));
-        }
-      }
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-    return ips;
-  }
-  public static String integer2Ip(int ip) {
-    StringBuilder sb = new StringBuilder();
-    int num = 0;
-    boolean needPoint = false; // 是否需要加入'.'
-    for (int i = 0; i < 4; i++) {
-      if (needPoint) {
-        sb.append('.');
-      }
-      needPoint = true;
-      int offset = 8 * (3 - i);
-      num = (ip >> offset) & 0xff;
-      sb.append(num);
-    }
-    return sb.toString();
-  }
-
-  public static void main(String[] args) throws UnknownHostException {
-    //List<String> ips = getIps("d:/pp.txt");
-    ByteBuffer buffer = ByteBuffer.allocate(4);
-    buffer.order(ByteOrder.nativeOrder());
-    buffer.put(Byte.parseByte("01",16));
-    buffer.put(Byte.parseByte("00",16));
-    buffer.put(Byte.parseByte("00",16));
-    buffer.put(Byte.parseByte("7F",16));
-    buffer.rewind();
-    int i = buffer.getInt();
-
-    System.out.println("i = " + i);
-    String ip = integer2Ip(i);
-    System.out.println("ip = " + ip);
-  }
 }

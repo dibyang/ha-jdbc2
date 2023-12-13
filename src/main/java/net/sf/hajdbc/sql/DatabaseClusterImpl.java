@@ -1054,9 +1054,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		@Override
 		public void run() {
 			try {
-//				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
-//					return;
-//				}
+				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+					return;
+				}
 
 				Set<D> databases = DatabaseClusterImpl.this.getBalancer();
 
@@ -1101,9 +1101,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
-//				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
+//				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
 //					return;
 //				}
+				if(NodeState.offline.equals(DatabaseClusterImpl.this.getClusterHealth().getState())){
+					return;
+				}
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 
 				if (!activeDatabases.isEmpty())
