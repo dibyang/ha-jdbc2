@@ -37,13 +37,14 @@ public class Observer {
 
   /**
    * Return observable or not
+   * @param needDown 是否是下线检测，false表示上线检测
    * @param localIp local ip
    * @param ips ip list
    * @return observable or not
    */
-  public boolean isObservable(String localIp, List<String> ips){
+  public boolean isObservable(boolean needDown, String localIp, List<String> ips){
     for (ObserveAdapter adapter : adapters) {
-      if (!adapter.isObservable(localIp, ips)) {
+      if (!adapter.isObservable(needDown, localIp, ips)) {
         return false;
       }
     }

@@ -15,7 +15,7 @@ public class Test1ObserveAdapter implements ObserveAdapter {
   }
 
   @Override
-  public boolean isObservable(String localIp, List<String> ips) {
+  public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
     return false;
   }
 }

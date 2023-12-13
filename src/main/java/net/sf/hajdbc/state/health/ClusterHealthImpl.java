@@ -204,7 +204,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    */
   private boolean canElect(){
     if(isUp()){
-      if(arbiter.isObservable()){
+      if(arbiter.isObservable(false)){
         DatabaseCluster cluster = stateManager.getDatabaseCluster();
         Database database = cluster.getLocalDatabase();
         if(cluster.isAlive(database, Level.WARN)) {
@@ -462,7 +462,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    */
   private boolean isNeedDown(){
     boolean up = isUp();
-    boolean observable = arbiter.isObservable();
+    boolean observable = arbiter.isObservable(true);
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
     boolean active = isActiveLocalDb(database);
     if(!up ||!observable ||!active){

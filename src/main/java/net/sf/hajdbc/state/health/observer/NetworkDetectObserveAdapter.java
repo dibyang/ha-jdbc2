@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
  */
 public class NetworkDetectObserveAdapter implements ObserveAdapter {
 
-  public static final int TIME_OUT = 70;
+  public static final int TIME_OUT = 60;
   public static final File DISABLE_FILE = Paths.get("/etc/ha-jdbc/net-delay-detect.disable").toFile();
 
   @Override
@@ -28,8 +28,8 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
   }
 
   @Override
-  public boolean isObservable(String localIp, List<String> ips) {
-    if(DISABLE_FILE.exists()) {
+  public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
+    if(!DISABLE_FILE.exists()) {
       List<TcpLink> tcpLinks = TcpLink.readTcpLinks("/proc/net/tcp");
       Set<String> ips2 = tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
               && !e.getRemote().getIp().equals(localIp))
@@ -41,7 +41,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
         int success = 0;
         int fail = 0;
         for (String ip : ips2) {
-          if (isHostReachable(ip, getTimeOut())) {
+          if (isHostReachable(ip, getTimeOut(needDown))) {
             success++;
           } else {
             fail++;
@@ -53,13 +53,16 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
     return true;
   }
 
-  private int getTimeOut() {
+  private int getTimeOut(boolean needDown) {
     int timeout = TIME_OUT;
     String timeout_s = System.getProperty("net-delay-detect.timeout");
     try {
       timeout = Integer.parseInt(timeout_s);
     }catch (NumberFormatException e){
       //ignore e
+    }
+    if(!needDown){
+      timeout-=15;
     }
     return timeout;
   }

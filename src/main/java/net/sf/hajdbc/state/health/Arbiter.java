@@ -66,10 +66,11 @@ public class Arbiter {
 
   /**
    * Return observable or not
+   * @param needDown 是否是下线检测，false表示上线检测
    * @return observable or not
    */
-  public boolean isObservable(){
-    if(observer.isObservable(config.getLocalIp(), config.getIps())){
+  public boolean isObservable(boolean needDown){
+    if(observer.isObservable(needDown, config.getLocalIp(), config.getIps())){
       return true;
     }
     return false;
