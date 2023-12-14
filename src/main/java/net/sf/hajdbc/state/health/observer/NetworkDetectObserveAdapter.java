@@ -1,5 +1,7 @@
 package net.sf.hajdbc.state.health.observer;
 
+import net.sf.hajdbc.state.health.FileReader;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -15,7 +17,8 @@ import java.util.stream.Collectors;
 public class NetworkDetectObserveAdapter implements ObserveAdapter {
 
   public static final int TIME_OUT = 60;
-  public static final File DISABLE_FILE = Paths.get("/etc/ha-jdbc/net-delay-detect.disable").toFile();
+
+  private final FileReader<DetectMode> net_delay_detect_reader = FileReader.of2("/etc/ha-jdbc/net-delay-detect", s->DetectMode.of(s));
 
   @Override
   public String getName() {
@@ -29,7 +32,10 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
 
   @Override
   public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
-    if(!DISABLE_FILE.exists()) {
+    DetectMode net_delay_detect = net_delay_detect_reader
+        .getData(DetectMode.disabled)
+        .orElse(DetectMode.all);
+    if(!DetectMode.disabled.equals(net_delay_detect)) {
       List<TcpLink> tcpLinks = TcpLink.readTcpLinks("/proc/net/tcp");
       Set<String> ips2 = tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
               && !e.getRemote().getIp().equals(localIp))
@@ -47,7 +53,11 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
             fail++;
           }
         }
-        return success >= fail;
+        if(DetectMode.half.equals(net_delay_detect)){
+          return success >= fail;
+        }else {
+          return fail==ips2.size();
+        }
       }
     }
     return true;
