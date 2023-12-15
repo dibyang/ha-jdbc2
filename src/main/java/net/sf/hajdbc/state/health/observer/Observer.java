@@ -1,19 +1,19 @@
 package net.sf.hajdbc.state.health.observer;
 
-import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.UnknownHostException;
-import java.nio.Buffer;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.logging.Logger;
+import net.sf.hajdbc.logging.LoggerFactory;
+
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Observer {
+  final Logger logger = LoggerFactory.getLogger(this.getClass());
+
   private final List<ObserveAdapter> adapters = new ArrayList<>();
 
   public Observer() {
+    adapters.add(new NetworkDetectObserveAdapter());
     ServiceLoader<ObserveAdapter> loader = ServiceLoader.load(ObserveAdapter.class);
     Iterator<ObserveAdapter> iterator = loader.iterator();
     while(iterator.hasNext()){
@@ -43,10 +43,28 @@ public class Observer {
    * @return observable or not
    */
   public boolean isObservable(boolean needDown, String localIp, List<String> ips){
-    for (ObserveAdapter adapter : adapters) {
-      if (!adapter.isObservable(needDown, localIp, ips)) {
-        return false;
+    List<ObserveAdapter> mustAdapters = adapters.stream().filter(e -> !e.isOptional()).collect(Collectors.toList());
+    for (ObserveAdapter adapter : mustAdapters) {
+      try {
+        if (!adapter.isObservable(needDown, localIp, ips)) {
+          return false;
+        }
+      }catch (Exception e){
+        logger.log(Level.WARN, e);
       }
+    }
+    List<ObserveAdapter> optionalAdapters = adapters.stream().filter(e -> e.isOptional()).collect(Collectors.toList());
+    if(optionalAdapters.size()>0) {
+      for (ObserveAdapter adapter : mustAdapters) {
+        try {
+          if (adapter.isObservable(needDown, localIp, ips)) {
+            return true;
+          }
+        } catch (Exception e) {
+          logger.log(Level.WARN, e);
+        }
+      }
+      return false;
     }
     return true;
   }

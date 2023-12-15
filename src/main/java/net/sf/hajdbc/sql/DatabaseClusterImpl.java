@@ -50,6 +50,7 @@ import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 import net.sf.hajdbc.util.LocalHost;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
+import net.sf.hajdbc.util.Tracer;
 import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
 import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
@@ -989,6 +990,15 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		return null;
 	}
 
+	@Override
+	public List<String> getNodes() {
+		List<String> nodes = new ArrayList<>();
+		for (D db : configuration.getDatabaseMap().values()) {
+			nodes.add(db.getIp());
+		}
+		return nodes;
+	}
+
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
 		synchronized (database) {
@@ -1067,8 +1077,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 					for (D database : databases) {
 						if(database.isLocal()) {
-							if (!DatabaseClusterImpl.this.isAlive(database, Level.WARN)
-									|| !stateManager.isValid(database)) {
+							boolean alive = DatabaseClusterImpl.this.isAlive(database, Level.WARN);
+							boolean valid = stateManager.isValid(database);
+							if(Tracer.db_state.isTrace()){
+								logger.log(Level.INFO, "db {0} alive={1}, valid={2}", database.getIp(), alive, valid);
+							}
+							if (!alive||!valid) {
 								deadList.add(database);
 							}
 						}
@@ -1101,6 +1115,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
+				if (NodeState.offline.equals(DatabaseClusterImpl.this.getClusterHealth().getState())) {
+					return;
+				}
 
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 
@@ -1108,19 +1125,13 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				{
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
-						if (database.isLocal())
-						{
-							if(!activeDatabases.contains(database)) {
-								try {
-									if (DatabaseClusterImpl.this.activate(database, DatabaseClusterImpl.this.configuration.getSynchronizationStrategyMap().get(DatabaseClusterImpl.this.configuration.getDefaultSynchronizationStrategy()))) {
-										logger.log(Level.INFO, Messages.DATABASE_ACTIVATED.getMessage(), database, DatabaseClusterImpl.this);
-									}
-								} catch (SQLException e) {
-									logger.log(Level.WARN, e);
+						if(!activeDatabases.contains(database)&&database.isLocal()) {
+							try {
+								if (DatabaseClusterImpl.this.activate(database, DatabaseClusterImpl.this.configuration.getSynchronizationStrategyMap().get(DatabaseClusterImpl.this.configuration.getDefaultSynchronizationStrategy()))) {
+									logger.log(Level.INFO, Messages.DATABASE_ACTIVATED.getMessage(), database, DatabaseClusterImpl.this);
 								}
-							}else{
-								DatabaseEvent event = new DatabaseEvent(database);
-								DatabaseClusterImpl.this.stateManager.activated(event);
+							} catch (SQLException e) {
+								logger.log(Level.WARN, e);
 							}
 						}
 					}

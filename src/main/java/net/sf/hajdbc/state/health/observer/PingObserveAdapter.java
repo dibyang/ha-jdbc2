@@ -18,6 +18,11 @@ public class PingObserveAdapter implements ObserveAdapter {
   }
 
   @Override
+  public boolean isOptional() {
+    return true;
+  }
+
+  @Override
   public int getWeight() {
     return 100;
   }

@@ -34,6 +34,7 @@ import net.sf.hajdbc.state.health.NodeStateListener;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
 
@@ -210,4 +211,6 @@ public interface DatabaseCluster<Z, D extends Database<Z>> extends Lifecycle
 	int getNodeCount();
 
 	SyncMgr getSyncMgr();
+
+	List<String> getNodes();
 }

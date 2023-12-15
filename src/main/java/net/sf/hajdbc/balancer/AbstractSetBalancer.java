@@ -101,7 +101,7 @@ public abstract class AbstractSetBalancer<Z, D extends Database<Z>> extends Abst
 		try
 		{
 			return this.getDatabases().stream()
-					.filter(e->e.isLocal()).findFirst()
+					.filter(e->e.isLocal()&&e.isActive()).findFirst()
 					.orElse(null);
 		}
 		catch (NoSuchElementException e)

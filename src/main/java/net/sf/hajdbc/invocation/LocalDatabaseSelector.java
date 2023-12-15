@@ -24,8 +24,8 @@ import java.util.Iterator;
 import java.util.Optional;
 
 /**
- * @author paul
  *
+ * 本地优先
  */
 public class LocalDatabaseSelector implements InvokeOnOneInvocationStrategy.DatabaseSelector
 {

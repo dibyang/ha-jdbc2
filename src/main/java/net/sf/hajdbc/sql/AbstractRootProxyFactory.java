@@ -17,17 +17,15 @@
  */
 package net.sf.hajdbc.sql;
 
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.sql.SQLException;
-import java.util.TreeMap;
-
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.util.StopWatch;
+
+import java.sql.SQLException;
+import java.util.TreeMap;
 
 /**
  * 

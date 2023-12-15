@@ -17,29 +17,11 @@
  */
 package net.sf.hajdbc.sql;
 
-import java.io.File;
-import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
-import java.nio.file.Paths;
-import java.sql.SQLException;
-import java.sql.Wrapper;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.SortedMap;
-
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.ExceptionFactory;
 import net.sf.hajdbc.Messages;
-import net.sf.hajdbc.invocation.AllResultsCollector;
-import net.sf.hajdbc.invocation.InvocationStrategies;
-import net.sf.hajdbc.invocation.InvocationStrategy;
-import net.sf.hajdbc.invocation.Invoker;
-import net.sf.hajdbc.invocation.SimpleInvoker;
+import net.sf.hajdbc.invocation.*;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -47,7 +29,14 @@ import net.sf.hajdbc.sql.serial.SerialLocatorFactories;
 import net.sf.hajdbc.sql.serial.SerialLocatorFactory;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.util.StopWatch;
+import net.sf.hajdbc.util.Tracer;
 import net.sf.hajdbc.util.reflect.Methods;
+
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import java.sql.SQLException;
+import java.sql.Wrapper;
+import java.util.*;
 
 /**
  * 
@@ -59,8 +48,6 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 	private static final Method hashCodeMethod = Methods.getMethod(Object.class, "hashCode");
 	private static final Method toStringMethod = Methods.getMethod(Object.class, "toString");
 	private static final Set<Method> wrapperMethods = Methods.findMethods(Wrapper.class, "isWrapperFor", "unwrap");
-	public static final File INVOKE_TRACE = Paths.get("/etc/ha-jdbc/trace/invoke").toFile();
-
 	protected final Logger logger = LoggerFactory.getLogger(this.getClass());
 	private final Class<T> proxyClass;
 	private final F proxyFactory;
@@ -100,14 +87,14 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		StopWatch stopWatch = StopWatch.createStarted();
 		SortedMap<D, R> results = strategy.invoke(this.proxyFactory, invoker);
 
-		if(isTrace()) {
+		if(Tracer.invoke.isTrace()) {
 			List<String> ps = new ArrayList<>();
 			if(parameters!=null){
 				for (Object parameter : parameters) {
 					ps.add(""+parameter);
 				}
 			}
-			this.logger.log(Level.INFO, "cost {0} Invoked {1} using {2} ps={3}", stopWatch, method, strategy, ps);
+			this.logger.log(Level.INFO, "cost {0} Invoked {1} using {2} ps={3} results={4}", stopWatch, method, strategy, ps, results);
 		}
 		this.postInvoke(invoker, proxy, method, parameters);
 		
@@ -123,10 +110,6 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		}
 
 		return this.createResult(resultFactory, results);
-	}
-
-	private static boolean isTrace() {
-		return INVOKE_TRACE.exists();
 	}
 
 	private boolean isAllInvoke(InvocationStrategy strategy) {

@@ -15,6 +15,11 @@ public abstract class ConnectObserveAdapter implements ObserveAdapter {
   public abstract int getPort();
 
   @Override
+  public boolean isOptional() {
+    return true;
+  }
+
+  @Override
   public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
     if(ips!=null&&!ips.isEmpty()) {
       int success = 0;

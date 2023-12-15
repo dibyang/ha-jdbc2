@@ -20,6 +20,7 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.util.FileReader;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
 import org.joda.time.DateTime;
@@ -32,6 +33,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final static Logger logger = LoggerFactory.getLogger(ClusterHealthImpl.class);
 
   public static final int MAX_INACTIVATED = 30;
+  /**
+   * 默认最大观察者探测失败生效次数
+   */
+  public static final int MAX_UNOBSERVABLE = 6;
+
   public static final String HOST_ELECT = "HOST_ELECT";
   public static final long DEFAULT_MAX_ELECT_TIME = 4 * 60 * 1000L;
   public static final String MAX_ELECT_TIME = "MAX_ELECT_TIME";
@@ -52,8 +58,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile Member host = null;
   private FileWatchDog fileWatchDog;
 
-  HeartBeatCommand beatCommand = new HeartBeatCommand();
-  NodeHealthCommand healthCommand = new NodeHealthCommand();
+  private final FileReader<Integer> maxUnobservableReader = FileReader.of4int("max_unobservable");
+
+  private final HeartBeatCommand beatCommand = new HeartBeatCommand();
+  private final NodeHealthCommand healthCommand = new NodeHealthCommand();
+
+  private final UpdateTokenCommand updateTokenCommand = new UpdateTokenCommand();
+  private final AtomicInteger dbInActivated = new AtomicInteger();
+  private final AtomicInteger unObservable = new AtomicInteger();
 
   private final ScheduledExecutorService scheduledService = Executors.newScheduledThreadPool(1,
       HaJdbcThreadFactory.c("cluster-health-Thread"));
@@ -73,6 +85,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
     arbiter.setLocalIp(localIp);
+    arbiter.setIps(this.stateManager.getDatabaseCluster().getNodes());
     this.run();
     scheduledService.scheduleWithFixedDelay(this,500,500, TimeUnit.MILLISECONDS);
   }
@@ -163,8 +176,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     stateManager.getDatabaseCluster().changeState(oldState,newState);
   }
 
-  UpdateTokenCommand updateTokenCommand = new UpdateTokenCommand();
-
   @Override
   public void incrementToken(){
     nodeUpdated.compareAndSet(false,true);
@@ -213,6 +224,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           logger.info("database not active.");
         }
       }
+    }else{
+      logger.info("nic is down.");
     }
     return false;
   }
@@ -435,10 +448,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return find;
   }
 
-  private final AtomicInteger dbInActivated = new AtomicInteger();
 
   /**
-   * 6以上次才认为数据库不是活的
+   * 30以上次才认为数据库不是活的
    * @param database
    * @return
    */
@@ -456,13 +468,42 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return active;
   }
 
+
+  private int getMaxUnobservable(){
+    int maxUnobservable = maxUnobservableReader
+        .getData(MAX_UNOBSERVABLE);
+    if(maxUnobservable<1){
+      maxUnobservable = 1;
+    }
+    if(maxUnobservable>100){
+      maxUnobservable = 100;
+    }
+    return maxUnobservable;
+  }
+
+  private boolean isObservable(){
+    boolean observable = true;
+    if(!arbiter.isObservable(true)){
+      unObservable.incrementAndGet();
+    }else{
+      if(arbiter.isObservable(false)) {
+        unObservable.set(0);
+      }
+    }
+    if(unObservable.get()> getMaxUnobservable()){
+      observable = false;
+      dbInActivated.set(0);
+    }
+    return observable;
+  }
+
   /**
    * Does it need to be down.
    * @return Does it need to be down?
    */
   private boolean isNeedDown(){
     boolean up = isUp();
-    boolean observable = arbiter.isObservable(true);
+    boolean observable = isObservable();
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
     boolean active = isActiveLocalDb(database);
     if(!up ||!observable ||!active){
@@ -532,12 +573,12 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         elect();
       }
     }else{
+      if(canElect()){
+        elect();
+      }
       Database database = databaseCluster.getLocalDatabase();
       if(database.isActive()) {
         databaseCluster.deactivate(database,stateManager);
-      }
-      if(canElect()){
-        elect();
       }
     }
   }

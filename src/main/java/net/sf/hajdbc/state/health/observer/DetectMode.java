@@ -19,10 +19,14 @@ public enum DetectMode {
 
   public static DetectMode of(String name){
     DetectMode mode = DetectMode.disabled;
-    for (DetectMode detectMode : DetectMode.values()) {
-      if(detectMode.name().equalsIgnoreCase(name)){
-        mode = detectMode;
-        break;
+    if("".equals(name)){
+      mode = DetectMode.all;
+    }else {
+      for (DetectMode detectMode : DetectMode.values()) {
+        if (detectMode.name().equalsIgnoreCase(name)) {
+          mode = detectMode;
+          break;
+        }
       }
     }
     return mode;

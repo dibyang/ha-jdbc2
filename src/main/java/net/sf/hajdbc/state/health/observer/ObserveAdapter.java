@@ -28,4 +28,11 @@ public interface ObserveAdapter {
    * @return observable or not
    */
   boolean isObservable(boolean needDown, String localIp, List<String> ips);
+
+
+  /**
+   * 是否是可选观察者
+   * @return
+   */
+  boolean isOptional();
 }

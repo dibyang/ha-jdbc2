@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.invocation;
 
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.SortedMap;
@@ -24,7 +26,11 @@ import java.util.TreeMap;
 import java.util.AbstractMap;
 
 import net.sf.hajdbc.Database;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.logging.Logger;
+import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.ProxyFactory;
+import net.sf.hajdbc.util.Tracer;
 
 /**
  * @author Paul Ferraro
@@ -32,12 +38,16 @@ import net.sf.hajdbc.sql.ProxyFactory;
  */
 public class ExistingResultsCollector implements InvokeOnManyInvocationStrategy.ResultsCollector
 {
+	protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+
 	@Override
 	public <Z, D extends Database<Z>, T, R, E extends Exception> Entry<SortedMap<D, R>, SortedMap<D, E>> collectResults(ProxyFactory<Z, D, T, E> factory, Invoker<Z, D, T, R, E> invoker)
 	{
 		SortedMap<D, R> resultMap = new TreeMap<D, R>();
 		SortedMap<D, E> exceptionMap = new TreeMap<D, E>();
-
+		if(Tracer.invoke.isTrace()) {
+			logger.log(Level.INFO, "factory.entries().size={0}", factory.entries().size());
+		}
 		for (Map.Entry<D, T> entry: factory.entries())
 		{
 			D database = entry.getKey();
@@ -48,6 +58,9 @@ public class ExistingResultsCollector implements InvokeOnManyInvocationStrategy.
 			}
 			catch (Exception e)
 			{
+				if(Tracer.invoke.isTrace()) {
+					logger.log(Level.INFO, e);
+				}
 				// If this database was concurrently deactivated, just ignore the failure
 				if (factory.getDatabaseCluster().getBalancer().contains(database))
 				{

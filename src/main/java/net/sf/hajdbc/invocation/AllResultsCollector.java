@@ -17,6 +17,8 @@
  */
 package net.sf.hajdbc.invocation;
 
+import java.io.File;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,13 +35,19 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.ExceptionFactory;
 import net.sf.hajdbc.Messages;
+import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.logging.Logger;
+import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.sql.ProxyFactory;
+import net.sf.hajdbc.util.Tracer;
 
 /**
  * @author Paul Ferraro
  */
 public class AllResultsCollector implements InvokeOnManyInvocationStrategy.ResultsCollector
 {
+	protected final Logger logger = LoggerFactory.getLogger(this.getClass());
+
 	public static interface ExecutorProvider
 	{
 		<Z, D extends Database<Z>> ExecutorService getExecutor(DatabaseCluster<Z, D> cluster);
@@ -61,7 +69,9 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 		DatabaseCluster<Z, D> cluster = factory.getDatabaseCluster();
 		ExceptionFactory<E> exceptionFactory = factory.getExceptionFactory();
 		Set<D> databaseSet = cluster.getBalancer();
-		
+		if(Tracer.invoke.isTrace()) {
+			logger.log(Level.INFO, "databaseSet={0}", databaseSet);
+		}
 		if (databaseSet.isEmpty())
 		{
 			exceptionFactory.createException(Messages.NO_ACTIVE_DATABASES.getMessage(cluster));
@@ -93,6 +103,9 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 				}
 				catch (ExecutionException e)
 				{
+					if(Tracer.invoke.isTrace()) {
+						logger.log(Level.INFO, e);
+					}
 					// If this database was concurrently deactivated, just ignore the failure
 					if (databaseSet.contains(database))
 					{
