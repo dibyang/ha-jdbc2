@@ -41,5 +41,4 @@ public interface ClusterHealth extends MembershipListener {
 
   long getMaxElectTime();
 
-  public void checkActiveDatabases(Set<String> activeDatabases);
 }

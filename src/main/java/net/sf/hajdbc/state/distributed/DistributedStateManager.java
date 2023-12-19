@@ -102,7 +102,9 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	{
 		this.stateManager.activated(event);
 		this.dispatcher.executeAll(new ActivationCommand<Z, D>(event), this.dispatcher.getLocal());
-		DatabasesEvent event2 = new DatabasesEvent(getActiveDatabases());
+		Set<String> activeDatabases = getActiveDatabases();
+		logger.log(Level.INFO,"sync activeDatabases={0}", activeDatabases);
+		DatabasesEvent event2 = new DatabasesEvent(activeDatabases);
 		this.dispatcher.executeAll(new SyncActiveDbsCommand<Z, D>(event2), this.dispatcher.getLocal());
 
 	}

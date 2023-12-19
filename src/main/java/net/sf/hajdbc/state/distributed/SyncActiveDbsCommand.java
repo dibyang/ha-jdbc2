@@ -20,7 +20,7 @@ public class SyncActiveDbsCommand<Z, D extends Database<Z>> implements Command<B
 	@Override
 	public Boolean execute(StateCommandContext<Z, D> context) {
 		if(event!=null&&event.getSource()!=null&&event.getSource().size()>0){
-			context.getHealth().checkActiveDatabases(new HashSet<>(event.getSource()));
+			context.getDatabaseCluster().checkActiveDatabases(new HashSet<>(event.getSource()));
 		}
 		return true;
 	}

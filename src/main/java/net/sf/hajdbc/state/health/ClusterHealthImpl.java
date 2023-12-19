@@ -719,21 +719,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
   }
 
-  public void checkActiveDatabases(Set<String> activeDatabases) {
-    DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-    Set databases = stateManager.getActiveDatabases();
-    for(String db:activeDatabases){
-      if(!databases.contains(db)){
-        Database database = databaseCluster.getDatabase(db);
-        if(!database.isActive()){
-          logger.info("database:"+db+" is reactive.");
-          databaseCluster.getBalancer().add(database);
-          database.setActive(true);
-        }
-      }
-    }
-  }
-
   @Override
   public void activated(DatabaseEvent event) {
   }

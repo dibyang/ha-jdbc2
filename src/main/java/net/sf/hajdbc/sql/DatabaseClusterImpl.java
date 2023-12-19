@@ -1005,6 +1005,20 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		return nodes;
 	}
 
+	@Override
+	public void checkActiveDatabases(Set<String> activeDatabases) {
+		Set databases = stateManager.getActiveDatabases();
+		for(String db : activeDatabases){
+			logger.log(Level.INFO,"active database: {0}.", db);
+			D database = getDatabase(db);
+			boolean add = this.balancer.add(database);
+			if(add){
+				logger.log(Level.INFO,"database {0} is add.", db);
+				database.setActive(true);
+			}
+		}
+	}
+
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
 		if(Tracer.db_state.isTrace()){
