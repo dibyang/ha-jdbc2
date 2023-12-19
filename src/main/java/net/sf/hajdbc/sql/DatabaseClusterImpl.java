@@ -315,9 +315,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
   @Override
   public void changeState(NodeState oldState, NodeState newState) {
-//		if(NodeState.host.equals(newState)){
-//      recoverDatabase();
-//		}
+		if(NodeState.host.equals(newState)){
+      recoverDatabase();
+		}
     Iterator<NodeStateListener> iterator = nodeStateListeners.iterator();
     while (iterator.hasNext()){
 			NodeStateListener listener = iterator.next();
@@ -822,9 +822,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	 * Recover all active databases.
 	 */
 	private void recoverDatabase() {
-		logger.log(Level.INFO, "Recover all active databases");
 		Set<String> databases = this.stateManager.getActiveDatabases();
-
+		logger.log(Level.INFO, "Recover all active databases. databases={0}", databases);
 		if (!databases.isEmpty())
 		{
 			for (String databaseId: databases)
