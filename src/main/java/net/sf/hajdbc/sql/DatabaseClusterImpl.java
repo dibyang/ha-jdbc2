@@ -315,6 +315,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
   @Override
   public void changeState(NodeState oldState, NodeState newState) {
+//		if(NodeState.host.equals(newState)){
+//      recoverDatabase();
+//		}
     Iterator<NodeStateListener> iterator = nodeStateListeners.iterator();
     while (iterator.hasNext()){
 			NodeStateListener listener = iterator.next();
@@ -490,6 +493,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	@Override
 	public boolean deactivate(D database, StateManager manager)
 	{
+		if(Tracer.db_state.isTrace()){
+			logger.log(Level.WARN, new Exception("trace db_state"),"deactivate {0}", database.getId());
+		}
 		boolean removed = this.balancer.remove(database);
 		
 		if (removed)
@@ -816,6 +822,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	 * Recover all active databases.
 	 */
 	private void recoverDatabase() {
+		logger.log(Level.INFO, "Recover all active databases");
 		Set<String> databases = this.stateManager.getActiveDatabases();
 
 		if (!databases.isEmpty())
@@ -1001,6 +1008,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
+		if(Tracer.db_state.isTrace()){
+			logger.log(Level.WARN, new Exception("trace db_state"),"activate {0}", database.getId());
+		}
 		synchronized (database) {
 			if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 				return false;
@@ -1064,7 +1074,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		@Override
 		public void run() {
 			try {
-				if (!DatabaseClusterImpl.this.getStateManager().isEnabled()) {
+				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
 
@@ -1076,15 +1086,13 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					List<D> deadList = new ArrayList<D>(size);
 
 					for (D database : databases) {
-						if(database.isLocal()) {
-							boolean alive = DatabaseClusterImpl.this.isAlive(database, Level.WARN);
-							boolean valid = stateManager.isValid(database);
-							if(Tracer.db_state.isTrace()){
-								logger.log(Level.INFO, "db {0} alive={1}, valid={2}", database.getIp(), alive, valid);
-							}
-							if (!alive||!valid) {
-								deadList.add(database);
-							}
+						boolean alive = DatabaseClusterImpl.this.isAlive(database, Level.WARN);
+						boolean valid = stateManager.isValid(database);
+						if(Tracer.db_state.isTrace()){
+							logger.log(Level.INFO, "db {0} alive={1}, valid={2}", database.getIp(), alive, valid);
+						}
+						if (!alive||!valid) {
+							deadList.add(database);
 						}
 					}
 
@@ -1115,7 +1123,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
-				if (NodeState.offline.equals(DatabaseClusterImpl.this.getClusterHealth().getState())) {
+				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
 
@@ -1125,7 +1133,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				{
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
-						if(!activeDatabases.contains(database)&&database.isLocal()) {
+						if(!activeDatabases.contains(database)) {
 							try {
 								if (DatabaseClusterImpl.this.activate(database, DatabaseClusterImpl.this.configuration.getSynchronizationStrategyMap().get(DatabaseClusterImpl.this.configuration.getDefaultSynchronizationStrategy()))) {
 									logger.log(Level.INFO, Messages.DATABASE_ACTIVATED.getMessage(), database, DatabaseClusterImpl.this);

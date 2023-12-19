@@ -456,14 +456,16 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    */
   private boolean isActiveLocalDb(Database database){
     boolean active = true;
-    if(database!=null&&!database.isActive()){
-      dbInActivated.incrementAndGet();
-    }else{
-      dbInActivated.set(0);
-    }
-    if(dbInActivated.get()> MAX_INACTIVATED){
-      active = false;
-      dbInActivated.set(0);
+    if(!database.getDbType().equalsIgnoreCase("h2")) {
+      if (database != null && !database.isActive()) {
+        dbInActivated.incrementAndGet();
+      } else {
+        dbInActivated.set(0);
+      }
+      if (dbInActivated.get() > MAX_INACTIVATED) {
+        active = false;
+        dbInActivated.set(0);
+      }
     }
     return active;
   }

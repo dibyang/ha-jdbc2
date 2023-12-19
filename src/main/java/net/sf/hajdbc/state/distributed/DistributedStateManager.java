@@ -380,7 +380,7 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
         logger.log(Level.WARN,e);
       }
     }
-		removeNodeDatabase(member);
+
   }
 
 	private void removeNodeDatabase(Member member) {
