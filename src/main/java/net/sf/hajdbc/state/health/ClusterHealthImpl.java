@@ -41,6 +41,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public static final String HOST_ELECT = "HOST_ELECT";
   public static final long DEFAULT_MAX_ELECT_TIME = 4 * 60 * 1000L;
   public static final String MAX_ELECT_TIME = "MAX_ELECT_TIME";
+  public static final String NODE_DOWN_LOCK = "node_down";
 
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -521,10 +522,33 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     boolean observable = isObservable();
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
     boolean active = isActiveLocalDb(database);
-    if(!up ||!observable ||!active){
-      String db = database!=null?database.getId():"";
+    String db = database!=null?database.getId():"";
+    if(!up ||!active){
       logger.warn("node need down. up={}, observable={}, db active={} db={}",up,observable,active, db);
       return true;
+    }else if(!observable){
+      Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(NODE_DOWN_LOCK);
+      try {
+        lock.lockInterruptibly();
+        try {
+          Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand, this.stateManager.getLocal());
+          remveInvalidReceive(all);
+          if(all.size()>0){
+            for (Member member : all.keySet()) {
+              NodeState nodeState = all.get(member).getState();
+              if(nodeState.isCanUpdate()){
+                logger.warn("node need down. observable={} find node {} state:{}", observable, member, nodeState);
+                return true;
+              }
+            }
+          }
+        } finally {
+          lock.unlock();
+        }
+        logger.warn("observable={}, online node is not find. node can not down.", observable);
+      }catch (Exception e){
+        //ignore e
+      }
     }
     return false;
   }

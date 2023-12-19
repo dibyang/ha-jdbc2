@@ -1021,23 +1021,31 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
-		if(Tracer.db_state.isTrace()){
-			logger.log(Level.WARN, new Exception("trace db_state"),"activate {0}", database.getId());
-		}
+
 		synchronized (database) {
 			if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 				return false;
 			}
-			Member find = getDistributedManager().getMember(database.getIp());
-			if (find != null) {
-				NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
-				if (nodeHealth == null) {
+			if(!database.isLocal()){
+				//远程节点需要状态正常才允许激活
+				Member find = getDistributedManager().getMember(database.getIp());
+				if (find != null) {
+					NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
+					if (nodeHealth == null || nodeHealth.getState() == null || NodeState.offline.equals(nodeHealth.getState())) {
+						return false;
+					}
+				} else {
 					return false;
 				}
-			} else {
-				return false;
+			}else{
+				//本地节点需要状态正常才允许激活
+				if(NodeState.offline.equals(this.getClusterHealth().getState())){
+					return false;
+				}
 			}
-
+			if(Tracer.db_state.isTrace()){
+				logger.log(Level.WARN, new Exception("trace db_state"),"activate {0}", database.getId());
+			}
 			StopWatch stopWatch = StopWatch.createStarted();
 			Lock lock = this.lockManager.writeLock(null);
 
