@@ -287,38 +287,51 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(all.size()>=stateManager.getMembers().size()){
       //find host
       host = findNodeByState(all, NodeState.host);
-      //not find host node. find backup node
-      if(host==null){
+      if(host!=null){
+        logger.info("elect host by host state. host={}", host);
+      }else{
+        //not find host node. find backup node
         host = findNodeByState(all, NodeState.backup);
-      }
-
-      //not find backup node. find by valid local node
-      if(host==null){
-        host = findNodeByValidLocal(all);
-      }
-
-      //not find valid local node. find last only host node
-      if(host==null){
-        host = findNodeByLastOnlyHost(all);
-      }
-
-      //not find last only host node. find empty node
-      if(host==null){
-        host = findNodeByEmpty(all);
-      }
-      if(host==null){
-        //满足最小节点数
-        if(all.size()>=getMinNodeCount()){
-          host = findNodeByToken(all);
+        if(host!=null){
+          logger.info("elect host by backup state. host={}", host);
+        }else{
+          //not find backup node. find by valid local node
+          host = findNodeByValidLocal(all);
+          if(host!=null){
+            logger.info("elect host by valid local. host={}", host);
+          }else{
+            //not find valid local node. find last only host node
+            host = findNodeByLastOnlyHost(all);
+            if(host!=null){
+              logger.info("elect host by only host. host={}", host);
+            }else{
+              //not find last only host node. find empty node
+              host = findNodeByEmpty(all);
+              if(host!=null){
+                logger.info("elect host by empty node. host={}", host);
+              }else{
+                //满足最小节点数
+                if(all.size()>=getMinNodeCount()){
+                  host = findNodeByToken(all);
+                }
+                if(host!=null){
+                  logger.info("elect any node by ge min node count. host={}", host);
+                }else{
+                  long time = System.nanoTime() - beginElectTime;
+                  //选举超时
+                  if((TimeUnit.NANOSECONDS.toMillis(time) > getMaxElectTime())){
+                    host = findNodeByToken(all);
+                  }
+                  if(host!=null){
+                    logger.info("elect any node by ge max elect time. host={}", host);
+                  }
+                }
+              }
+            }
+          }
         }
       }
-      if(host==null){
-        long time = System.nanoTime() - beginElectTime;
-        //选举超时
-        if((TimeUnit.NANOSECONDS.toMillis(time) > getMaxElectTime())){
-          host = findNodeByToken(all);
-        }
-      }
+
       if(host!=null){
         logger.info("find host node "+host.getKey()+".");
       }
@@ -583,6 +596,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         if (database.isActive()) {
           databaseCluster.deactivate(database, stateManager);
         }
+        //移除其它的数据库
+        if(databaseCluster.getBalancer().size()>0) {
+          databaseCluster.getBalancer().clear();
+        }
       }
     }
   }
@@ -702,7 +719,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
   }
 
-  private void checkActiveDatabases(Set<String> activeDatabases) {
+  public void checkActiveDatabases(Set<String> activeDatabases) {
     DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
     Set databases = stateManager.getActiveDatabases();
     for(String db:activeDatabases){
@@ -719,21 +736,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void activated(DatabaseEvent event) {
-    if(!state.equals(NodeState.host)){
-      executorService.submit(new Runnable() {
-        @Override
-        public void run() {
-          Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
-
-          //delete invalid data.
-          remveInvalidReceive(all);
-          Entry<Member, NodeHealth> host = findNodeByState(all, NodeState.host);
-          if(host!=null){
-            checkActiveDatabases(host.getValue().getActiveDBs());
-          }
-        }
-      });
-    }
   }
 
   @Override

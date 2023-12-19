@@ -5,6 +5,8 @@ import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Stateful;
 import net.sf.hajdbc.state.distributed.NodeState;
 
+import java.util.Set;
+
 public interface ClusterHealth extends MembershipListener {
 
   void start();
@@ -38,4 +40,6 @@ public interface ClusterHealth extends MembershipListener {
   Member getHost();
 
   long getMaxElectTime();
+
+  public void checkActiveDatabases(Set<String> activeDatabases);
 }
