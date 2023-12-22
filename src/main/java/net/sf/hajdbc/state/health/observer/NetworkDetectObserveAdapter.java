@@ -6,9 +6,7 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.FileReader;
 import net.sf.hajdbc.util.Tracer;
 
-import java.io.IOException;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -19,7 +17,7 @@ import java.util.stream.Collectors;
  * Observe adapter for network delay detect
  */
 public class NetworkDetectObserveAdapter implements ObserveAdapter {
-  final Logger logger = LoggerFactory.getLogger(this.getClass());
+  static final Logger logger = LoggerFactory.getLogger(NetworkDetectObserveAdapter.class);
 
   public static final int TIME_OUT = 60;
 
@@ -94,27 +92,27 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
   }
 
   private int getTimeOut(boolean needDown) {
-    int timeout = detectTimeout
-        .getData(TIME_OUT);
-    if(timeout<20){
-      timeout = 20;
+    synchronized (detectTimeout) {
+      int timeout = detectTimeout
+          .getData(TIME_OUT);
+      if (timeout < 20) {
+        timeout = 20;
+      }
+      if (timeout > 100) {
+        timeout = 100;
+      }
+      if (!needDown) {
+        timeout -= 15;
+      }
+      return timeout;
     }
-    if(timeout>100){
-      timeout = 100;
-    }
-    if(!needDown){
-      timeout-=15;
-    }
-    return timeout;
   }
 
-  private synchronized boolean isHostReachable(String host, int timeOut) {
+  private boolean isHostReachable(String host, int timeOut) {
     boolean reachable = false;
     try {
       reachable = InetAddress.getByName(host).isReachable(timeOut);
-    } catch (UnknownHostException e) {
-      e.printStackTrace();
-    } catch (IOException e) {
+    } catch (Exception e) {
       e.printStackTrace();
     }
     if (Tracer.observe.isTrace()) {
@@ -126,4 +124,5 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
     }
     return reachable;
   }
+
 }
