@@ -969,11 +969,14 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
+
+
 	@Override
 	public boolean isAlive(D database, Level level)
 	{
-		try(Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.decoder)))
+		try
 		{
+			Connection connection = database.getDetectConnection(this.decoder);
 			return this.dialect.isValid(connection);
 		}catch (Exception e)
 		{

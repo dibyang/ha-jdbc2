@@ -18,6 +18,7 @@
 package net.sf.hajdbc.sql;
 
 import java.net.InetAddress;
+import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +40,7 @@ import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.sql.AbstractDatabaseClusterConfiguration.Property;
 import net.sf.hajdbc.util.LocalHost;
+import net.sf.hajdbc.util.Resources;
 
 /**
  * @author  Paul Ferraro
@@ -67,6 +69,8 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	private Map<String, String> properties = new HashMap<String, String>();
 	private boolean dirty = false;
 	private volatile boolean active = false;
+	private volatile Connection detectConnection;
+
 	private volatile String ip=null;
 	
 	@XmlElement(name = "property")
@@ -161,11 +165,6 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 		urlBuilder.append(location.substring(end));
 		String url = urlBuilder.toString();
 		return url;
-	}
-
-	public static void main(String[] args) {
-		String localUrl = getLocalUrl("jdbc:h2:tcp://13.13.14.162:9092//manager/data/db/aiodb");
-		System.out.println("localUrl = " + localUrl);
 	}
 
 	@ManagedAttribute
@@ -376,6 +375,10 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	public void setActive(boolean active)
 	{
 		this.active = active;
+		if(!active&&detectConnection!=null){
+			Resources.close(detectConnection);
+			detectConnection = null;
+		}
 	}
 
 	@Override
@@ -413,4 +416,12 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 			throw new IllegalStateException();
 		}
 	}
+
+	public Connection getDetectConnection(Decoder decoder) throws SQLException{
+		if(detectConnection==null){
+			detectConnection = this.connect(this.getConnectionSource(),this.decodePassword(decoder));
+		}
+		return detectConnection;
+	}
+
 }

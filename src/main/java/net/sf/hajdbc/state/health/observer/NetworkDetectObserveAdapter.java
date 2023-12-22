@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -42,14 +43,17 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
         .getData(DetectMode.all, DetectMode.disabled);
     if(!DetectMode.disabled.equals(detectMode)) {
       List<TcpLink> tcpLinks = TcpLink.readTcpLinks("/proc/net/tcp");
-      Set<String> ips2 = tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
+      Set<String> ips1 = new HashSet<>(tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
               && !e.getRemote().getIp().equals(localIp))
           .map(e -> e.getRemote().getIp())
-          .limit(5)
-          .collect(Collectors.toSet());
-
+          .collect(Collectors.toList()));
+      ips1.removeIf(ip -> ips.contains(ip));
+      Set<String> ips2 = ips1.stream().limit(5).collect(Collectors.toSet());
       List<String> remoteNodes = new ArrayList<>(ips);
       remoteNodes.removeIf(ip -> localIp.equals(ip));
+      if (Tracer.observe.isTrace()) {
+        logger.log(Level.INFO, "remoteNodes={0} ips2={1}", remoteNodes, ips2);
+      }
       //配置节点通信状态
       boolean nodeOk = false;
       for (String remoteNode : remoteNodes) {
@@ -58,7 +62,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
           break;
         }
       }
-      ips2.removeIf(ip -> ips.contains(ip));
+
 
       //配置节点通信状态都异常,最小必需有1个可探测节点
       if (!nodeOk&&ips2.size() >= 1) {
@@ -104,7 +108,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
     return timeout;
   }
 
-  private boolean isHostReachable(String host, int timeOut) {
+  private synchronized boolean isHostReachable(String host, int timeOut) {
     boolean reachable = false;
     try {
       reachable = InetAddress.getByName(host).isReachable(timeOut);

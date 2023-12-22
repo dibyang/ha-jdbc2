@@ -93,4 +93,6 @@ public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 	String getIp();
 
 	void setLocal(boolean local);
+
+	Connection getDetectConnection(Decoder decoder) throws SQLException;
 }
