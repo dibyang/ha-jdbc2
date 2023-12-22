@@ -202,7 +202,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     boolean lost = (host == null);
     if(host != null){
       NodeHealth health = this.getNodeHealth(host);
-      if(!NodeState.host.equals(health.getState())){
+      if(health!=null&&!NodeState.host.equals(health.getState())){
         lost = true;
       }
 
@@ -608,8 +608,16 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           setState(NodeState.backup);
         }
       }
-      if(this.isLostHost()&&canElect()){
-        elect();
+      if(this.isLostHost()){
+        if(canElect()){
+          elect();
+        }else if(NodeState.backup.equals(state)){
+          //自己backup, 主丢失可以正常通信就再次选主
+          NodeHealth health = this.getNodeHealth(host);
+          if (health != null && !NodeState.host.equals(health.getState())) {
+            elect();
+          }
+        }
       }
     }else{
       if(canElect()){
