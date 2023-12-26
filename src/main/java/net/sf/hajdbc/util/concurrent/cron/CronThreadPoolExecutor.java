@@ -17,6 +17,9 @@
  */
 package net.sf.hajdbc.util.concurrent.cron;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Date;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.RejectedExecutionException;
@@ -33,6 +36,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class CronThreadPoolExecutor extends ScheduledThreadPoolExecutor implements CronExecutorService
 {
+	static final Logger LOG = LoggerFactory.getLogger(CronThreadPoolExecutor.class);
 	/**
 	 * Constructs a new CronThreadPoolExecutor.
 	 * @param corePoolSize
@@ -89,37 +93,48 @@ public class CronThreadPoolExecutor extends ScheduledThreadPoolExecutor implemen
 			@Override
 			public void run()
 			{
-				Date now = new Date();
-				Date time = expression.getNextValidTimeAfter(now);
-			
 				try
 				{
+					Date now = new Date();
+					Date time = expression.getNextValidTimeAfter(now);
 					while (time != null)
 					{
-						CronThreadPoolExecutor.this.schedule(task, time.getTime() - now.getTime(), TimeUnit.MILLISECONDS);
+						long delay = time.getTime() - now.getTime();
+						CronThreadPoolExecutor.this.schedule(task, delay, TimeUnit.MILLISECONDS);
 						
 						while (now.before(time))
 						{
-							Thread.sleep(time.getTime() - now.getTime());
-							
-							now = new Date();
+							Thread.sleep(delay);
+							Date newNow = new Date();
+							//时间回调处理
+							if(newNow.before(now)){
+								now = newNow;
+								break;
+							}
+							now = newNow;
+							//时间回调处理结束
 						}
-						
 						time = expression.getNextValidTimeAfter(now);
 					}
 				}
 				catch (RejectedExecutionException e)
 				{
 					// Occurs if executor was already shutdown when schedule() is called
+					LOG.warn("", e);
 				}
 				catch (CancellationException e)
 				{
 					// Occurs when scheduled, but not yet executed tasks are canceled during shutdown
+					LOG.warn("", e);
 				}
 				catch (InterruptedException e)
 				{
+					LOG.warn("", e);
 					// Occurs when executing tasks are interrupted during shutdownNow()
 					Thread.currentThread().interrupt();
+				}catch (Exception e)
+				{
+					LOG.warn("", e);
 				}
 			}
 		};
