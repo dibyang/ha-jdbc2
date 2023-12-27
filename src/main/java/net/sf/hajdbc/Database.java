@@ -23,6 +23,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 import net.sf.hajdbc.codec.Decoder;
+import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.distributed.Member;
 
 /**
@@ -93,6 +94,4 @@ public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 	String getIp();
 
 	void setLocal(boolean local);
-
-	Connection getDetectConnection(Decoder decoder) throws SQLException;
 }

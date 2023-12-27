@@ -202,7 +202,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     boolean lost = (host == null);
     if(host != null){
       NodeHealth health = this.getNodeHealth(host);
-      if(health!=null&&!NodeState.host.equals(health.getState())){
+      if(health!=null&&health.getState()!=null&&!NodeState.host.equals(health.getState())){
         lost = true;
       }
 

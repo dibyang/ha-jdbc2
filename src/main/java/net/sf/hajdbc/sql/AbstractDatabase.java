@@ -17,30 +17,26 @@
  */
 package net.sf.hajdbc.sql;
 
-import java.net.InetAddress;
-import java.sql.Connection;
-import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import javax.xml.bind.annotation.XmlAttribute;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlType;
-
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.codec.Decoder;
-import net.sf.hajdbc.distributed.Member;
-import net.sf.hajdbc.logging.Level;
+import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.management.Description;
 import net.sf.hajdbc.management.ManagedAttribute;
 import net.sf.hajdbc.management.ManagedOperation;
 import net.sf.hajdbc.sql.AbstractDatabaseClusterConfiguration.Property;
-import net.sf.hajdbc.util.LocalHost;
 import net.sf.hajdbc.util.Resources;
+
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlType;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author  Paul Ferraro
@@ -69,7 +65,6 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	private Map<String, String> properties = new HashMap<String, String>();
 	private boolean dirty = false;
 	private volatile boolean active = false;
-	private volatile Connection detectConnection;
 
 	private volatile String ip=null;
 	
@@ -375,10 +370,6 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	public void setActive(boolean active)
 	{
 		this.active = active;
-		if(!active&&detectConnection!=null){
-			Resources.close(detectConnection);
-			detectConnection = null;
-		}
 	}
 
 	@Override
@@ -417,11 +408,5 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 		}
 	}
 
-	public Connection getDetectConnection(Decoder decoder) throws SQLException{
-		if(detectConnection==null){
-			detectConnection = this.connect(this.getConnectionSource(),this.decodePassword(decoder));
-		}
-		return detectConnection;
-	}
 
 }
