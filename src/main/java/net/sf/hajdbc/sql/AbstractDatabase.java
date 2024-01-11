@@ -46,6 +46,7 @@ import java.util.Map;
 public abstract class AbstractDatabase<Z> implements Database<Z>
 {
 	static final Logger logger = LoggerFactory.getLogger(AbstractDatabase.class);
+	public static final String H2 = "h2";
 
 
 	@XmlAttribute(name = "id", required = true)
@@ -123,7 +124,7 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@Override
 	public String getLocation()
 	{
-		if(this.isLocal()){
+		if(H2.equals(this.getDbType())&&this.isLocal()){
 			String url = getLocalUrl(this.location);
 			return url;
 		}
@@ -137,7 +138,7 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	}
 
 	private String getDbType(String url){
-		String type= "h2";
+		String type= H2;
 		if((url!=null)&&(url.length()>5)
 			&&(url.substring(0,5).equalsIgnoreCase("jdbc:"))){
 			int index = url.indexOf(":", 5);
