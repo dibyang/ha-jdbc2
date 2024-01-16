@@ -1,9 +1,8 @@
 package net.sf.hajdbc.state.health;
 
 import java.io.File;
-import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
+import java.io.IOException;
+import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -288,6 +287,15 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if(all.size()>=stateManager.getMembers().size()){
       //find host
       host = findNodeByState(all, NodeState.host);
+      //没有找到主再次进行选主
+      if (host == null) {
+        int liveNodeCount = getLiveNodeCount();
+        //活跃的多,但是返回的少,就下次在进行选举
+        if (liveNodeCount > 0 && liveNodeCount != all.size()) {
+          logger.info("some nodes are not responding. live node count [{}], all size [{}]", liveNodeCount, all.size());
+          return null;
+        }
+      }
       if(host!=null){
         logger.info("elect host by host state. host={}", host);
       }else{
@@ -341,6 +349,26 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
     return host;
 
+  }
+
+  private int getLiveNodeCount() {
+    List<String> remoteIps = this.arbiter.getRemoteIp();
+    int liveNodeCount = 0;
+    //自身
+    liveNodeCount++;
+    if (remoteIps == null) {
+      return liveNodeCount;
+    }
+    for (String ip : remoteIps) {
+      try (Socket socket = new Socket()) {
+        logger.info("ready connect node [{}]", ip);
+        socket.connect(new InetSocketAddress(ip, 7800), 1000);
+        logger.info("connect node [{}] success", ip);
+        liveNodeCount++;
+      } catch (IOException ignored) {
+      }
+    }
+    return liveNodeCount;
   }
 
   @Override
