@@ -362,7 +362,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     for (String ip : remoteIps) {
       try (Socket socket = new Socket()) {
         logger.info("ready connect node [{}]", ip);
-        socket.connect(new InetSocketAddress(ip, 7800), 1000);
+        socket.connect(new InetSocketAddress(ip, Integer.parseInt(System.getProperty("jgroups.tcpping.initial_hosts", "7800"), 1000)));
         logger.info("connect node [{}] success", ip);
         liveNodeCount++;
       } catch (IOException ignored) {
@@ -761,7 +761,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         return nic.isUp();
       } catch (SocketException e) {
         logger.warn("is up fail.", e);
-        return false;
+        return true;
       }
     }else{
       logger.info("not find nic for ip {}", ip);
