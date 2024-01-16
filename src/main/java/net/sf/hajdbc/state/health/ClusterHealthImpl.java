@@ -761,7 +761,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         return nic.isUp();
       } catch (SocketException e) {
         logger.warn("is up fail.", e);
-        return true;
+        return false;
       }
     }else{
       logger.info("not find nic for ip {}", ip);
