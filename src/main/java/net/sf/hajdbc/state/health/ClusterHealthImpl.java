@@ -254,7 +254,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
             Thread.sleep(waitTime * 1000);
             if (waitTime < 16) {
               long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
-              if(costTime>8000) {
+              //10s内等待时间不延长
+              if(costTime>10000) {
                 waitTime = waitTime * 2;
               }
             }
@@ -300,6 +301,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         if(host!=null){
           logger.info("elect host by backup state. host={}", host);
         }else{
+          //8s内不单节点选主
           if(costTime< 8000){
             return null;
           }
