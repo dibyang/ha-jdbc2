@@ -315,10 +315,8 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void added(Member member)
 	{
-
 		this.remoteInvokerMap.putIfAbsent(member, new HashMap<InvocationEvent, Map<String, InvokerEvent>>());
 		members.add(member);
-
 		checkMemberDatabaseConfig(member);
 
 		Iterator<MembershipListener> iterator = membershipListeners.iterator();
@@ -344,12 +342,15 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private void checkMemberDatabaseConfig(Member member) {
 		if(!member.equals(getLocal())){
 			String ip = getIp(member);
-			D database = cluster.getDatabaseByIp(ip);
-			if(database==null){
-				D db = (D)execute(getDatabaseCommand, member);
-				if(db!=null){
-					db.setLocal(false);
-					cluster.addDatabase(db);
+			if(ip!=null) {
+				D database = cluster.getDatabaseByIp(ip);
+				if (database == null) {
+					logger.log(Level.INFO, "checkMemberDatabaseConfig member={0}, ip={1}", member, ip);
+					D db = (D) execute(getDatabaseCommand, member);
+					if (db != null) {
+						db.setLocal(false);
+						cluster.addDatabase(db);
+					}
 				}
 			}
 		}
