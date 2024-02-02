@@ -22,7 +22,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 
-public class H2RunScriptCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D, Boolean> {
+public class H2RunScriptCommand implements SyncCommand<Boolean> {
   static final Logger logger = LoggerFactory.getLogger(H2RunScriptCommand.class);
 
   private String path;
@@ -37,10 +37,10 @@ public class H2RunScriptCommand<Z, D extends Database<Z>> implements SyncCommand
   }
 
   @Override
-  public Boolean execute(StateCommandContext<Z, D> context) {
+  public Boolean execute(StateCommandContext context) {
     try {
       if(path!=null) {
-        D database = context.getDatabaseCluster().getLocalDatabase();
+        Database database = context.getDatabaseCluster().getLocalDatabase();
         Decoder decoder = context.getDatabaseCluster().getDecoder();
         DbRestore dbRestore = new DbRestore();
         return dbRestore.restore(database, decoder, Paths.get(path).toFile());

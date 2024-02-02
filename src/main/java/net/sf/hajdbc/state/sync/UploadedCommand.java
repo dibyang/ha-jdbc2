@@ -1,7 +1,5 @@
 package net.sf.hajdbc.state.sync;
 
-import net.sf.hajdbc.Database;
-import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -17,7 +15,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 
-public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D, Boolean> {
+public class UploadedCommand implements SyncCommand<Boolean> {
   static final Logger logger = LoggerFactory.getLogger(UploadedCommand.class);
   public static final String TMP_FILE_SUFFIX = ".tmp";
   public static final int BUFFER_SIZE = 64 * 1024;
@@ -59,7 +57,7 @@ public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z,
   }
 
   @Override
-  public Boolean execute(StateCommandContext<Z, D> context) {
+  public Boolean execute(StateCommandContext context) {
     String path2 = path + TMP_FILE_SUFFIX;
     File file = new File(path2);
     if(file.exists()){

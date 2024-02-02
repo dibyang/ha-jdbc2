@@ -1,7 +1,6 @@
 package net.sf.hajdbc.state.sync;
 
 import net.sf.hajdbc.Database;
-import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
@@ -10,11 +9,11 @@ import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.util.MD5;
 import net.sf.hajdbc.util.StopWatch;
 
-
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 
 public class SyncMgrImpl implements SyncMgr{
@@ -28,8 +27,12 @@ public class SyncMgrImpl implements SyncMgr{
   }
 
   @Override
-  public boolean upload(Database db, File file) {
-    Member target = this.getMember(db);
+  public boolean upload(Member target, File file) {
+    return upload(target, file, file.getPath());
+  }
+
+  @Override
+  public boolean upload(Member target, File file, String path) {
     if(target!=null) {
       StopWatch stopWatch = StopWatch.createStarted();
       MessageDigest md = MD5.newInstance();
@@ -38,7 +41,7 @@ public class SyncMgrImpl implements SyncMgr{
         int len = 0;
         int offset = 0;
         UploadCommand cmd = new UploadCommand();
-        cmd.setPath(file.getPath());
+        cmd.setPath(path);
         while ((len = fis.read(buffer)) != -1) {
           cmd.setOffset(offset);
           byte[] data = new byte[len];
@@ -53,7 +56,7 @@ public class SyncMgrImpl implements SyncMgr{
           }
         }
         UploadedCommand cmd2 = new UploadedCommand();
-        cmd2.setPath(file.getPath());
+        cmd2.setPath(path);
         cmd2.setSize(file.length());
         cmd2.setMd5(MD5.md5DigestToString(md.digest()));
         cmd2.setNanos(stopWatch.getNanoTime());
@@ -69,68 +72,62 @@ public class SyncMgrImpl implements SyncMgr{
   }
 
   @Override
-  public boolean download(Database db, File file) {
+  public boolean download(Member target, File file) {
+    return download(target, file, file.getPath());
+  }
+
+  @Override
+  public boolean download(Member target, File file, String path) {
     boolean r = false;
-    Member target = this.getMember(db);
     if(target!=null) {
       StopWatch stopWatch = StopWatch.createStarted();
       DownloadCommand downloadCommand = new DownloadCommand();
-      downloadCommand.setPath(file.getPath());
-      while (true) {
-        Block block = this.execute(target, downloadCommand);
-        if(block!=null){
-          if(block.getLength()>0) {
-            if(block.getSize()>0&&block.getData()!=null) {
-              try (RandomAccessFile raf = new RandomAccessFile(file, "rws")) {
-                raf.seek(block.getOffset());
-                raf.write(block.getData(), 0, block.getSize());
-              } catch (IOException e) {
-                logger.log(Level.WARN, e);
+      if(path!=null){
+        downloadCommand.setPath(path);
+      }else{
+        downloadCommand.setPath(file.getPath());
+      }
+      long offset = 0;
+      try (RandomAccessFile raf = new RandomAccessFile(file, "rws")) {
+        if(offset>0){
+          raf.seek(offset);
+        }
+        while (true) {
+          downloadCommand.setOffset(offset);
+          Block block = this.execute(target, downloadCommand);
+          if(block!=null){
+            if(block.getLength()>0) {
+              if(block.getSize()>0&&block.getData()!=null) {
+                MessageDigest md = MD5.newInstance();
+                md.update(block.getData(),0, block.getSize());
+                String md5 = MD5.md5DigestToString(md.digest());
+                if(md5.equals(block.getMd5())) {
+                  raf.write(block.getData(), 0, block.getSize());
+                  offset += block.getSize();
+                }
               }
-            }
-            if(file.length()>=block.getLength()){
+              if(file.length()>=block.getLength()){
+                r = true;
+                break;
+              }
+            }else{
               r = true;
               break;
             }
           }else{
-            r = true;
             break;
           }
-        }else{
-          break;
         }
+      } catch (IOException e) {
+        logger.log(Level.WARN, e);
       }
+
       stopWatch.stop();
       logger.log(Level.INFO,"download file path={0} size={1} r={2} time={3}", file.getPath(),file.length(), r, stopWatch.toString());
     }
     return r;
   }
 
-  private Block execute(Member target, DownloadCommand cmd) {
-    int fails = 0;
-    while(fails<3) {
-      Block r = (Block)stateManager.execute(cmd, target);
-      if (r != null) {
-        return r;
-      } else {
-        fails += 1;
-      }
-    }
-    return null;
-  }
-
-  private boolean execute(Member target, Command cmd) {
-    int fails = 0;
-    while(fails<3) {
-      Object r = stateManager.execute(cmd, target);
-      if (r != null && r.equals(Boolean.TRUE)) {
-        return true;
-      } else {
-        fails += 1;
-      }
-    }
-    return false;
-  }
 
   @Override
   public Member getMember(Database db) {
@@ -138,11 +135,16 @@ public class SyncMgrImpl implements SyncMgr{
   }
 
   @Override
-  public boolean execute(Database db, Command cmd) {
-    Member member = getMember(db);
-    if(member!=null) {
-      return execute(member, cmd);
+  public <R> R execute(Member target, SyncCommand<R> cmd) {
+    int fails = 0;
+    while(fails<3) {
+      R r = (R)stateManager.execute(cmd, target);
+      if (r != null) {
+        return r;
+      } else {
+        fails += 1;
+      }
     }
-    return false;
+    return null;
   }
 }

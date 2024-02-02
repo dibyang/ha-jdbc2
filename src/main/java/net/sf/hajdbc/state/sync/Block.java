@@ -1,19 +1,13 @@
 package net.sf.hajdbc.state.sync;
 
-public class Block {
+import java.io.Serializable;
+
+public class Block implements Serializable {
   private long length;
-  private long offset;
   private byte[] data;
   private int size;
+  private String md5;
 
-
-  public long getOffset() {
-    return offset;
-  }
-
-  public void setOffset(long offset) {
-    this.offset = offset;
-  }
 
   public byte[] getData() {
     return data;
@@ -37,5 +31,13 @@ public class Block {
 
   public void setSize(int size) {
     this.size = size;
+  }
+
+  public String getMd5() {
+    return md5;
+  }
+
+  public void setMd5(String md5) {
+    this.md5 = md5;
   }
 }

@@ -97,7 +97,8 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 			}
 			finally
 			{
-				Files.delete(file);
+				//不再删除该文件
+				//Files.delete(file);
 			}
 		}
 		catch (Exception e)
