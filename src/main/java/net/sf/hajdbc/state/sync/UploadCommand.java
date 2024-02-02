@@ -10,7 +10,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 
-public class UploadCommand <Z, D extends Database<Z>> implements SyncCommand<Z, D> {
+public class UploadCommand <Z, D extends Database<Z>> implements SyncCommand<Z, D, Boolean> {
   static final Logger logger = LoggerFactory.getLogger(UploadCommand.class);
 
   public static final String TMP_FILE_SUFFIX = ".tmp";

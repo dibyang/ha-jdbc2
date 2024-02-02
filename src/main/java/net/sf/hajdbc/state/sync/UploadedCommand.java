@@ -17,7 +17,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 
-public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D> {
+public class UploadedCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D, Boolean> {
   static final Logger logger = LoggerFactory.getLogger(UploadedCommand.class);
   public static final String TMP_FILE_SUFFIX = ".tmp";
   public static final int BUFFER_SIZE = 64 * 1024;

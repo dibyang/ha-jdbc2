@@ -24,7 +24,7 @@ import java.util.zip.ZipInputStream;
 
 
 
-public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D> {
+public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D, Boolean> {
   static final Logger logger = LoggerFactory.getLogger(H2RestoreCommand.class);
 
   private String path;

@@ -186,14 +186,22 @@ public class H2Dialect extends StandardDialect
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		StopWatch stopWatch = StopWatch.createStarted();
-		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
-		if(syncMgr.sync(database,file)){
-			H2RunScriptCommand cmd = new H2RunScriptCommand();
-			cmd.setPath(file.getPath());
-			syncMgr.execute(database, cmd);
-			stopWatch.stop();
-			logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
+		if(database.isLocal()) {
+			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+			if(syncMgr.download(database,file)){
+				DbRestore dbRestore = new DbRestore();
+				dbRestore.restore(database, decoder, file);
+			}
+		}else{
+			StopWatch stopWatch = StopWatch.createStarted();
+			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+			if(syncMgr.upload(database,file)){
+				H2RunScriptCommand cmd = new H2RunScriptCommand();
+				cmd.setPath(file.getPath());
+				syncMgr.execute(database, cmd);
+				stopWatch.stop();
+				logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
+			}
 		}
 	}
 
