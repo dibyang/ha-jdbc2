@@ -189,7 +189,7 @@ public class H2Dialect extends StandardDialect
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		if(database.isLocal()) {
 			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
-			Member target = syncMgr.getMember(database);
+			Member target = syncMgr.getMember(context.getSourceDatabase());
 			if(syncMgr.download(target,file)){
 				DbRestore dbRestore = new DbRestore();
 				dbRestore.restore(database, decoder, file);
