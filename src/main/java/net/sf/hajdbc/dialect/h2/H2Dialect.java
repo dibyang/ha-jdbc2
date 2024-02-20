@@ -20,6 +20,7 @@ package net.sf.hajdbc.dialect.h2;
 import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.StandardDialect;
+import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -186,14 +187,24 @@ public class H2Dialect extends StandardDialect
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		StopWatch stopWatch = StopWatch.createStarted();
-		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
-		if(syncMgr.sync(database,file)){
-			H2RunScriptCommand cmd = new H2RunScriptCommand();
-			cmd.setPath(file.getPath());
-			syncMgr.execute(database, cmd);
-			stopWatch.stop();
-			logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
+		if(database.isLocal()) {
+			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+			Member target = syncMgr.getMember(context.getSourceDatabase());
+			if(syncMgr.download(target,file)){
+				DbRestore dbRestore = new DbRestore();
+				dbRestore.restore(database, decoder, file);
+			}
+		}else{
+			StopWatch stopWatch = StopWatch.createStarted();
+			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+			Member target = syncMgr.getMember(database);
+			if(syncMgr.upload(target,file)){
+				H2RunScriptCommand cmd = new H2RunScriptCommand();
+				cmd.setPath(file.getPath());
+				syncMgr.execute(target, cmd);
+				stopWatch.stop();
+				logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
+			}
 		}
 	}
 

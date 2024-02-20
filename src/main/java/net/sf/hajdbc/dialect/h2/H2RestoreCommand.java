@@ -24,7 +24,7 @@ import java.util.zip.ZipInputStream;
 
 
 
-public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z, D> {
+public class H2RestoreCommand implements SyncCommand<Boolean> {
   static final Logger logger = LoggerFactory.getLogger(H2RestoreCommand.class);
 
   private String path;
@@ -38,9 +38,9 @@ public class H2RestoreCommand<Z, D extends Database<Z>> implements SyncCommand<Z
   }
 
   @Override
-  public Boolean execute(StateCommandContext<Z, D> context) {
+  public Boolean execute(StateCommandContext context) {
     try {
-      D database = context.getDatabaseCluster().getLocalDatabase();
+      Database database = context.getDatabaseCluster().getLocalDatabase();
       Decoder decoder = context.getDatabaseCluster().getDecoder();
       final String password = database.decodePassword(decoder);
       try(Connection connection = database.connect(database.getConnectionSource(), password);

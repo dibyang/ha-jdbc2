@@ -88,7 +88,8 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 		
 		try
 		{
-			File file = Files.createTempFile(DUMP_FILE_SUFFIX);
+			String dbId = context.getSourceDatabase().getId();
+			File file = Files.createTempFile("_"+dbId +DUMP_FILE_SUFFIX);
 			
 			try
 			{
@@ -97,7 +98,8 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 			}
 			finally
 			{
-				Files.delete(file);
+				//不再删除该文件
+				//Files.delete(file);
 			}
 		}
 		catch (Exception e)

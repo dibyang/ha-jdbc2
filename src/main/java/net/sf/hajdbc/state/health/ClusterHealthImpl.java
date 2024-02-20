@@ -252,7 +252,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
             logger.info("can not elect host node. try elect again after " + waitTime + "s");
             Thread.sleep(waitTime * 1000);
             if (waitTime < 16) {
-              waitTime = waitTime * 2;
+              long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
+              //10s内等待时间不延长
+              if(costTime>10000) {
+                waitTime = waitTime * 2;
+              }
             }
           } else {
             break;
@@ -282,7 +286,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
     //delete invalid data.
     remveInvalidReceive(all);
-
+    //毫秒
+    long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
     Entry<Member, NodeHealth> host = null;
     if(all.size()>=stateManager.getMembers().size()){
       //find host
@@ -304,6 +309,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         if(host!=null){
           logger.info("elect host by backup state. host={}", host);
         }else{
+          //8s内不单节点选主
+          if(costTime< 8000){
+            return null;
+          }
           //not find backup node. find by valid local node
           host = findNodeByValidLocal(all);
           if(host!=null){
@@ -326,9 +335,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
                 if(host!=null){
                   logger.info("elect any node by ge min node count. host={}", host);
                 }else{
-                  long time = System.nanoTime() - beginElectTime;
+
                   //选举超时
-                  if((TimeUnit.NANOSECONDS.toMillis(time) > getMaxElectTime())){
+                  if((costTime > getMaxElectTime())){
                     host = findNodeByToken(all);
                   }
                   if(host!=null){
