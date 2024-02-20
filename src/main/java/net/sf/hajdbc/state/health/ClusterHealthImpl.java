@@ -366,7 +366,6 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     Map<String, String> nodeMap = getNodePort();
     for (Entry<String, String> entry : nodeMap.entrySet()) {
       try (Socket socket = new Socket()) {
-        logger.info("ready connect node [{}]", entry.getKey());
         //默认超时时间为1s
         socket.connect(new InetSocketAddress(entry.getKey(), Integer.parseInt(entry.getValue())), 1000);
         logger.info("connect node [{}] success", entry.getKey());
