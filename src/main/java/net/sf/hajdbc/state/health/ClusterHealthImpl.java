@@ -11,6 +11,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
+
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
@@ -26,6 +27,8 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import javax.swing.*;
 
 public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClusterListener {
 
@@ -67,38 +70,36 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private final AtomicInteger dbInActivated = new AtomicInteger();
   private final AtomicInteger unObservable = new AtomicInteger();
 
-  private final ScheduledExecutorService scheduledService = Executors.newScheduledThreadPool(1,
-      HaJdbcThreadFactory.c("cluster-health-Thread"));
+  private final ScheduledExecutorService scheduledService = Executors.newScheduledThreadPool(1, HaJdbcThreadFactory.c("cluster-health-Thread"));
 
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
     this.stateManager = stateManager;
     this.stateManager.getDatabaseCluster().addListener(this);
     executorService = Executors.newFixedThreadPool(3, HaJdbcThreadFactory.c("cluster-executor-Thread"));
-    stateManager.setExtContext(ClusterHealth.class.getName(),this);
+    stateManager.setExtContext(ClusterHealth.class.getName(), this);
     fileWatchDog = new FileWatchDog(new File("/proc/mounts"), MountPathHolder.H);
     arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
   }
 
   @Override
-  public void start(){
+  public void start() {
     fileWatchDog.watch();
     String localIp = stateManager.getLocalIp();
     arbiter.setLocalIp(localIp);
     arbiter.setIps(this.stateManager.getDatabaseCluster().getNodes());
     this.run();
-    scheduledService.scheduleWithFixedDelay(this,500,500, TimeUnit.MILLISECONDS);
+    scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
   }
 
 
-
   @Override
-  public void stop(){
+  public void stop() {
     scheduledService.shutdown();
   }
 
   @Override
-  public NodeHealth getNodeHealth(){
+  public NodeHealth getNodeHealth() {
     NodeHealth health = new NodeHealth();
     health.setState(state);
     health.setLastOnlyHost(arbiter.getLocalTokenStore().isOnlyHost());
@@ -113,7 +114,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public NodeHealth getNodeHealth(Member member) {
     NodeHealthCommand cmd = new NodeHealthCommand();
-    return (NodeHealth) stateManager.execute(cmd,member);
+    return (NodeHealth) stateManager.execute(cmd, member);
   }
 
 
@@ -121,11 +122,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * Receive host node heart beat.
    */
   @Override
-  public void receiveHeartbeat(long sendTime){
+  public void receiveHeartbeat(long sendTime) {
     logger.debug("receive host heart beat.");
     DateTime now = new DateTime();
-    long offset = ((sendTime - now.getMillis())/1000)*1000;
-    if(offset!=offsetTime) {
+    long offset = ((sendTime - now.getMillis()) / 1000) * 1000;
+    if (offset != offsetTime) {
       offsetTime = offset;
       DateTimeUtils.setCurrentMillisOffset(offsetTime);
     }
@@ -155,35 +156,35 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   @Override
-  public boolean isHost(){
+  public boolean isHost() {
     return NodeState.host.equals(state);
   }
 
   @Override
   public void setState(NodeState state) {
-    if(state==null){
+    if (state == null) {
       state = NodeState.offline;
     }
-    if(!state.equals(this.state)){
-      NodeState old  = this.state;
+    if (!state.equals(this.state)) {
+      NodeState old = this.state;
       this.state = state;
-      changeState(old,this.state);
+      changeState(old, this.state);
     }
   }
 
-  void changeState(NodeState oldState,NodeState newState){
-    logger.info("node state from "+oldState+" to "+newState);
-    stateManager.getDatabaseCluster().changeState(oldState,newState);
+  void changeState(NodeState oldState, NodeState newState) {
+    logger.info("node state from " + oldState + " to " + newState);
+    stateManager.getDatabaseCluster().changeState(oldState, newState);
   }
 
   @Override
-  public void incrementToken(){
-    nodeUpdated.compareAndSet(false,true);
+  public void incrementToken() {
+    nodeUpdated.compareAndSet(false, true);
   }
 
   @Override
-  public void updateToken(long token){
-    if(canWrite()){
+  public void updateToken(long token) {
+    if (canWrite()) {
       arbiter.update(token);
     }
   }
@@ -191,17 +192,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   /**
    * Send heartbeat.
    */
-  private void sendHeartbeat(){
-    stateManager.executeAll(beatCommand.preSend(),stateManager.getLocal());
+  private void sendHeartbeat() {
+    stateManager.executeAll(beatCommand.preSend(), stateManager.getLocal());
     logger.debug("host send heart beat end.");
   }
 
 
-  private boolean isLostHost(){
+  private boolean isLostHost() {
     boolean lost = (host == null);
-    if(host != null){
+    if (host != null) {
       NodeHealth health = this.getNodeHealth(host);
-      if(health!=null&&health.getState()!=null&&!NodeState.host.equals(health.getState())){
+      if (health != null && health.getState() != null && !NodeState.host.equals(health.getState())) {
         lost = true;
       }
 
@@ -211,20 +212,21 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   /**
    * Returns can it elect.
+   *
    * @return Can it elect.
    */
-  private boolean canElect(){
-    if(isUp()){
-      if(arbiter.isObservable(false)){
+  private boolean canElect() {
+    if (isUp()) {
+      if (arbiter.isObservable(false)) {
         DatabaseCluster cluster = stateManager.getDatabaseCluster();
         Database database = cluster.getLocalDatabase();
-        if(cluster.isAlive(database, Level.WARN)) {
+        if (cluster.isAlive(database, Level.WARN)) {
           return true;
-        }else{
+        } else {
           logger.info("database not active.");
         }
       }
-    }else{
+    } else {
       logger.info("nic is down.");
     }
     return false;
@@ -238,9 +240,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     this.readyElect = true;
     Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(HOST_ELECT);
     lock.lockInterruptibly();
-    try{
+    try {
       //如果有别的节点完成选主了的话直接跳过，否者继续选主
-      if(readyElect) {
+      if (readyElect) {
         logger.info("host elect begin.");
         StopWatch stopWatch = StopWatch.createStarted();
         long waitTime = 1;
@@ -254,7 +256,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
             if (waitTime < 16) {
               long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
               //10s内等待时间不延长
-              if(costTime>10000) {
+              if (costTime > 10000) {
                 waitTime = waitTime * 2;
               }
             }
@@ -273,9 +275,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         }
         logger.info("host elect end. cost time:{}", stopWatch.toString());
       }
-    }catch (Exception e){
-      logger.warn("",e);
-    }finally {
+    } catch (Exception e) {
+      logger.warn("", e);
+    } finally {
       lock.unlock();
     }
 
@@ -289,7 +291,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     //毫秒
     long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
     Entry<Member, NodeHealth> host = null;
-    if(all.size()>=stateManager.getMembers().size()){
+    if (all.size() >= stateManager.getMembers().size()) {
       //find host
       host = findNodeByState(all, NodeState.host);
       //没有找到主再次进行选主
@@ -301,46 +303,46 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           return null;
         }
       }
-      if(host!=null){
+      if (host != null) {
         logger.info("elect host by host state. host={}", host);
-      }else{
+      } else {
         //not find host node. find backup node
         host = findNodeByState(all, NodeState.backup);
-        if(host!=null){
+        if (host != null) {
           logger.info("elect host by backup state. host={}", host);
-        }else{
+        } else {
           //8s内不单节点选主
-          if(costTime< 8000){
+          if (costTime < 8000) {
             return null;
           }
           //not find backup node. find by valid local node
           host = findNodeByValidLocal(all);
-          if(host!=null){
+          if (host != null) {
             logger.info("elect host by valid local. host={}", host);
-          }else{
+          } else {
             //not find valid local node. find last only host node
             host = findNodeByLastOnlyHost(all);
-            if(host!=null){
+            if (host != null) {
               logger.info("elect host by only host. host={}", host);
-            }else{
+            } else {
               //not find last only host node. find empty node
               host = findNodeByEmpty(all);
-              if(host!=null){
+              if (host != null) {
                 logger.info("elect host by empty node. host={}", host);
-              }else{
+              } else {
                 //满足最小节点数
-                if(all.size()>=getMinNodeCount()){
+                if (all.size() >= getMinNodeCount()) {
                   host = findNodeByToken(all);
                 }
-                if(host!=null){
+                if (host != null) {
                   logger.info("elect any node by ge min node count. host={}", host);
-                }else{
+                } else {
 
                   //选举超时
-                  if((costTime > getMaxElectTime())){
+                  if ((costTime > getMaxElectTime())) {
                     host = findNodeByToken(all);
                   }
-                  if(host!=null){
+                  if (host != null) {
                     logger.info("elect any node by ge max elect time. host={}", host);
                   }
                 }
@@ -350,10 +352,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         }
       }
 
-      if(host!=null){
-        logger.info("find host node "+host.getKey()+".");
+      if (host != null) {
+        logger.info("find host node " + host.getKey() + ".");
       }
-    }else{
+    } else {
       logger.info("some nodes are not responding.");
     }
     return host;
@@ -361,60 +363,71 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   private int getLiveNodeCount() {
-    List<String> remoteIps = this.arbiter.getRemoteIp();
     int liveNodeCount = 0;
-    //自身
-    liveNodeCount++;
-    if (remoteIps == null) {
-      return liveNodeCount;
-    }
-    for (String ip : remoteIps) {
+    //ip 和端口对应关系
+    Map<String, String> nodeMap = getNodePort();
+    for (Entry<String, String> entry : nodeMap.entrySet()) {
       try (Socket socket = new Socket()) {
-        logger.info("ready connect node [{}]", ip);
-        socket.connect(new InetSocketAddress(ip, Integer.parseInt(System.getProperty("jgroups.tcp_port", "7800"))),1000);
-        logger.info("connect node [{}] success", ip);
+        logger.info("ready connect node [{}]", entry.getKey());
+        //默认超时时间为1s
+        socket.connect(new InetSocketAddress(entry.getKey(), Integer.parseInt(entry.getValue())), 1000);
+        logger.info("connect node [{}] success", entry.getKey());
         liveNodeCount++;
       } catch (IOException ignored) {
+        logger.info("connect node [{}] failed", entry.getKey());
       }
     }
     return liveNodeCount;
   }
 
+  private Map<String, String> getNodePort() {
+    Map<String, String> nodeMap = new HashMap<>();
+    String[] lines = System.getProperty("jgroups.tcpping.initial_hosts").split(",");
+    for (String line : lines) {
+      String ip = line.substring(0, line.indexOf("["));
+      String port = line.substring(line.indexOf("[") + 1, line.indexOf("]"));
+      if (!ip.isEmpty() && !port.isEmpty()) {
+        nodeMap.put(ip, port);
+      }
+    }
+    return nodeMap;
+  }
+
   @Override
   public long getMaxElectTime() {
-    long maxElectTime =  DEFAULT_MAX_ELECT_TIME;
+    long maxElectTime = DEFAULT_MAX_ELECT_TIME;
     try {
       maxElectTime = Long.parseLong(System.getProperty(MAX_ELECT_TIME, String.valueOf(DEFAULT_MAX_ELECT_TIME)));
-    }catch (NumberFormatException e){
+    } catch (NumberFormatException e) {
       logger.warn("MAX_ELECT_TIME format is error.", e);
     }
     return maxElectTime;
   }
 
-  private int getMinNodeCount(){
+  private int getMinNodeCount() {
     int count = stateManager.getDatabaseCluster().getNodeCount();
     return count;
   }
 
   @Override
-  public void host(Member host, long token){
+  public void host(Member host, long token) {
     this.host = host;
-    if(host!=null){
-      if(stateManager.getLocal().equals(host)){
-        if(!state.equals(NodeState.host)){
+    if (host != null) {
+      if (stateManager.getLocal().equals(host)) {
+        if (!state.equals(NodeState.host)) {
           setState(NodeState.host);
           DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
           Database database = databaseCluster.getLocalDatabase();
-          if(!database.isActive()){
+          if (!database.isActive()) {
             stateManager.activated(new DatabaseEvent(database));
             databaseCluster.getBalancer().add(database);
             database.setActive(true);
           }
         }
-      }else{
+      } else {
         setState(NodeState.ready);
       }
-    }else{
+    } else {
       //setState(NodeState.offline);
     }
     //选主结束
@@ -429,11 +442,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private Entry<Member, NodeHealth> findNodeByToken(Map<Member, NodeHealth> all) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()) {
+    while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null) {
-        if(find==null||health.getLocal()>find.getValue().getLocal()){
+        if (find == null || health.getLocal() > find.getValue().getLocal()) {
           find = next;
         }
       }
@@ -444,7 +457,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private Entry<Member, NodeHealth> findNodeByEmpty(Map<Member, NodeHealth> all) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()) {
+    while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null && health.isEmpty()) {
@@ -459,11 +472,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private Entry<Member, NodeHealth> findNodeByLastOnlyHost(Map<Member, NodeHealth> all) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()) {
+    while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null && health.isLastOnlyHost()) {
-        if(find==null||health.getLocal()>find.getValue().getLocal()){
+        if (find == null || health.getLocal() > find.getValue().getLocal()) {
           find = next;
         }
       }
@@ -474,7 +487,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private Entry<Member, NodeHealth> findNodeByValidLocal(Map<Member, NodeHealth> all) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()) {
+    while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null && health.isValidLocal()) {
@@ -485,10 +498,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return find;
   }
 
-  private Entry<Member, NodeHealth> findNodeByState(Map<Member, NodeHealth> all,NodeState state) {
+  private Entry<Member, NodeHealth> findNodeByState(Map<Member, NodeHealth> all, NodeState state) {
     Entry<Member, NodeHealth> find = null;
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
-    while(iterator.hasNext()) {
+    while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null && health.getState().equals(state)) {
@@ -502,12 +515,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   /**
    * 30以上次才认为数据库不是活的
+   *
    * @param database
    * @return
    */
-  private boolean isActiveLocalDb(Database database){
+  private boolean isActiveLocalDb(Database database) {
     boolean active = true;
-    if(!database.getDbType().equalsIgnoreCase("h2")) {
+    if (!database.getDbType().equalsIgnoreCase("h2")) {
       if (database != null && !database.isActive()) {
         dbInActivated.incrementAndGet();
       } else {
@@ -522,28 +536,27 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
 
-  private int getMaxUnobservable(){
-    int maxUnobservable = maxUnobservableReader
-        .getData(MAX_UNOBSERVABLE);
-    if(maxUnobservable<1){
+  private int getMaxUnobservable() {
+    int maxUnobservable = maxUnobservableReader.getData(MAX_UNOBSERVABLE);
+    if (maxUnobservable < 1) {
       maxUnobservable = 1;
     }
-    if(maxUnobservable>100){
+    if (maxUnobservable > 100) {
       maxUnobservable = 100;
     }
     return maxUnobservable;
   }
 
-  private boolean isObservable(){
+  private boolean isObservable() {
     boolean observable = true;
-    if(!arbiter.isObservable(true)){
+    if (!arbiter.isObservable(true)) {
       unObservable.incrementAndGet();
-    }else{
-      if(arbiter.isObservable(false)) {
+    } else {
+      if (arbiter.isObservable(false)) {
         unObservable.set(0);
       }
     }
-    if(unObservable.get()> getMaxUnobservable()){
+    if (unObservable.get() > getMaxUnobservable()) {
       observable = false;
       dbInActivated.set(0);
     }
@@ -552,28 +565,29 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   /**
    * Does it need to be down.
+   *
    * @return Does it need to be down?
    */
-  private boolean isNeedDown(){
+  private boolean isNeedDown() {
     boolean up = isUp();
     boolean observable = isObservable();
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
     boolean active = isActiveLocalDb(database);
-    String db = database!=null?database.getId():"";
-    if(!up ||!active){
-      logger.warn("node need down. up={}, observable={}, db active={} db={}",up,observable,active, db);
+    String db = database != null ? database.getId() : "";
+    if (!up || !active) {
+      logger.warn("node need down. up={}, observable={}, db active={} db={}", up, observable, active, db);
       return true;
-    }else if(!observable){
+    } else if (!observable) {
       Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(NODE_DOWN_LOCK);
       try {
         lock.lockInterruptibly();
         try {
           Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand, this.stateManager.getLocal());
           remveInvalidReceive(all);
-          if(all.size()>0){
+          if (all.size() > 0) {
             for (Member member : all.keySet()) {
               NodeState nodeState = all.get(member).getState();
-              if(nodeState.isCanUpdate()){
+              if (nodeState.isCanUpdate()) {
                 logger.warn("node need down. observable={} find node {} state:{}", observable, member, nodeState);
                 return true;
               }
@@ -583,14 +597,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           lock.unlock();
         }
         logger.warn("observable={}, online node is not find. node can not down.", observable);
-      }catch (Exception e){
+      } catch (Exception e) {
         //ignore e
       }
     }
     return false;
   }
 
-  private void downNode(){
+  private void downNode() {
     setState(NodeState.offline);
   }
 
@@ -599,28 +613,27 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public void run() {
     fileWatchDog.watch();
     try {
-      if(NodeState.host.equals(state)){
+      if (NodeState.host.equals(state)) {
         watchHostNode();
-      }else {
+      } else {
         watchNotHostNode();
       }
 
-    }catch (Exception e){
-      logger.warn("",e);
+    } catch (Exception e) {
+      logger.warn("", e);
     }
   }
 
   private void watchHostNode() throws InterruptedException {
-    if(findOtherHost()){
-      if(canElect()){
+    if (findOtherHost()) {
+      if (canElect()) {
         elect();
       }
-    }else{
-      if(isNeedDown()){
+    } else {
+      if (isNeedDown()) {
         downNode();
-      }else
-      {
-        arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size()<2));
+      } else {
+        arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size() < 2));
         sendHeartbeat();
         executorService.submit(new Runnable() {
           @Override
@@ -634,21 +647,21 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private void watchNotHostNode() throws InterruptedException {
     DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-    if(NodeState.backup.equals(state)||NodeState.ready.equals(state)){
+    if (NodeState.backup.equals(state) || NodeState.ready.equals(state)) {
       arbiter.getLocalTokenStore().setOnlyHost(false);
-      if(NodeState.backup.equals(state)){
-        if(isNeedDown()) {
+      if (NodeState.backup.equals(state)) {
+        if (isNeedDown()) {
           downNode();
         }
-      }else{
-        if(isActiveNode(databaseCluster)) {
+      } else {
+        if (isActiveNode(databaseCluster)) {
           setState(NodeState.backup);
         }
       }
-      if(this.isLostHost()){
-        if(canElect()){
+      if (this.isLostHost()) {
+        if (canElect()) {
           elect();
-        }else if(NodeState.backup.equals(state)){
+        } else if (NodeState.backup.equals(state)) {
           //自己backup, 主丢失可以正常通信就再次选主
           NodeHealth health = this.getNodeHealth(host);
           if (health != null && !NodeState.host.equals(health.getState())) {
@@ -656,17 +669,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           }
         }
       }
-    }else{
-      if(canElect()){
+    } else {
+      if (canElect()) {
         elect();
       }
-      if(NodeState.offline.equals(state)) {
+      if (NodeState.offline.equals(state)) {
         Database database = databaseCluster.getLocalDatabase();
         if (database.isActive()) {
           databaseCluster.deactivate(database, stateManager);
         }
         //移除其它的数据库
-        if(databaseCluster.getBalancer().size()>0) {
+        if (databaseCluster.getBalancer().size() > 0) {
           databaseCluster.getBalancer().clear();
         }
       }
@@ -684,21 +697,21 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           break;
         }
       }
-    }catch (Exception e){
+    } catch (Exception e) {
       e.printStackTrace();
       active = false;
     }
     return active;
   }
 
-  private boolean isTrace(){
+  private boolean isTrace() {
     return Files.exists(Paths.get("/etc/ha-jdbc/trace/health"));
   }
 
   private void updateNewToken() {
-    if(nodeUpdated.compareAndSet(true, false)) {
+    if (nodeUpdated.compareAndSet(true, false)) {
       long newToken = arbiter.getLocalTokenStore().getToken() + 1;
-      if(isTrace()) {
+      if (isTrace()) {
         logger.info("update newToken=" + newToken);
       }
       updateTokenCommand.setToken(newToken);
@@ -708,16 +721,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   /**
    * find other host or not
+   *
    * @return find other host or not
    */
   private boolean findOtherHost() {
     NodeHealthCommand cmd = new NodeHealthCommand();
     Map all = stateManager.executeAll(cmd, stateManager.getLocal());
-    if(all.size()>0){
+    if (all.size() > 0) {
       Iterator iterator = all.values().iterator();
-      while(iterator.hasNext()){
-        NodeHealth next = (NodeHealth)iterator.next();
-        if(next!=null&&next.getState().equals(NodeState.host)){
+      while (iterator.hasNext()) {
+        NodeHealth next = (NodeHealth) iterator.next();
+        if (next != null && next.getState().equals(NodeState.host)) {
           return true;
         }
       }
@@ -727,62 +741,61 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   private void remveInvalidReceive(Map<Member, NodeHealth> all) {
     //delete invalid data.
-    removeInvalidReceiveByState(all,null);
+    removeInvalidReceiveByState(all, null);
   }
 
-  private void removeInvalidReceiveByState(Map<Member, NodeHealth> all,NodeState state) {
+  private void removeInvalidReceiveByState(Map<Member, NodeHealth> all, NodeState state) {
     //delete invalid data.
     Iterator<Entry<Member, NodeHealth>> iterator = all.entrySet().iterator();
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
-      if (next.getValue() == null||(state!=null&&!state.equals(next.getValue().getState()))) {
+      if (next.getValue() == null || (state != null && !state.equals(next.getValue().getState()))) {
         iterator.remove();
       }
     }
   }
 
 
-  private  boolean isUp(){
+  private boolean isUp() {
     return isUp(stateManager.getLocalIp(), 1);
   }
 
-  private  NetworkInterface getNic(String ip) {
+  private NetworkInterface getNic(String ip) {
     NetworkInterface nic = null;
     try {
       InetAddress address = InetAddress.getByName(ip);
       nic = NetworkInterface.getByInetAddress(address);
-    }catch (Exception ex){
+    } catch (Exception ex) {
       ex.printStackTrace();
     }
     return nic;
   }
 
   /**
-   *
-   * @param ip 对应的IP
+   * @param ip             对应的IP
    * @param failedTryCount 失败后的尝试次数
    * @return
    */
-  private  boolean isUp(String ip, int failedTryCount){
+  private boolean isUp(String ip, int failedTryCount) {
     NetworkInterface nic = getNic(ip);
-    if(nic!=null){
+    if (nic != null) {
       try {
         return nic.isUp();
       } catch (SocketException e) {
         logger.warn("is up fail.", e);
         return true;
       }
-    }else{
+    } else {
       logger.info("not find nic for ip {}", ip);
-      if(failedTryCount>1) {
+      if (failedTryCount > 1) {
         try {
           Thread.sleep(1000);
-          return isUp(ip, failedTryCount-1);
+          return isUp(ip, failedTryCount - 1);
         } catch (InterruptedException e) {
           //e.printStackTrace();
           return false;
         }
-      }else{
+      } else {
         return false;
       }
     }
@@ -805,10 +818,20 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public void removed(Member member) {
     logger.info("removed node:{}", member);
-    if(member!=null&&member.equals(host)){
-      this.host(null,0);
+    if (member != null && member.equals(host)) {
+      this.host(null, 0);
       logger.info("lost Host:{}", member);
 
+    }
+  }
+
+  public static void main(String[] args) {
+    List<String> lines = new ArrayList<>();
+    lines.add("1.1.1.1[7800]");
+    lines.add("1.1.1.2[7800]");
+    for (String line : lines) {
+      System.out.println(line.substring(0, line.indexOf("[")));
+      System.out.println(line.substring(line.indexOf("[") + 1, line.indexOf("]")));
     }
   }
 }
