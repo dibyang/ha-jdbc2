@@ -5,6 +5,7 @@ import net.sf.hajdbc.state.health.observer.Observer;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Arbiter {
@@ -76,5 +77,8 @@ public class Arbiter {
     return false;
   }
 
+  public List<String> getIps() {
+    return config.getIps();
+  }
 
 }
