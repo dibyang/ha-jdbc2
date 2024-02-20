@@ -371,7 +371,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     for (String ip : remoteIps) {
       try (Socket socket = new Socket()) {
         logger.info("ready connect node [{}]", ip);
-        socket.connect(new InetSocketAddress(ip, Integer.parseInt(System.getProperty("jgroups.tcp_port", "7800"))),1000);        logger.info("connect node [{}] success", ip);
+        socket.connect(new InetSocketAddress(ip, Integer.parseInt(System.getProperty("jgroups.tcp_port", "7800"))),1000);
+        logger.info("connect node [{}] success", ip);
         liveNodeCount++;
       } catch (IOException ignored) {
       }
