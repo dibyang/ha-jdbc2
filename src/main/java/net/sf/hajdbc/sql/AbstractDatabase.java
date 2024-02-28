@@ -68,6 +68,8 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	private volatile boolean active = false;
 
 	private volatile String ip=null;
+
+	private volatile boolean syncing;
 	
 	@XmlElement(name = "property")
 	private Property[] getXmlProperties()
@@ -380,6 +382,16 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 
 	public void setIp(String ip) {
 		this.ip = ip;
+	}
+
+	@Override
+	public boolean isSyncing() {
+		return syncing;
+	}
+
+	@Override
+	public void setSyncing(boolean syncing) {
+		this.syncing = syncing;
 	}
 
 	/**

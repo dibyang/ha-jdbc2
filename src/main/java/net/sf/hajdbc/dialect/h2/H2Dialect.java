@@ -182,7 +182,7 @@ public class H2Dialect extends StandardDialect
 			executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
 		}
 		stopWatch.stop();
-		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(),file.getPath());
+		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(), file.getPath());
 	}
 
 	@Override

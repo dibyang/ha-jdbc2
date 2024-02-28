@@ -315,9 +315,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
   @Override
   public void changeState(NodeState oldState, NodeState newState) {
-		if(NodeState.host.equals(newState)){
-      recoverDatabase();
-		}
     Iterator<NodeStateListener> iterator = nodeStateListeners.iterator();
     while (iterator.hasNext()){
 			NodeStateListener listener = iterator.next();
@@ -844,7 +841,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			for (D database: this.configuration.getDatabaseMap().values())
 			{
-				if (this.isAlive(database, Level.WARN))
+				//没有任何活动数据库时只检测本地才检测是否可以激活
+				if (database.isLocal()&&this.isAlive(database, Level.WARN))
 				{
 					this.activate(database, this.stateManager);
 				}
@@ -974,6 +972,10 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	@Override
 	public boolean isAlive(D database, Level level)
 	{
+		//在同步中的数据库不可以激活
+		if(database.isSyncing()){
+			return false;
+		}
 		try (Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(decoder))){
 			return dialect.isValid(connection);
 		}catch (Exception e)

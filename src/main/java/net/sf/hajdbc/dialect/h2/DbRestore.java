@@ -24,6 +24,7 @@ public class DbRestore {
 
   public boolean restore(Database database, Decoder decoder, File file){
     try {
+      database.setSyncing(true);
       if(file!=null&&file.exists()) {
         StopWatch stopWatch = StopWatch.createStarted();
         final String password = database.decodePassword(decoder);
@@ -42,6 +43,8 @@ public class DbRestore {
       }
     }catch (Exception e){
       logger.log(Level.WARN, e);
+    }finally {
+      database.setSyncing(false);
     }
     return false;
   }
