@@ -820,7 +820,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	/**
 	 * Recover all active databases.
 	 */
-	private void recoverDatabase(boolean starting) {
+	private void recoverDatabase(boolean starting) throws InterruptedException {
 		Set<String> databases = this.stateManager.getActiveDatabases();
 		logger.log(Level.INFO, "Recover all active databases. databases={0}", databases);
 		if (!databases.isEmpty())
@@ -842,12 +842,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		else
 		{
 			if(starting) {
-				for (D database : this.configuration.getDatabaseMap().values()) {
-					//没有任何活动数据库时只检测本地才检测是否可以激活
-					if (database.isLocal() && this.isAlive(database, Level.WARN)) {
-						this.activate(database, this.stateManager);
+				while(this.stateManager.getActiveDatabases().isEmpty()){
+					for (D database : this.configuration.getDatabaseMap().values()) {
+						//没有任何活动数据库时只检测本地才检测是否可以激活
+						if (database.isLocal() && this.isAlive(database, Level.WARN)) {
+							this.activate(database, this.stateManager);
+						}
 					}
+					logger.log(Level.INFO, "No active database, detect again after 1s");
+					Thread.sleep(1000);
 				}
+				logger.log(Level.INFO, "Active database="+this.stateManager.getActiveDatabases());
 			}
 		}
 

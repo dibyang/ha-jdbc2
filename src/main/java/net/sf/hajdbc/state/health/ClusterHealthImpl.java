@@ -422,6 +422,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           }
         }
       } else {
+        DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+        Database database = databaseCluster.getLocalDatabase();
+        if (database.isActive()) {
+          databaseCluster.getBalancer().remove(database);
+          stateManager.deactivated(new DatabaseEvent(database));
+          database.setActive(false);
+        }
         setState(NodeState.ready);
       }
     } else {
