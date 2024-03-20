@@ -21,7 +21,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
 
   public static final int TIME_OUT = 60;
 
-  private final FileReader<DetectMode> detectModeFileReader = FileReader.of2("net-delay-detect", s-> DetectMode.of(s));
+  private static final FileReader<DetectMode> detectModeFileReader = FileReader.of2("net-delay-detect", s-> DetectMode.of(s));
 
   private final FileReader<Integer> detectTimeout = FileReader.of4int("net-delay-detect.timeout");
 
@@ -37,8 +37,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
 
   @Override
   public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
-    DetectMode detectMode = detectModeFileReader
-        .getData(DetectMode.all, DetectMode.disabled);
+    DetectMode detectMode = getDetectMode();
     if(!DetectMode.disabled.equals(detectMode)) {
       List<TcpLink> tcpLinks = TcpLink.readTcpLinks("/proc/net/tcp");
       Set<String> ips1 = new HashSet<>(tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
@@ -123,6 +122,12 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
       }
     }
     return reachable;
+  }
+
+  public static DetectMode getDetectMode() {
+    DetectMode detectMode = detectModeFileReader
+        .getData(DetectMode.all, DetectMode.disabled);
+    return detectMode;
   }
 
 }
