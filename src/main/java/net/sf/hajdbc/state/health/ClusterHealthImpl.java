@@ -16,10 +16,13 @@ import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.jgroups.AddressMember;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.DatabasesEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.util.FileReader;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
@@ -27,8 +30,6 @@ import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.swing.*;
 
 public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClusterListener {
 
@@ -287,7 +288,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand);
 
     //delete invalid data.
-    remveInvalidReceive(all);
+    removeInvalidReceive(all);
     //毫秒
     long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
     Entry<Member, NodeHealth> host = null;
@@ -413,22 +414,18 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       if (stateManager.getLocal().equals(host)) {
         if (!state.equals(NodeState.host)) {
           setState(NodeState.host);
-          DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-          Database database = databaseCluster.getLocalDatabase();
-          if (!database.isActive()) {
-            stateManager.activated(new DatabaseEvent(database));
-            databaseCluster.getBalancer().add(database);
-            database.setActive(true);
-          }
+          activeHostDb();
         }
       } else {
         DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-        Database database = databaseCluster.getLocalDatabase();
-        if (database.isActive()) {
-          databaseCluster.getBalancer().remove(database);
-          stateManager.deactivated(new DatabaseEvent(database));
-          database.setActive(false);
+        //Database hostDb = databaseCluster.getDatabase(getIp(host));
+        if(databaseCluster.getBalancer().size()>1){
+          Database localDatabase = databaseCluster.getLocalDatabase();
+          if (localDatabase.isActive()) {
+            databaseCluster.deactivate(localDatabase, stateManager);
+          }
         }
+
         setState(NodeState.ready);
       }
     } else {
@@ -436,6 +433,18 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
     //选主结束
     readyElect = false;
+  }
+
+  private void activeHostDb() {
+    DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
+    Database database = databaseCluster.getLocalDatabase();
+    if (!database.isActive()&&!database.isSyncing()) {
+      databaseCluster.activate(database, stateManager);
+    }
+  }
+
+  private String getIp(Member local) {
+    return org.jgroups.util.UUID.get(((AddressMember)local).getAddress());
   }
 
   @Override
@@ -587,7 +596,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         lock.lockInterruptibly();
         try {
           Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand, this.stateManager.getLocal());
-          remveInvalidReceive(all);
+          removeInvalidReceive(all);
           if (all.size() > 0) {
             for (Member member : all.keySet()) {
               NodeState nodeState = all.get(member).getState();
@@ -637,7 +646,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       if (isNeedDown()) {
         downNode();
       } else {
+        activeHostDb();
         arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size() < 2));
+        DatabasesEvent event2 = new DatabasesEvent(stateManager.getActiveDatabases());
         sendHeartbeat();
         executorService.submit(new Runnable() {
           @Override
@@ -743,7 +754,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return false;
   }
 
-  private void remveInvalidReceive(Map<Member, NodeHealth> all) {
+  private void removeInvalidReceive(Map<Member, NodeHealth> all) {
     //delete invalid data.
     removeInvalidReceiveByState(all, null);
   }

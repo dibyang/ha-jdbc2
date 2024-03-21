@@ -35,10 +35,12 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.management.*;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.DatabasesEvent;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeHealth;
@@ -481,7 +483,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				listener.activated(event);
 			}
 		}
-		
 		return added;
 	}
 	
@@ -842,19 +843,20 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		else
 		{
 			if(starting) {
-				while(this.stateManager.getActiveDatabases().isEmpty()){
-					for (D database : this.configuration.getDatabaseMap().values()) {
-						//没有任何活动数据库时只检测本地才检测是否可以激活
-						if (database.isLocal() && this.isAlive(database, Level.WARN)) {
-							this.activate(database, this.stateManager);
-						}
+				for (D database : this.configuration.getDatabaseMap().values()) {
+					//没有任何活动数据库时只检测本地才检测是否可以激活
+					if (database.isLocal() && this.isAlive(database, Level.WARN)) {
+						this.activate(database, this.stateManager);
 					}
+				}
+				while(this.stateManager.getActiveDatabases().isEmpty()){
 					logger.log(Level.INFO, "No active database, detect again after 1s");
 					Thread.sleep(1000);
 				}
 				logger.log(Level.INFO, "Active database="+this.stateManager.getActiveDatabases());
 			}
 		}
+
 
 		Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.stateManager.recover();
 		if (!invokers.isEmpty())
@@ -1017,13 +1019,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 	@Override
 	public void checkActiveDatabases(Set<String> activeDatabases) {
-		Set databases = stateManager.getActiveDatabases();
 		for(String db : activeDatabases){
-			logger.log(Level.INFO,"active database: {0}.", db);
+			logger.log(Level.INFO,"sync active database: {0} from other node.", db);
 			D database = getDatabase(db);
 			boolean add = this.balancer.add(database);
 			if(add){
-				logger.log(Level.INFO,"database {0} is add.", db);
+				logger.log(Level.INFO,"active database {0} is add.", db);
 				database.setActive(true);
 			}
 		}
