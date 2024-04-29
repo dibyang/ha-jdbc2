@@ -46,8 +46,8 @@
   <TCPPING port_range="${jgroups.tcpping.port_range:0}" initial_hosts="${jgroups.tcpping.initial_hosts:127.0.0.1[7800]}" />
   <MERGE3 />
 <!--  <FD_SOCK />-->
-  <FD_ALL2 timeout="${jgroups.fd_all.timeout:10000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
-  <VERIFY_SUSPECT timeout="${jgroups.verify_suspect.timeout:2000}"  />
+  <FD_ALL2 timeout="${jgroups.fd_all.timeout:20000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
+  <VERIFY_SUSPECT timeout="${jgroups.verify_suspect.timeout:2000}" num_msgs="${jgroups.verify_suspect.num_msgs:2}"  />
   <BARRIER />
   <pbcast.NAKACK2 use_mcast_xmit="false"
                   discard_delivered_msgs="true"/>
