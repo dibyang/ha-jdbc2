@@ -47,7 +47,7 @@
   <MERGE3 />
 <!--  <FD_SOCK />-->
   <FD_ALL2 timeout="${jgroups.fd_all.timeout:10000}" interval="${jgroups.fd_all.interval:1000}" timeout_check_interval="${jgroups.fd_all.interval:1000}" />
-<!--  <VERIFY_SUSPECT timeout="${jgroups.verify_suspect.timeout:10000}"  />-->
+  <VERIFY_SUSPECT timeout="${jgroups.verify_suspect.timeout:2000}"  />
   <BARRIER />
   <pbcast.NAKACK2 use_mcast_xmit="false"
                   discard_delivered_msgs="true"/>
