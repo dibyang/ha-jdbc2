@@ -418,7 +418,17 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         }
       } else {
         DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
-        //Database hostDb = databaseCluster.getDatabase(getIp(host));
+        //补充将主节点直接加入活动数据库
+        Database<?> hostDb = databaseCluster.getDatabase(getIp(host));
+        if(hostDb!=null){
+          Set<String> activeDatabases = stateManager.getActiveDatabases();
+          if(!activeDatabases.contains(hostDb.getId())) {
+            logger.info("add host db {} to active dbs.", hostDb);
+            activeDatabases.add(hostDb.getId());
+          }else{
+            logger.info("active dbs {}  contains host.", activeDatabases);
+          }
+        }
         if(databaseCluster.getBalancer().size()>1){
           Database localDatabase = databaseCluster.getLocalDatabase();
           if (localDatabase.isActive()) {
@@ -504,8 +514,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
       if (health != null && health.isValidLocal()) {
-        find = next;
-        break;
+        if (find == null || health.getLocal() > find.getValue().getLocal()) {
+          find = next;
+        }
       }
     }
     return find;

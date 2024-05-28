@@ -12,8 +12,8 @@ public class HAThreadFactory implements ThreadFactory {
       SecurityManager s = System.getSecurityManager();
       group = (s != null) ? s.getThreadGroup() :
                             Thread.currentThread().getThreadGroup();
-      namePrefix = "n2-" +name +
-                   "-thread-";
+      namePrefix = name +
+                   "-";
   }
 
   public Thread newThread(Runnable r) {

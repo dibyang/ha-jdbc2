@@ -17,7 +17,7 @@ public class TimeoutUtil {
   public static final int DEFAULT_TIMEOUT = 1000;
 
 
-  private final ExecutorService exec;
+  private final ThreadPoolExecutor exec;
 
 
   public TimeoutUtil(String name){
@@ -25,7 +25,10 @@ public class TimeoutUtil {
   }
 
   public TimeoutUtil(String name, int nThreads) {
-    exec= Executors.newFixedThreadPool(nThreads, HAThreadFactory.c(name));
+    exec = new ThreadPoolExecutor(nThreads, nThreads,
+        0L, TimeUnit.MILLISECONDS,
+        new LinkedBlockingQueue<Runnable>(),
+        HAThreadFactory.c(name));;
   }
 
 
@@ -89,13 +92,18 @@ public class TimeoutUtil {
     }
   }
 
+
+  public void shutdown(){
+    exec.shutdown();
+  }
+
   public static void main(String[] args) {
     TimeoutUtil util = new TimeoutUtil("test");
 
     util.call(()->{
       StopWatch stopWatch = StopWatch.createStarted();
       try {
-        Thread.sleep(5000);
+        Thread.sleep(50000);
       } catch (InterruptedException e) {
         //e.printStackTrace();
       }
@@ -104,7 +112,7 @@ public class TimeoutUtil {
     util.call(()->{
       StopWatch stopWatch = StopWatch.createStarted();
       try {
-        Thread.sleep(5000);
+        Thread.sleep(50000);
       } catch (InterruptedException e) {
         //e.printStackTrace();
       }
@@ -113,7 +121,7 @@ public class TimeoutUtil {
     util.call(()->{
       StopWatch stopWatch = StopWatch.createStarted();
       try {
-        Thread.sleep(5000);
+        Thread.sleep(50000);
       } catch (InterruptedException e) {
         //e.printStackTrace();
       }
@@ -122,12 +130,22 @@ public class TimeoutUtil {
     util.call(()->{
       StopWatch stopWatch = StopWatch.createStarted();
       try {
-        Thread.sleep(5000);
+        Thread.sleep(50000);
       } catch (InterruptedException e) {
         //e.printStackTrace();
       }
       System.out.println("cost time:"+stopWatch.toString());
     });
-
+    for (int i = 0; i < 20; i++) {
+      util.call(()->{
+        StopWatch stopWatch = StopWatch.createStarted();
+        try {
+          Thread.sleep(50000);
+        } catch (InterruptedException e) {
+          //e.printStackTrace();
+        }
+        System.out.println("cost time:"+stopWatch.toString());
+      });
+    }
   }
 }
