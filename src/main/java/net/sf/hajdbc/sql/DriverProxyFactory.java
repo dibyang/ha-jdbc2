@@ -18,6 +18,7 @@
 package net.sf.hajdbc.sql;
 
 import java.sql.Driver;
+import java.sql.SQLException;
 
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.util.reflect.Proxies;
@@ -37,5 +38,13 @@ public class DriverProxyFactory extends AbstractRootProxyFactory<Driver, DriverD
 	public Driver createProxy()
 	{
 		return Proxies.createProxy(Driver.class, new DriverInvocationHandler(this));
+	}
+
+	@Override
+	public synchronized void removeChild(ChildProxyFactory<Driver, DriverDatabase, Driver, SQLException, ?, ? extends Exception> child) {
+		super.removeChild(child);
+		if(!this.children().iterator().hasNext()){
+			this.getDatabaseCluster().removeListener(this);
+		}
 	}
 }
