@@ -159,8 +159,6 @@ public abstract class AbstractStatementInvocationHandler<Z, D extends Database<Z
 		if (method.equals(addBatchMethod))
 		{
 			this.getProxyFactory().addBatchSQL((String) parameters[0]);
-			this.logger.log(Level.TRACE, "Recording batch method: {0}", invoker);
-			this.getProxyFactory().addBatchInvoker(invoker);
 		}
 		else if (method.equals(clearBatchMethod) || method.equals(executeBatchMethod))
 		{
@@ -173,15 +171,20 @@ public abstract class AbstractStatementInvocationHandler<Z, D extends Database<Z
 			Resources.close(this.getProxyFactory().getInputSinkRegistry());
 			this.getProxyFactory().remove();
 		}
-
-		if (driverWriteMethodSet.contains(method))
+		
+		if (this.isBatchMethod(method))
+		{
+			this.logger.log(Level.TRACE, "Recording batch method: {0}", invoker);
+			this.getProxyFactory().addBatchInvoker(invoker);
+		}
+		else if (driverWriteMethodSet.contains(method))
 		{
 			this.getProxyFactory().record(invoker);
 		}
 	}
 
-//	protected boolean isBatchMethod(Method method)
-//	{
-//		return method.equals(addBatchMethod);
-//	}
+	protected boolean isBatchMethod(Method method)
+	{
+		return method.equals(addBatchMethod);
+	}
 }

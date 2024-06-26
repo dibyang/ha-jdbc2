@@ -66,14 +66,14 @@ public class CallableStatementInvocationHandler<Z, D extends Database<Z>> extend
 		return super.getInvocationStrategy(statement, method, parameters);
 	}
 
-//	/**
-//	 * @see net.sf.hajdbc.sql.AbstractPreparedStatementInvocationHandler#isBatchMethod(java.lang.reflect.Method)
-//	 */
-//	@Override
-//	protected boolean isBatchMethod(Method method)
-//	{
-//		return registerOutParameterMethods.contains(method) || super.isBatchMethod(method);
-//	}
+	/**
+	 * @see net.sf.hajdbc.sql.AbstractPreparedStatementInvocationHandler#isBatchMethod(java.lang.reflect.Method)
+	 */
+	@Override
+	protected boolean isBatchMethod(Method method)
+	{
+		return registerOutParameterMethods.contains(method) || super.isBatchMethod(method);
+	}
 
 	/**
 	 * @see net.sf.hajdbc.sql.AbstractPreparedStatementInvocationHandler#isIndexType(java.lang.Class)
