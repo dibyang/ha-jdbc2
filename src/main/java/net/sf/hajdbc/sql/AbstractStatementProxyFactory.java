@@ -81,7 +81,14 @@ public abstract class AbstractStatementProxyFactory<Z, D extends Database<Z>, S 
 	{
 		this.batchInvokers.clear();
 	}
-	
+
+	@Override
+	public void remove() {
+		super.remove();
+		this.clearBatch();
+		this.clearBatchInvokers();
+	}
+
 	@Override
 	public void replay(D database, S object) throws SQLException
 	{

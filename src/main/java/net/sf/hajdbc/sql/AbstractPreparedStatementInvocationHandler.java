@@ -123,11 +123,11 @@ public abstract class AbstractPreparedStatementInvocationHandler<Z, D extends Da
 		return super.getInvoker(statement, method, parameters);
 	}
 	
-	@Override
-	protected boolean isBatchMethod(Method method)
-	{
-		return method.equals(addBatchMethod) || method.equals(clearParametersMethod) || this.isSetParameterMethod(method) || super.isBatchMethod(method);
-	}
+//	@Override
+//	protected boolean isBatchMethod(Method method)
+//	{
+//		return method.equals(addBatchMethod) || method.equals(clearParametersMethod) || this.isSetParameterMethod(method) || super.isBatchMethod(method);
+//	}
 
 	private boolean isSetParameterMethod(Method method)
 	{
