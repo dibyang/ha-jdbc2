@@ -22,6 +22,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.locks.Lock;
@@ -53,6 +54,10 @@ public abstract class AbstractPreparedStatementInvocationHandler<Z, D extends Da
 	{
 		super(statementClass, proxyFactory);
 		this.setMethods = setMethods;
+		//排除setQueryTimeout方法
+		Set<String> exclude = new HashSet<>();
+		exclude.add("setQueryTimeout");
+		this.setMethods.removeIf(e->exclude.contains(e.getName()));
 	}
 	
 	@Override
@@ -132,8 +137,8 @@ public abstract class AbstractPreparedStatementInvocationHandler<Z, D extends Da
 	private boolean isSetParameterMethod(Method method)
 	{
 		Class<?>[] types = method.getParameterTypes();
-		
-		return this.setMethods.contains(method) && (types.length > 0) && this.isIndexType(types[0]);
+		//排除setQueryTimeout方法
+		return this.setMethods.contains(method) && (types.length > 1) && this.isIndexType(types[0]);
 	}
 	
 	protected boolean isIndexType(Class<?> type)
