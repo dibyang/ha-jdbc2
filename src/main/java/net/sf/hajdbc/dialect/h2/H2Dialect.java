@@ -43,7 +43,8 @@ public class H2Dialect extends StandardDialect
 {
 	static final Logger logger = LoggerFactory.getLogger(H2Dialect.class);
 	private static final Set<Integer> failureCodes = new HashSet<Integer>(Arrays.asList(90013, 90030, 90046, 90067, 90100, 90108, 90117, 90121));
-	
+	public static final int MIN_DUMP_FILE_SIZE = 1024;
+
 	/**
 	 * {@inheritDoc}
 	 * @see net.sf.hajdbc.dialect.StandardDialect#vendorPattern()
@@ -190,9 +191,15 @@ public class H2Dialect extends StandardDialect
 		if(database.isLocal()) {
 			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 			Member target = syncMgr.getMember(context.getSourceDatabase());
-			if(syncMgr.download(target,file)){
-				DbRestore dbRestore = new DbRestore();
-				dbRestore.restore(database, decoder, file);
+			if(syncMgr.download(target, file)){
+				if(file.length() > MIN_DUMP_FILE_SIZE) {
+					DbRestore dbRestore = new DbRestore();
+					dbRestore.restore(database, decoder, file);
+				}else{
+					throw new IllegalArgumentException("download dump file size is invalid. size="+ file.length());
+				}
+			}else{
+				throw new IllegalArgumentException("dump file download fail. file="+ file.getPath());
 			}
 		}else{
 			StopWatch stopWatch = StopWatch.createStarted();

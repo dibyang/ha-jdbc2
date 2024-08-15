@@ -89,9 +89,6 @@ public class SyncMgrImpl implements SyncMgr{
       }
       long offset = 0;
       try (RandomAccessFile raf = new RandomAccessFile(file, "rws")) {
-        if(offset>0){
-          raf.seek(offset);
-        }
         while (true) {
           downloadCommand.setOffset(offset);
           Block block = this.execute(target, downloadCommand);
@@ -102,8 +99,13 @@ public class SyncMgrImpl implements SyncMgr{
                 md.update(block.getData(),0, block.getSize());
                 String md5 = MD5.md5DigestToString(md.digest());
                 if(md5.equals(block.getMd5())) {
+                  raf.seek(offset);
                   raf.write(block.getData(), 0, block.getSize());
                   offset += block.getSize();
+                }else{
+                  //下载失败
+                  logger.log(Level.INFO,"download file path={0} fail for md5 invalid.", file.getPath());
+                  break;
                 }
               }
               if(file.length()>=block.getLength()){
@@ -111,10 +113,13 @@ public class SyncMgrImpl implements SyncMgr{
                 break;
               }
             }else{
-              r = true;
+              //空文件将会下载失败
+              logger.log(Level.INFO,"download file path={0} fail for empty file.", file.getPath());
               break;
             }
           }else{
+            //网络失败重试3次就会下载失败
+            logger.log(Level.INFO,"download file path={0} fail for net fail.", file.getPath());
             break;
           }
         }
