@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DbRestore {
-  static final Logger logger = LoggerFactory.getLogger(H2RunScriptCommand.class);
+  static final Logger logger = LoggerFactory.getLogger(DbRestore.class);
   static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
   public static final int MAX_BACKUP_COUNT = 30;
 
@@ -26,20 +26,25 @@ public class DbRestore {
     try {
       database.setSyncing(true);
       if(file!=null&&file.exists()) {
-        StopWatch stopWatch = StopWatch.createStarted();
-        final String password = database.decodePassword(decoder);
-        try (Connection connection = database.connect(database.getConnectionSource(), password);
-             Statement statTarget = connection.createStatement()) {
+        if (file.length() > 0) {
+          StopWatch stopWatch = StopWatch.createStarted();
+          final String password = database.decodePassword(decoder);
+          try (Connection connection = database.connect(database.getConnectionSource(), password);
+               Statement statTarget = connection.createStatement()) {
 
-          String bakPath = getBakPath(database.getLocation());
-          statTarget.execute("BACKUP TO  '" + bakPath + "'");
-          logger.log(Level.INFO, "H2 backup old data use time {0} to {1}", stopWatch.toString(), bakPath);
-          statTarget.execute("DROP ALL OBJECTS");
-          statTarget.execute("RUNSCRIPT FROM '" + file.getPath() + "'");
-          stopWatch.stop();
-          logger.log(Level.INFO, "H2 Run Script use time {0} from {1}", stopWatch.toString(), file.getPath());
+            String bakPath = getBakPath(database.getLocation());
+            statTarget.execute("BACKUP TO  '" + bakPath + "'");
+            logger.log(Level.INFO, "H2 backup old data use time {0} to {1}", stopWatch.toString(), bakPath);
+            statTarget.execute("DROP ALL OBJECTS");
+            statTarget.execute("RUNSCRIPT FROM '" + file.getPath() + "'");
+            stopWatch.stop();
+            logger.log(Level.INFO, "H2 Run Script use time {0} from {1}", stopWatch.toString(), file.getPath());
+          }
+          return true;
+        } else {
+          logger.log(Level.INFO, "file {0} length is zero", file.getPath());
+          return false;
         }
-        return true;
       }
     }catch (Exception e){
       logger.log(Level.WARN, e);

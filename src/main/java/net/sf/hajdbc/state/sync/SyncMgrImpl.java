@@ -13,11 +13,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 
 public class SyncMgrImpl implements SyncMgr{
-  static final Logger logger = LoggerFactory.getLogger(SyncMgr.class);
+  static final Logger logger = LoggerFactory.getLogger(SyncMgrImpl.class);
   public static final int BLOCK_SIZE = 256 * 1024;
 
   private DistributedStateManager stateManager;
