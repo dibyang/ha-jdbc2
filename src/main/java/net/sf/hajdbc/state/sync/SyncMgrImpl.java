@@ -38,7 +38,7 @@ public class SyncMgrImpl implements SyncMgr{
       MessageDigest md = MD5.newInstance();
       try (FileInputStream fis = new FileInputStream(file)) {
         byte[] buffer = new byte[BLOCK_SIZE];
-        int len = 0;
+        int len;
         int offset = 0;
         UploadCommand cmd = new UploadCommand();
         cmd.setPath(path);

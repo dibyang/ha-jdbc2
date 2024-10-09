@@ -20,7 +20,7 @@ import java.util.stream.Collectors;
 public class DbRestore {
   static final Logger logger = LoggerFactory.getLogger(H2RunScriptCommand.class);
   static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
-  public static final int MAX_BACKUP_COUNT = 30;
+  public static final int MAX_BACKUP_COUNT = 10;
 
   public boolean restore(Database database, Decoder decoder, File file){
     try {
@@ -32,7 +32,8 @@ public class DbRestore {
              Statement statTarget = connection.createStatement()) {
 
           String bakPath = getBakPath(database.getLocation());
-          statTarget.execute("BACKUP TO  '" + bakPath + "'");
+          //更改为数据库sql文件
+          statTarget.execute("SCRIPT TO  '" + bakPath + "'");
           logger.log(Level.INFO, "H2 backup old data use time {0} to {1}", stopWatch.toString(), bakPath);
           statTarget.execute("DROP ALL OBJECTS");
           statTarget.execute("RUNSCRIPT FROM '" + file.getPath() + "'");
@@ -58,7 +59,7 @@ public class DbRestore {
     }
 
     String backupFlag = "_backup_";
-    String bakPath = location + backupFlag + LocalDateTime.now().format(formatter) + ".zip";
+    String bakPath = location + backupFlag + LocalDateTime.now().format(formatter) + ".dump";
     File bakFile = new File(bakPath);
     String bakFileName = bakFile.getName();
     String namePrefix = bakFileName.substring(0,bakFileName.indexOf(backupFlag)+backupFlag.length());
@@ -66,12 +67,7 @@ public class DbRestore {
     if(!dbDir.exists()){
       dbDir.mkdirs();
     }
-    File[] files = dbDir.listFiles(new FileFilter() {
-      @Override
-      public boolean accept(File f) {
-        return f.getName().startsWith(namePrefix) && f.getName().endsWith(".zip");
-      }
-    });
+    File[] files = dbDir.listFiles(f -> f.getName().startsWith(namePrefix) && f.getName().endsWith(".dump"));
     if(files!=null){
       List<File> fileList = Arrays.stream(files)
           .sorted((f1, f2) -> f2.getName().compareTo(f1.getName()))
