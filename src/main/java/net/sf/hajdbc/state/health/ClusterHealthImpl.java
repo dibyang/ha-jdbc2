@@ -22,7 +22,6 @@ import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.DatabasesEvent;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
-import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.util.FileReader;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
@@ -265,15 +264,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
             break;
           }
         }
-        if (host != null) {
-          logger.info("host elect:{}. cost time:{}", host.getKey(), stopWatch.toString());
+        logger.info("host elect:{}. cost time:{}", host.getKey(), stopWatch.toString());
 
-          HostCommand hostCommand = new HostCommand();
-          hostCommand.setHost(host.getKey());
-          hostCommand.setToken(host.getValue().getLocal());
-          this.host(host.getKey(), host.getValue().getLocal());
-          stateManager.executeAll(hostCommand, stateManager.getLocal());
-        }
+        HostCommand hostCommand = new HostCommand();
+        hostCommand.setHost(host.getKey());
+        hostCommand.setToken(host.getValue().getLocal());
+        this.host(host.getKey(), host.getValue().getLocal());
+        stateManager.executeAll(hostCommand, stateManager.getLocal());
         logger.info("host elect end. cost time:{}", stopWatch.toString());
       }
     } catch (Exception e) {
@@ -339,7 +336,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
                   //选举超时
                   if ((costTime > getMaxElectTime())) {
-                    host = findNodeByToken(all);
+                    File file = new File("/etc/aio/start-force.xx");
+                    if(file.exists()) {
+                      logger.info("elect host used local node");
+                      host = findNodeByToken(all);
+                    } else {
+                      logger.info("elect host more than 4 min, system exit");
+                      System.exit(0);
+                    }
                   }
                   if (host != null) {
                     logger.info("elect any node by ge max elect time. host={}", host);
@@ -597,7 +601,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     boolean observable = isObservable();
     Database database = stateManager.getDatabaseCluster().getLocalDatabase();
     boolean active = isActiveLocalDb(database);
-    String db = database != null ? database.getId() : "";
+    String db = database.getId();
     if (!up || !active) {
       logger.warn("node need down. up={}, observable={}, db active={} db={}", up, observable, active, db);
       return true;
@@ -608,7 +612,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         try {
           Map<Member, NodeHealth> all = stateManager.executeAll(healthCommand, this.stateManager.getLocal());
           removeInvalidReceive(all);
-          if (all.size() > 0) {
+          if (!all.isEmpty()) {
             for (Member member : all.keySet()) {
               NodeState nodeState = all.get(member).getState();
               if (nodeState.isCanUpdate()) {
@@ -661,12 +665,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size() < 2));
         DatabasesEvent event2 = new DatabasesEvent(stateManager.getActiveDatabases());
         sendHeartbeat();
-        executorService.submit(new Runnable() {
-          @Override
-          public void run() {
-            updateNewToken();
-          }
-        });
+        executorService.submit(this::updateNewToken);
       }
     }
   }
