@@ -21,6 +21,7 @@ import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.exception.CommandNotFoundException;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -28,8 +29,10 @@ import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
+import net.sf.hajdbc.util.ZipUtils;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.sql.*;
 import java.util.*;
 
@@ -184,31 +187,33 @@ public class H2Dialect extends StandardDialect
 		}
 		stopWatch.stop();
 		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(), file.getPath());
+		stopWatch.reset();
+		stopWatch.start();
+		String zipFilePath = file.getPath() + ".zip";
+		ZipUtils.compressFile(file.getPath(), zipFilePath);
+		stopWatch.stop();
+		logger.log(Level.INFO,"h2 zip dump file time={0} path={1}", stopWatch.toString(), zipFilePath);
 	}
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
-		if(database.isLocal()) {
-			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
-			Member target = syncMgr.getMember(context.getSourceDatabase());
-			if(syncMgr.download(target, file)){
-				if(file.length() > MIN_DUMP_FILE_SIZE) {
-					DbRestore dbRestore = new DbRestore();
-					dbRestore.restore(database, decoder, file);
-				}else{
-					throw new IllegalArgumentException("download dump file size is invalid. size="+ file.length());
-				}
-			}else{
-				throw new IllegalArgumentException("dump file download fail. file="+ file.getPath());
-			}
-		}else{
+		File zipFile = Paths.get(file.getPath() + ".zip").toFile();
+		if(!database.isLocal()) {
 			StopWatch stopWatch = StopWatch.createStarted();
 			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
 			Member target = syncMgr.getMember(database);
-			if(syncMgr.upload(target,file)){
-				H2RunScriptCommand cmd = new H2RunScriptCommand();
-				cmd.setPath(file.getPath());
-				syncMgr.execute(target, cmd);
+			if(syncMgr.upload(target, zipFile)){
+				H2RunScriptCommand2 cmd2 = new H2RunScriptCommand2();
+				cmd2.setPath(file.getPath());
+				try {
+					syncMgr.execute(target, cmd2);
+				}catch (CommandNotFoundException e){
+					H2RunScriptCommand cmd = new H2RunScriptCommand();
+					cmd.setPath(file.getPath());
+					if(syncMgr.upload(target,file)){
+						syncMgr.execute(target, cmd);
+					}
+				}
 				stopWatch.stop();
 				logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
 			}

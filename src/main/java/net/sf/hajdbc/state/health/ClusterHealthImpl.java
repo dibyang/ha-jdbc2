@@ -17,6 +17,8 @@ import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.DatabaseClusterListener;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.jgroups.AddressMember;
+import net.sf.hajdbc.exception.CommandNotFoundException;
+import net.sf.hajdbc.exception.StartFailException;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.state.DatabaseEvent;
 import net.sf.hajdbc.state.DatabasesEvent;
@@ -42,9 +44,11 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   public static final int MAX_UNOBSERVABLE = 6;
 
   public static final String HOST_ELECT = "HOST_ELECT";
-  public static final long DEFAULT_MAX_ELECT_TIME = 4 * 60 * 1000L;
+  public static final long DEFAULT_MAX_ELECT_TIME = 3 * 60 * 1000L;
+  public static final long DEFAULT_FORCE_ELECT_TIME = 60 * 1000L;
   public static final String MAX_ELECT_TIME = "MAX_ELECT_TIME";
   public static final String NODE_DOWN_LOCK = "node_down";
+  public static final String FORCE_ELECT_TIME = "FORCE_ELECT_TIME";
 
   private DistributedStateManager stateManager;
   private final Arbiter arbiter;
@@ -89,9 +93,19 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     String localIp = stateManager.getLocalIp();
     arbiter.setLocalIp(localIp);
     arbiter.setIps(this.stateManager.getDatabaseCluster().getNodes());
-    this.run();
-    scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
+    try {
+      doTask();
+    } catch (StartFailException e){
+      //操作不允许
+      System.exit(1);
+    }catch (Exception e) {
+      logger.warn("", e);
+    }
+    if(host!=null) {
+      scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
+    }
   }
+
 
 
   @Override
@@ -236,7 +250,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   /**
    * start elect host node.
    */
-  private synchronized void elect() throws InterruptedException {
+  private synchronized void elect() throws InterruptedException, StartFailException {
     //准备开始选主
     this.readyElect = true;
     Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(HOST_ELECT);
@@ -244,7 +258,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     try {
       //如果有别的节点完成选主了的话直接跳过，否者继续选主
       if (readyElect) {
-        logger.info("host elect begin.");
+        logger.info("host elect begin. force mode is {}",isForceMode());
         StopWatch stopWatch = StopWatch.createStarted();
         long waitTime = 1;
         long beginElectTime = System.nanoTime();
@@ -252,10 +266,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         while (host == null) {
           host = doElect(beginElectTime);
           if (host == null) {
-            logger.info("can not elect host node. try elect again after " + waitTime + "s");
+            long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
+            if(costTime>getMaxElectTime()&&!isForceMode()){
+              break;
+            }
+            logger.info("cost time {}s, can not elect host node. try elect again after {}s", costTime/1000, waitTime);
             Thread.sleep(waitTime * 1000);
             if (waitTime < 16) {
-              long costTime = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - beginElectTime);
               //10s内等待时间不延长
               if (costTime > 10000) {
                 waitTime = waitTime * 2;
@@ -273,9 +290,14 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
           hostCommand.setToken(host.getValue().getLocal());
           this.host(host.getKey(), host.getValue().getLocal());
           stateManager.executeAll(hostCommand, stateManager.getLocal());
+        }else{
+          logger.warn("can not elect host node. try start from another node.");
+          throw new StartFailException();
         }
         logger.info("host elect end. cost time:{}", stopWatch.toString());
       }
+    } catch (StartFailException e) {
+      throw e;
     } catch (Exception e) {
       logger.warn("", e);
     } finally {
@@ -338,7 +360,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
                 } else {
 
                   //选举超时
-                  if ((costTime > getMaxElectTime())) {
+                  if ((costTime > (getMaxElectTime()+getForceElectTime())) && isForceMode()) {
                     host = findNodeByToken(all);
                   }
                   if (host != null) {
@@ -391,7 +413,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return nodeMap;
   }
 
-  @Override
+
   public long getMaxElectTime() {
     long maxElectTime = DEFAULT_MAX_ELECT_TIME;
     try {
@@ -402,9 +424,26 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     return maxElectTime;
   }
 
+  public long getForceElectTime() {
+    long maxElectTime = DEFAULT_FORCE_ELECT_TIME;
+    try {
+      maxElectTime = Long.parseLong(System.getProperty(FORCE_ELECT_TIME, String.valueOf(DEFAULT_FORCE_ELECT_TIME)));
+    } catch (NumberFormatException e) {
+      logger.warn("FORCE_ELECT_TIME format is error.", e);
+    }
+    return maxElectTime;
+  }
+
+  /**
+   * 是否启用强制模式
+   * @return 是否启用强制模式
+   */
+  public boolean isForceMode() {
+    return System.getProperty("ha_force_mode","false").equals("true");
+  }
+
   private int getMinNodeCount() {
-    int count = stateManager.getDatabaseCluster().getNodeCount();
-    return count;
+    return stateManager.getDatabaseCluster().getNodeCount();
   }
 
   @Override
@@ -635,20 +674,25 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void run() {
-    fileWatchDog.watch();
+    this.fileWatchDog.watch();
     try {
-      if (NodeState.host.equals(state)) {
-        watchHostNode();
-      } else {
-        watchNotHostNode();
-      }
-
+      doTask();
     } catch (Exception e) {
       logger.warn("", e);
     }
   }
 
-  private void watchHostNode() throws InterruptedException {
+  private void doTask() throws InterruptedException, StartFailException {
+    if (NodeState.host.equals(state)) {
+      watchHostNode();
+    } else {
+      watchNotHostNode();
+    }
+  }
+
+
+  private void watchHostNode() throws InterruptedException, StartFailException {
+
     if (findOtherHost()) {
       if (canElect()) {
         elect();
@@ -671,7 +715,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }
   }
 
-  private void watchNotHostNode() throws InterruptedException {
+  private void watchNotHostNode() throws InterruptedException, StartFailException {
+
     DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
     if (NodeState.backup.equals(state) || NodeState.ready.equals(state)) {
       arbiter.getLocalTokenStore().setOnlyHost(false);

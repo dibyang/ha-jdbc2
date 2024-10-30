@@ -1163,6 +1163,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 				if (!activeDatabases.isEmpty())
 				{
+					if(activeDatabases.stream().noneMatch(Database::isLocal)){
+						return;
+					}
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
 						if(!activeDatabases.contains(database)) {

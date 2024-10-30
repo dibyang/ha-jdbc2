@@ -22,6 +22,7 @@ import java.io.ObjectInputStream;
 import java.io.ObjectOutput;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -35,6 +36,7 @@ import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Stateful;
+import net.sf.hajdbc.exception.CommandNotFoundException;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -194,6 +196,17 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 		}
 		catch (Exception e)
 		{
+			if(e instanceof InvocationTargetException){
+				Throwable cause = e.getCause();
+				if(cause instanceof IllegalStateException) {
+					cause = cause.getCause();
+					String cmdName = command.getClass().getName();
+					if ((cause instanceof ClassNotFoundException)
+							&& (cause.toString().contains(cmdName))) {
+						throw new CommandNotFoundException(cmdName, cause);
+					}
+				}
+			}
 			this.logger.log(Level.WARN, e);
 			return null;
 		}

@@ -1,9 +1,8 @@
 package net.sf.hajdbc.util;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.zip.Deflater;
-import java.util.zip.Inflater;
+import java.io.*;
+import java.nio.file.Paths;
+import java.util.zip.*;
 
 public class ZipUtils {
 
@@ -80,31 +79,48 @@ public class ZipUtils {
       return output;
   }
 
-  public static void main(String[] args) {
-    
-    StringBuilder s = new StringBuilder("snowolf@zlex.org;dongliang@zlex.org;zlex.dongliang@zl");
-    for(int i=0;i<10;i++){
-      s.append(" i=")
-      .append(i)
-      .append(";");
-      
-      test(s.toString());
+  public static void compressFile(String filePath, String zipFilePath) throws IOException {
+    File file = new File(filePath);
+    try(FileOutputStream fos = new FileOutputStream(zipFilePath);
+    ZipOutputStream zos = new ZipOutputStream(fos);
+    FileInputStream fis = new FileInputStream(file)) {
+      ZipEntry zipEntry = new ZipEntry(file.getName());
+      zos.putNextEntry(zipEntry);
+      byte[] buffer = new byte[1024];
+      int length;
+      while ((length = fis.read(buffer)) > 0) {
+        zos.write(buffer, 0, length);
+      }
+      zos.closeEntry();
     }
   }
 
-  private static void test(String s) {
-    System.out.println("");
-    System.out.println("输入字符串:\t" + s);
-    byte[] input = s.getBytes();
-    System.out.println("输入字节长度:\t" + input.length);
-
-    byte[] data = ZipUtils.compress(input);
-    System.out.println("压缩后字节长度:\t" + data.length);
-
-    byte[] output = ZipUtils.decompress(data);
-    System.out.println("解压缩后字节长度:\t" + output.length);
-    String outputStr = new String(output);
-    System.out.println("输出字符串:\t" + outputStr);
-
+  public static void decompressFile(String zipFilePath, String destDir) throws IOException {
+    try(FileInputStream fis = new FileInputStream(zipFilePath);
+        ZipInputStream zis = new ZipInputStream(fis);) {
+      ZipEntry ze = zis.getNextEntry();
+      byte[] buffer = new byte[1024];
+      int length;
+      while (ze != null) {
+        String fileName = ze.getName();
+        File dir = Paths.get(destDir).toFile();
+        if(!dir.exists()){
+          dir.mkdirs();
+        }
+        try(FileOutputStream fos = new FileOutputStream(Paths.get(destDir, fileName).toFile())) {
+          while ((length = zis.read(buffer)) > 0) {
+            fos.write(buffer, 0, length);
+          }
+        }
+        ze = zis.getNextEntry();
+      }
+    }
   }
+
+  public static void main(String[] args) throws IOException {
+
+    decompressFile("d:/test/manager.log.zip","d:/test/log2/");
+  }
+
+
 }

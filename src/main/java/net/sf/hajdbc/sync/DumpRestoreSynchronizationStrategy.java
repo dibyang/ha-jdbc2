@@ -18,6 +18,7 @@
 package net.sf.hajdbc.sync;
 
 import java.io.File;
+import java.nio.file.Paths;
 import java.sql.SQLException;
 
 import net.sf.hajdbc.*;
@@ -90,7 +91,7 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 		{
 			String dbId = context.getSourceDatabase().getId();
 			File file = Files.createTempFile("_"+dbId +DUMP_FILE_SUFFIX);
-			
+			File zipFile = Paths.get(file.getPath() + ".zip").toFile();
 			try
 			{
 				support.dump(context, context.getSourceDatabase(), decoder, file, this.dataOnly);
@@ -100,6 +101,7 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 			{
 				//不再删除该文件
 				Files.delete(file);
+				Files.delete(zipFile);
 			}
 		}
 		catch (Exception e)

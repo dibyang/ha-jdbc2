@@ -6,9 +6,11 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.StopWatch;
+import net.sf.hajdbc.util.ZipUtils;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.LocalDateTime;
@@ -21,11 +23,20 @@ public class DbRestore {
   static final Logger logger = LoggerFactory.getLogger(H2RunScriptCommand.class);
   static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
   public static final int MAX_BACKUP_COUNT = 10;
+  public static final String EXT_DUMP = ".dump";
+  public static final String EXT_ZIP = ".zip";
 
   public boolean restore(Database database, Decoder decoder, File file){
     try {
       database.setSyncing(true);
-      if(file!=null&&file.exists()) {
+      File zipFile = Paths.get(file.getPath() + EXT_ZIP).toFile();
+      if(!file.exists()&&zipFile.exists()){
+        StopWatch stopWatch = StopWatch.createStarted();
+        ZipUtils.decompressFile(zipFile.getPath(), file.getParentFile().getPath());
+        stopWatch.stop();
+        logger.log(Level.INFO, "H2 unzip dump file use time {0} to {1}", stopWatch.toString(), zipFile.getPath());
+      }
+      if(file.exists()) {
         StopWatch stopWatch = StopWatch.createStarted();
         final String password = database.decodePassword(decoder);
         try (Connection connection = database.connect(database.getConnectionSource(), password);
@@ -59,7 +70,7 @@ public class DbRestore {
     }
 
     String backupFlag = "_backup_";
-    String bakPath = location + backupFlag + LocalDateTime.now().format(formatter) + ".dump";
+    String bakPath = location + backupFlag + LocalDateTime.now().format(formatter) + EXT_DUMP;
     File bakFile = new File(bakPath);
     String bakFileName = bakFile.getName();
     String namePrefix = bakFileName.substring(0,bakFileName.indexOf(backupFlag)+backupFlag.length());
@@ -67,7 +78,7 @@ public class DbRestore {
     if(!dbDir.exists()){
       dbDir.mkdirs();
     }
-    File[] files = dbDir.listFiles(f -> f.getName().startsWith(namePrefix) && f.getName().endsWith(".dump"));
+    File[] files = dbDir.listFiles(f -> f.getName().startsWith(namePrefix) && f.getName().endsWith(EXT_DUMP));
     if(files!=null){
       List<File> fileList = Arrays.stream(files)
           .sorted((f1, f2) -> f2.getName().compareTo(f1.getName()))
