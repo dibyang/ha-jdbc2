@@ -5,6 +5,7 @@ import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
+import net.sf.hajdbc.util.Files;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.ZipUtils;
 
@@ -56,12 +57,8 @@ public class DbRestore {
     } catch (Exception e) {
       logger.log(Level.WARN, e);
     } finally {
-      //删除文件
-      if (zipFile != null) {
-        zipFile.deleteOnExit();
-      }
-      //删除文件
-      file.deleteOnExit();
+      Files.delete(file);
+      Files.delete(zipFile);
       database.setSyncing(false);
     }
     return false;
