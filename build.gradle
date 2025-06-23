@@ -90,7 +90,6 @@ description = 'HA-JDBC2'
 sourceCompatibility = project.jdkVersion
 targetCompatibility = project.jdkVersion
 
-afterReleaseBuild.dependsOn uploadArchives
 
 
 configurations.all {
