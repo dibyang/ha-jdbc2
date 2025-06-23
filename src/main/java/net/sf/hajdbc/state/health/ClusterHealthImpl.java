@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.Map.Entry;
@@ -65,6 +66,19 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile boolean readyElect = false;
   private volatile Member host = null;
   private FileWatchDog fileWatchDog;
+  private List<String> managerFsIps = new ArrayList<>();
+  private FileWatchDog managerFsIpFileWatchDog = new FileWatchDog(new File("/etc/aio/.mfs_ip"), file -> {
+    Path path = file.toPath();
+    managerFsIps.clear();
+    try {
+      List<String> lines = Files.readAllLines(path);
+      if (!lines.isEmpty()) {
+        managerFsIps.addAll(Arrays.asList(lines.get(0).split(",")));
+      }
+    } catch (Exception e) {
+      logger.error("load manager fs ip error", e);
+    }
+  });
 
   private final FileReader<Integer> maxUnobservableReader = FileReader.of4int("max_unobservable");
 
@@ -851,7 +865,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     NetworkInterface nic = getNic(ip);
     if (nic != null) {
       try {
-        return nic.isUp();
+        return nic.isUp() && isManagerNicUp();
       } catch (SocketException e) {
         logger.warn("is up fail.", e);
         return true;
@@ -870,6 +884,30 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         return false;
       }
     }
+  }
+
+  /**
+   * 判断manager节点里文件系统里的网卡是否有启动的
+   * @return
+   */
+  private boolean isManagerNicUp() {
+    managerFsIpFileWatchDog.watch();
+    if (managerFsIps.isEmpty()) {
+      return true;
+    }
+    boolean up = false;
+    for (String ip : managerFsIps) {
+      NetworkInterface nic = getNic(ip);
+      if (nic != null) {
+        try {
+          up = up || nic.isUp();
+        } catch (SocketException e) {
+          logger.warn("check nic[{}] is up fail.", nic.getName(), e);
+          up = true;
+        }
+      }
+    }
+    return up;
   }
 
   @Override
