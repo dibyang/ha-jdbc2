@@ -115,9 +115,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     }catch (Exception e) {
       logger.warn("", e);
     }
-    if(host!=null) {
-      scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
-    }
+    scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
+
   }
 
 
