@@ -35,33 +35,38 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.management.*;
 import net.sf.hajdbc.state.DatabaseEvent;
+import net.sf.hajdbc.state.DatabasesEvent;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
+import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeHealth;
 import net.sf.hajdbc.state.health.NodeStateListener;
+import net.sf.hajdbc.state.health.observer.DetectMode;
+import net.sf.hajdbc.state.health.observer.NetworkDetectObserveAdapter;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.sync.SynchronizationContextImpl;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 import net.sf.hajdbc.util.LocalHost;
+import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.Tracer;
 import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
+import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 
 import javax.management.JMException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 
 /**
@@ -97,8 +102,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private final List<SynchronizationListener> synchronizationListeners = new CopyOnWriteArrayList<SynchronizationListener>();
   private final List<NodeStateListener> nodeStateListeners = new CopyOnWriteArrayList<>();
   private final List<NodeDatabaseRestoreListener> nodeDatabaseRestoreListeners = new CopyOnWriteArrayList<>();
-
-	private final AtomicBoolean synchronizing = new AtomicBoolean(false);
 
 	public DatabaseClusterImpl(String id, DatabaseClusterConfiguration<Z, D> configuration, DatabaseClusterConfigurationListener<Z, D> listener)
 	{
@@ -465,6 +468,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		if (added)
 		{
 			database.setActive(true);
+			
 			if (database.isDirty())
 			{
 				database.clean();
@@ -493,6 +497,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			logger.log(Level.WARN, new Exception("trace db_state"),"deactivate {0}", database.getId());
 		}
 		boolean removed = this.balancer.remove(database);
+		
 		if (removed)
 		{
 			database.setActive(false);
@@ -1025,7 +1030,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
-  boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
+
+	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
+
 		synchronized (database) {
 			if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 				return false;
@@ -1054,43 +1061,43 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			Lock lock = this.lockManager.writeLock(null);
 
 			lock.lockInterruptibly();
-			if(synchronizing.compareAndSet(false, true)) {
-				try {
-					if (this.balancer.contains(database)) {
-						return false;
-					}
-					if (!this.balancer.isEmpty()) {
-						SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
 
-						try {
-							DatabaseEvent event = new DatabaseEvent(database);
+			try {
 
-							logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
-
-							for (SynchronizationListener listener : this.synchronizationListeners) {
-								listener.beforeSynchronization(event);
-							}
-
-							strategy.synchronize(context);
-
-							logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
-
-							for (SynchronizationListener listener : this.synchronizationListeners) {
-								listener.afterSynchronization(event);
-							}
-						} finally {
-							context.close();
-						}
-					}
-					return this.activate(database, this.stateManager);
-				} finally {
-					lock.unlock();
-					stopWatch.stop();
-					synchronizing.set(false);
-					logger.log(Level.INFO, "db activate lock time {0}", stopWatch.toString());
+				if (this.balancer.contains(database)) {
+					return false;
 				}
+
+				if (!this.balancer.isEmpty()) {
+					SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
+
+					try {
+						DatabaseEvent event = new DatabaseEvent(database);
+
+						logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
+
+						for (SynchronizationListener listener : this.synchronizationListeners) {
+							listener.beforeSynchronization(event);
+						}
+
+						strategy.synchronize(context);
+
+						logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
+
+						for (SynchronizationListener listener : this.synchronizationListeners) {
+							listener.afterSynchronization(event);
+						}
+					} finally {
+						context.close();
+					}
+				}
+
+				return this.activate(database, this.stateManager);
+			} finally {
+				lock.unlock();
+				stopWatch.stop();
+				logger.log(Level.INFO, "db activate lock time {0}", stopWatch.toString());
 			}
-			return false;
 		}
 	}
 
@@ -1102,10 +1109,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
-				//在数据库同步中不检测活跃状态直接跳出
-				if(synchronizing.get()){
-					return;
-				}
+
 				Set<D> databases = DatabaseClusterImpl.this.getBalancer();
 
 				int size = databases.size();
@@ -1114,10 +1118,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					List<D> deadList = new ArrayList<D>(size);
 
 					for (D database : databases) {
-						//在同步中的数据库不检测活跃状态直接跳出
-						if(database.isSyncing()){
-							continue;
-						}
 						boolean alive = DatabaseClusterImpl.this.isAlive(database, Level.WARN);
 						boolean valid = stateManager.isValid(database);
 						if(Tracer.db_state.isTrace()){
@@ -1158,10 +1158,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
-				//在数据库同步中不尝试激活直接跳出
-        if(synchronizing.get()){
-					return;
-				}
+
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 
 				if (!activeDatabases.isEmpty())
@@ -1171,10 +1168,6 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					}
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
-						//在同步中的数据库不尝试激活直接跳出
-						if(database.isSyncing()){
-							continue;
-						}
 						if(!activeDatabases.contains(database)) {
 							try {
 								if (DatabaseClusterImpl.this.activate(database, DatabaseClusterImpl.this.configuration.getSynchronizationStrategyMap().get(DatabaseClusterImpl.this.configuration.getDefaultSynchronizationStrategy()))) {

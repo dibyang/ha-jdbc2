@@ -8,9 +8,9 @@ import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.Files;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.ZipUtils;
-import org.h2.Driver;
 
 import java.io.File;
+import java.io.FileFilter;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.Statement;
@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DbRestore {
-  static final Logger logger = LoggerFactory.getLogger(DbRestore.class);
+  static final Logger logger = LoggerFactory.getLogger(H2RunScriptCommand.class);
   static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
   public static final int MAX_BACKUP_COUNT = 10;
   public static final String EXT_DUMP = ".dump";
@@ -42,6 +42,7 @@ public class DbRestore {
         StopWatch stopWatch = StopWatch.createStarted();
         final String password = database.decodePassword(decoder);
         try (Connection connection = database.connect(database.getConnectionSource(), password); Statement statTarget = connection.createStatement()) {
+
           String bakPath = getBakPath(database.getLocation());
           //更改为数据库sql文件
           statTarget.execute("SCRIPT TO  '" + bakPath + "'");

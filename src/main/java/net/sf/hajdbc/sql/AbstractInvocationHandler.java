@@ -37,7 +37,6 @@ import java.lang.reflect.Proxy;
 import java.sql.SQLException;
 import java.sql.Wrapper;
 import java.util.*;
-import java.util.concurrent.locks.Condition;
 
 /**
  * 
@@ -77,8 +76,6 @@ public class AbstractInvocationHandler<Z, D extends Database<Z>, T, E extends Ex
 		
 		return this.invokeOnProxy(this.proxyClass.cast(proxy), method, args);
 	}
-
-
 
 	private <R> R invokeOnProxy(T proxy, Method method, Object... parameters) throws E
 	{
