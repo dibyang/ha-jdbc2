@@ -18,7 +18,7 @@ buildscript {
 }
 
 apply plugin: 'java'
-apply plugin: 'maven'
+apply plugin: 'maven-publish'
 apply plugin: 'signing'
 apply plugin: 'net.researchgate.release'
 
@@ -120,7 +120,7 @@ task javadocJar(type: Jar) {
     from javadoc
 }
 
-task sourcesJar(type: Jar) {
+task sourceJar(type: Jar) {
     classifier = 'sources'
     from sourceSets.main.allSource
 }
@@ -144,51 +144,73 @@ javadoc {
 
 // 并将它们与项目 jar 本身一起连接到 artifacts 集合中：
 artifacts {
-    archives javadocJar, sourcesJar
+    archives javadocJar, sourceJar
 }
 
-
-uploadArchives {
-    repositories {
-        mavenDeployer {
-            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-
-            repository(url: "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/") {
-                authentication(userName: findProperty("ossrhUsername")?:"", password: findProperty("ossrhPassword")?:"")
-            }
-
-            snapshotRepository(url: "https://s01.oss.sonatype.org/content/repositories/snapshots/") {
-                authentication(userName: findProperty("ossrhUsername")?:"", password: findProperty("ossrhPassword")?:"")
-            }
-
-            pom.project {
-                name 'ha-jdbc2'
-                packaging 'jar'
-                // optionally artifactId can be defined here
-                description "High-Availability JDBC"
-                url 'https://github.com/dibyang/ha-jdbc2'
-
-                scm {
-                    connection 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
-                    developerConnection 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
-                    url 'https://github.com/dibyang/ha-jdbc2.git'
-                }
-
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = project.group
+            artifactId = project.name
+            version = project.version
+            //如果不定义，则会按照以上默认值执行
+            // 指定要发布的模块
+            from components.java
+            // 添加源码jar
+            artifact sourceJar
+            // 添加javadocjar
+            artifact javadocJar
+            pom {
+                name = 'ha-jdbc2'
+                description = "High-Availability JDBC"
+                // 构件主页
+                url = 'https://github.com/dibyang/ha-jdbc2'
+                // 许可证名称和地址
                 licenses {
                     license {
-                        name 'GNU Lesser General Public License v3.0'
-                        url 'https://www.gnu.org/licenses/lgpl.html'
+                        name = 'The Apache License, Version 2.0'
+                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
                     }
                 }
-
+                // 开发者信息
                 developers {
                     developer {
-                        id 'yangzj'
-                        name 'Yang zhijian'
-                        email '3227817@qq.com'
+                        id = 'dib.yang'
+                        name = 'dib.yang'
+                        email = 'dib.yang@gmail.com'
                     }
+                }
+                // 版本控制仓库地址
+                scm {
+                    url = 'https://github.com/dibyang/ha-jdbc2'
+                    connection = 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
+                    developerConnection = 'scm:git:https://github.com/dibyang/ha-jdbc2.git'
                 }
             }
         }
     }
+    repositories {
+        maven {
+            // 发布仓库配置，这里基于version后缀是否为SNAPSHOT来区分发布到release库还是snapshots库
+            if(version.endsWith('SNAPSHOT')){
+                it.url = project.property("snapshotsRepository")
+            }else{
+                it.url = project.property("releasesRepository")
+            }
+
+            //认证用户和密码，在配置文件gradle.properties中配置
+            //oss-sonatype的登录用户名和密码
+            credentials {
+                username = findProperty("ossrhUsername")?:""
+                password = findProperty("ossrhPassword")?:""
+            }
+
+        }
+    }
 }
+
+// 将构建的包签名
+signing {
+    sign publishing.publications.maven
+}
+
