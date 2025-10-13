@@ -5,6 +5,7 @@ import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
+import net.sf.hajdbc.sql.AbstractDatabase;
 import net.sf.hajdbc.util.Files;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.ZipUtils;
@@ -13,6 +14,7 @@ import java.io.File;
 import java.io.FileFilter;
 import java.nio.file.Paths;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -41,8 +43,8 @@ public class DbRestore {
       if (file.exists()) {
         StopWatch stopWatch = StopWatch.createStarted();
         final String password = database.decodePassword(decoder);
-        try (Connection connection = database.connect(database.getConnectionSource(), password); Statement statTarget = connection.createStatement()) {
-
+        try (Connection connection = DriverManager.getConnection(database.getLocation(), database.getUser(), password); Statement statTarget = connection.createStatement()) {
+          statTarget.setQueryTimeout(60);
           String bakPath = getBakPath(database.getLocation());
           //更改为数据库sql文件
           statTarget.execute("SCRIPT TO  '" + bakPath + "'");

@@ -64,7 +64,7 @@ public interface Database<Z> extends Comparable<Database<Z>>, Serializable
 	 * @return true if local, false if remote
 	 */
 	boolean isLocal();
-
+  String getUser();
 	String decodePassword(Decoder decoder) throws SQLException;
 	
 	/**

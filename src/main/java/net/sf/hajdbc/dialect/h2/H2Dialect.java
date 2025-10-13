@@ -25,6 +25,7 @@ import net.sf.hajdbc.exception.CommandNotFoundException;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
+import net.sf.hajdbc.sql.AbstractDatabase;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.util.Resources;
@@ -170,20 +171,16 @@ public class H2Dialect extends StandardDialect
 		return this;
 	}
 
-	private void executeSql(Connection conn, String sql) throws SQLException {
-		try(Statement s = conn.createStatement()) {
-			s.execute(sql);
-		}
-	}
-
 
 	@Override
 	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
 		final String password = database.decodePassword(decoder);
 		StopWatch stopWatch = StopWatch.createStarted();
-		try(Connection connection = database.connect(database.getConnectionSource(), password))
+		try(Connection conn = DriverManager.getConnection(database.getLocation(), database.getUser(), password);
+        Statement stmt = conn.createStatement())
 		{
-			executeSql(connection, "SCRIPT TO  '" + file.getPath() + "'");
+      stmt.setQueryTimeout(60);
+      stmt.execute("SCRIPT TO  '" + file.getPath() + "'");
 		}
 		stopWatch.stop();
 		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(), file.getPath());

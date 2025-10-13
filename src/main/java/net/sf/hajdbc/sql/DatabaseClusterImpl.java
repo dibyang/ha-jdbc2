@@ -35,29 +35,23 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.management.*;
 import net.sf.hajdbc.state.DatabaseEvent;
-import net.sf.hajdbc.state.DatabasesEvent;
 import net.sf.hajdbc.state.StateManager;
 import net.sf.hajdbc.state.distributed.DistributedManager;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
-import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.state.health.ClusterHealth;
 import net.sf.hajdbc.state.health.NodeDatabaseRestoreListener;
 import net.sf.hajdbc.state.health.NodeHealth;
 import net.sf.hajdbc.state.health.NodeStateListener;
-import net.sf.hajdbc.state.health.observer.DetectMode;
-import net.sf.hajdbc.state.health.observer.NetworkDetectObserveAdapter;
 import net.sf.hajdbc.state.sync.SyncMgr;
 import net.sf.hajdbc.sync.SynchronizationContext;
 import net.sf.hajdbc.sync.SynchronizationContextImpl;
 import net.sf.hajdbc.tx.TransactionIdentifierFactory;
 import net.sf.hajdbc.util.LocalHost;
-import net.sf.hajdbc.util.Resources;
 import net.sf.hajdbc.util.StopWatch;
 import net.sf.hajdbc.util.Tracer;
 import net.sf.hajdbc.util.concurrent.cron.CronExpression;
 import net.sf.hajdbc.util.concurrent.cron.CronThreadPoolExecutor;
-import org.h2.jdbc.JdbcSQLNonTransientConnectionException;
 
 import javax.management.JMException;
 import java.sql.Connection;
@@ -66,7 +60,7 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
 /**
@@ -501,15 +495,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		if (removed)
 		{
 			database.setActive(false);
-			
-			DatabaseEvent event = new DatabaseEvent(database);
 
+			DatabaseEvent event = new DatabaseEvent(database);
 			manager.deactivated(event);
 			
 			for (DatabaseClusterListener listener: this.clusterListeners)
 			{
 				listener.deactivated(event);
 			}
+      if(database.isLocal()){
+        getClusterHealth().setState(NodeState.offline);
+      }
 		}
 		
 		return removed;
@@ -1030,6 +1026,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		}
 	}
 
+  final AtomicBoolean activating = new AtomicBoolean(false);
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
 
@@ -1067,7 +1064,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				if (this.balancer.contains(database)) {
 					return false;
 				}
-
+        activating.compareAndSet(false,true);
 				if (!this.balancer.isEmpty()) {
 					SynchronizationContext<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database);
 
@@ -1094,6 +1091,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 
 				return this.activate(database, this.stateManager);
 			} finally {
+        activating.set(false);
 				lock.unlock();
 				stopWatch.stop();
 				logger.log(Level.INFO, "db activate lock time {0}", stopWatch.toString());
@@ -1109,7 +1107,9 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
 					return;
 				}
-
+        if(activating.get()){
+          return;
+        }
 				Set<D> databases = DatabaseClusterImpl.this.getBalancer();
 
 				int size = databases.size();

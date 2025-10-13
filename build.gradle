@@ -211,6 +211,9 @@ publishing {
 
 // 将构建的包签名
 signing {
-    sign publishing.publications.maven
+    required { !version.endsWith("SNAPSHOT") }
+    if (!version.endsWith("SNAPSHOT")) {
+        sign publishing.publications.maven
+    }
 }
 
