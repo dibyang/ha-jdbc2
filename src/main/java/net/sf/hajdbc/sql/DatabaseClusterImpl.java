@@ -1155,8 +1155,16 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		{
 			try
 			{
+        if(isActive()) {
+          D localDb = DatabaseClusterImpl.this.getLocalDatabase();
+          if (localDb != null && !localDb.isActive()) {
+            for (NodeStateListener stateListener : DatabaseClusterImpl.this.nodeStateListeners) {
+              stateListener.notActiveDatabase(localDb);
+            }
+          }
+        }
 				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
-					return;
+          return;
 				}
 
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
