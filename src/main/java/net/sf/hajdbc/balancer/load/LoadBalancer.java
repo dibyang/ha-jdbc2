@@ -21,6 +21,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractBalancer;
@@ -103,7 +104,9 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	{
 		try
 		{
-			return this.databaseMap.firstKey();
+			return this.getDatabases().stream()
+          .findFirst()
+          .orElse(null);
 		}
 		catch (NoSuchElementException e)
 		{
@@ -132,7 +135,9 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	@Override
 	public Set<D> getDatabases()
 	{
-		return this.databaseMap.keySet();
+    return this.databaseMap.keySet().stream()
+        .sorted(Comparator.comparing(e -> !e.isLocal()))
+        .collect(Collectors.toCollection(LinkedHashSet::new));
 	}
 
 	/**
