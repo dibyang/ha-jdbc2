@@ -63,6 +63,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 
+import static net.sf.hajdbc.sql.AbstractDatabase.H2;
+
 /**
  * @author paul
  *
@@ -1163,15 +1165,20 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
             }
           }
         }
-				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()) {
-          return;
+				boolean h2 = false;
+				D localDb = DatabaseClusterImpl.this.getLocalDatabase();
+				if (localDb != null && localDb.getDbType().equals(H2)) {
+					h2 = true;
+				}
+				if (!DatabaseClusterImpl.this.getClusterHealth().isHost()&&h2) {
+					return;
 				}
 
 				Set<D> activeDatabases = DatabaseClusterImpl.this.getBalancer();
 
 				if (!activeDatabases.isEmpty())
 				{
-					if(activeDatabases.stream().noneMatch(Database::isLocal)){
+					if(h2&&activeDatabases.stream().noneMatch(Database::isLocal)){
 						return;
 					}
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
