@@ -114,6 +114,17 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+task verifyTestCompilation(type: JavaCompile) {
+    group = 'verification'
+    description = 'Compiles test sources without running tests; intended for use while legacy test tasks are disabled.'
+    source = sourceSets.test.java
+    classpath = sourceSets.test.compileClasspath
+    destinationDir = file("$buildDir/classes/java/verifyTestCompilation")
+    sourceCompatibility = project.jdkVersion
+    targetCompatibility = project.jdkVersion
+    options.encoding = 'UTF-8'
+}
+
 //对于典型的 Java 项目，您可以添加一个javadocJar以及一个 sourcesJar任务
 task javadocJar(type: Jar) {
     classifier = 'javadoc'
@@ -168,8 +179,8 @@ publishing {
                 // 许可证名称和地址
                 licenses {
                     license {
-                        name = 'The Apache License, Version 2.0'
-                        url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        name = 'GNU Lesser General Public License, Version 3.0'
+                        url = 'https://www.gnu.org/licenses/lgpl-3.0.txt'
                     }
                 }
                 // 开发者信息
