@@ -73,7 +73,7 @@ public class TimeoutUtil {
         return callable.call();
       }
     };
-    return call(task,timeout,TimeUnit.MILLISECONDS);
+    return call(task, timeout, unit);
   }
 
   public <V> V call(final Task<V> task){

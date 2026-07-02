@@ -33,7 +33,7 @@
 | P1-3 | 已处理（短期） | 分布式文件同步下载可能保留旧文件尾部，上传/下载命令缺少路径信任边界 | `SyncMgrImpl:82-155`, `UploadCommand:46-62`, `UploadedCommand:60-99`, `DownloadCommand:49-75` | 已改为下载临时文件替换、失败清理临时文件，并增加同步路径白名单 |
 | P1-4 | 已处理 | 发布元数据许可证与仓库 LICENSE/README 不一致 | `LICENSE:1-2`, `README.md:5-7`, `build.gradle:169-173` | 已统一为 LGPL |
 | P2-1 | 中 | 健康检测和诊断配置硬编码 Linux 系统路径 | `ClusterHealthImpl:70`, `ClusterHealthImpl:100`, `Tracer:18-25`, `FileReader:62-66` | 中 |
-| P2-2 | 中 | `TimeoutUtil` 忽略调用方传入的 `TimeUnit` | `TimeoutUtil:59-77` | 中 |
+| P2-2 | 已处理 | `TimeoutUtil` 忽略调用方传入的 `TimeUnit` | `TimeoutUtil:59-77` | 已改为使用调用方传入的时间单位，并增加秒级超时与取消测试 |
 | P2-3 | 中 | 资源关闭不完整，健康检测线程池未在 `stop()` 中关闭 | `ClusterHealthImpl:92-121`, `ClusterHealthImpl:721-726` | 中 |
 | P2-4 | 中 | 日志体系混用和裸 `printStackTrace()`，生产问题难以统一收敛 | `ClusterHealthImpl:773-787`, `ClusterHealthImpl:847-855`, `ZipUtils` 等 | 中 |
 | P3-1 | 低中 | 空 SPI 文件可能造成扩展点配置误导 | `META-INF/services/net.sf.hajdbc.state.health.observer.ObserveAdapter` 长度为 0 | 低中 |
@@ -299,6 +299,10 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 - 直接使用传入的 `unit`。
 - 增加单元测试覆盖毫秒、秒两种单位。
 
+**处理结果**
+
+已采用上述方案：`TimeoutUtil.call(Callable, V, long, TimeUnit)` 现在会把调用方传入的 `unit` 继续传递到最终 `Future#get(timeout, unit)`；新增 `TimeoutUtilTest` 覆盖秒级超时不被误当毫秒，以及超时后任务会被取消并收到中断。
+
 ### P2-3 健康检测资源关闭不完整
 
 **事实证据**
@@ -442,6 +446,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 ### 阶段 4：环境适配与可观测性
 
 - 系统路径配置化。
+- 修复 `TimeoutUtil` 的 `TimeUnit` 传递问题。（已完成）
 - 清理 `printStackTrace()` 和吞异常。
 - 完善 health/command 日志字段。
 
