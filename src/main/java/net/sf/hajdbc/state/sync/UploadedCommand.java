@@ -11,7 +11,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 
@@ -58,8 +58,16 @@ public class UploadedCommand implements SyncCommand<Boolean> {
 
   @Override
   public Boolean execute(StateCommandContext context) {
-    String path2 = path + TMP_FILE_SUFFIX;
-    File file = new File(path2);
+    Path target;
+    Path temp;
+    try {
+      target = SyncFilePath.target(path);
+      temp = SyncFilePath.tempSibling(path);
+    } catch (IllegalArgumentException e) {
+      logger.log(Level.WARN, e);
+      return false;
+    }
+    File file = temp.toFile();
     if(file.exists()){
 
       if(file.length()==size){
@@ -73,7 +81,7 @@ public class UploadedCommand implements SyncCommand<Boolean> {
           String digest = MD5.md5DigestToString(md.digest());
           if(digest.equals(md5)){
             logger.log(Level.INFO,"uploaded file size={0} path={1} use time {2}",size,path, StopWatch.formatDuration(nanos));
-            Files.move(file.toPath(), Paths.get(path), StandardCopyOption.REPLACE_EXISTING);
+            Files.move(file.toPath(), target, StandardCopyOption.REPLACE_EXISTING);
             return true;
           }else{
             logger.log(Level.WARN,"uploaded file md5 error. md5={0} expect={1} path={2}",md5, digest, path);
@@ -85,6 +93,11 @@ public class UploadedCommand implements SyncCommand<Boolean> {
       }else{
         logger.log(Level.WARN,"uploaded file size error. size={0} expect={1} path={2}",file.length(), size, path);
       }
+    }
+    try {
+      Files.deleteIfExists(temp);
+    } catch (IOException e) {
+      logger.log(Level.WARN, e);
     }
     return false;
   }

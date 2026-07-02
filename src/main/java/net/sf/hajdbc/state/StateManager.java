@@ -43,5 +43,9 @@ public interface StateManager extends DatabaseClusterListener, DurabilityListene
 	
 	boolean isEnabled();
 
+	/**
+	 * Returns whether the database is valid for this state manager's topology.
+	 * This is not the same as whether the database is currently active.
+	 */
 	boolean isValid(Database<?> database);
 }

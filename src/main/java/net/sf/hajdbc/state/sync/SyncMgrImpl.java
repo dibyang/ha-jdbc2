@@ -13,7 +13,9 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.file.Paths;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 
 public class SyncMgrImpl implements SyncMgr{
@@ -88,43 +90,68 @@ public class SyncMgrImpl implements SyncMgr{
         downloadCommand.setPath(file.getPath());
       }
       long offset = 0;
-      try (RandomAccessFile raf = new RandomAccessFile(file, "rws")) {
-        while (true) {
-          downloadCommand.setOffset(offset);
-          Block block = this.execute(target, downloadCommand);
-          if(block!=null){
-            if(block.getLength()>0) {
-              if(block.getSize()>0&&block.getData()!=null) {
-                MessageDigest md = MD5.newInstance();
-                md.update(block.getData(),0, block.getSize());
-                String md5 = MD5.md5DigestToString(md.digest());
-                if(md5.equals(block.getMd5())) {
-                  raf.seek(offset);
-                  raf.write(block.getData(), 0, block.getSize());
-                  offset += block.getSize();
-                }else{
-                  //下载失败
-                  logger.log(Level.INFO,"download file path={0} fail for md5 invalid.", file.getPath());
+      long remoteLength = -1;
+      Path tempPath = null;
+      try {
+        Path targetPath = SyncFilePath.target(file.getPath());
+        tempPath = SyncFilePath.tempSibling(file.getPath());
+        boolean complete = false;
+        try (RandomAccessFile raf = new RandomAccessFile(tempPath.toFile(), "rws")) {
+          raf.setLength(0);
+          while (true) {
+            downloadCommand.setOffset(offset);
+            Block block = this.execute(target, downloadCommand);
+            if(block!=null){
+              if(block.getLength()>0) {
+                if (remoteLength < 0) {
+                  remoteLength = block.getLength();
+                }
+                if(block.getSize()>0&&block.getData()!=null) {
+                  MessageDigest md = MD5.newInstance();
+                  md.update(block.getData(),0, block.getSize());
+                  String md5 = MD5.md5DigestToString(md.digest());
+                  if(md5.equals(block.getMd5())) {
+                    raf.seek(offset);
+                    raf.write(block.getData(), 0, block.getSize());
+                    offset += block.getSize();
+                  }else{
+                    // Download failed.
+                    logger.log(Level.INFO,"download file path={0} fail for md5 invalid.", file.getPath());
+                    break;
+                  }
+                }
+                if(offset>=remoteLength){
+                  raf.setLength(remoteLength);
+                  complete = true;
                   break;
                 }
-              }
-              if(file.length()>=block.getLength()){
-                r = true;
+              }else{
+                // Empty files are treated as a failed download.
+                logger.log(Level.INFO,"download file path={0} fail for empty file.", file.getPath());
                 break;
               }
             }else{
-              //空文件将会下载失败
-              logger.log(Level.INFO,"download file path={0} fail for empty file.", file.getPath());
+              // Network failures are retried by execute() before failing the download.
+              logger.log(Level.INFO,"download file path={0} fail for net fail.", file.getPath());
               break;
             }
-          }else{
-            //网络失败重试3次就会下载失败
-            logger.log(Level.INFO,"download file path={0} fail for net fail.", file.getPath());
-            break;
           }
+        }
+        if (complete) {
+          Files.move(tempPath, targetPath, StandardCopyOption.REPLACE_EXISTING);
+          r = true;
         }
       } catch (IOException e) {
         logger.log(Level.WARN, e);
+      } catch (IllegalArgumentException e) {
+        logger.log(Level.WARN, e);
+      }
+      if (!r && tempPath != null) {
+        try {
+          Files.deleteIfExists(tempPath);
+        } catch (IOException e) {
+          logger.log(Level.WARN, e);
+        }
       }
 
       stopWatch.stop();

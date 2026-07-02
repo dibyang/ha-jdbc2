@@ -5,9 +5,9 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.state.distributed.StateCommandContext;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.Path;
 
 public class UploadCommand implements SyncCommand<Boolean> {
   static final Logger logger = LoggerFactory.getLogger(UploadCommand.class);
@@ -44,24 +44,20 @@ public class UploadCommand implements SyncCommand<Boolean> {
 
   @Override
   public Boolean execute(StateCommandContext context) {
-    String path2 = path + TMP_FILE_SUFFIX;
-    File file = new File(path2);
     try {
-      if(offset==0&&file.exists()){
-        file.delete();
+      Path file = SyncFilePath.tempSibling(path);
+      if(offset==0&&file.toFile().exists()){
+        file.toFile().delete();
       }
-      if(!file.exists()){
-        file.createNewFile();
+      if(!file.toFile().exists()){
+        file.toFile().createNewFile();
       }
-    } catch (IOException e) {
-      logger.log(Level.WARN,e);
-    }
-
-    try (RandomAccessFile raf = new RandomAccessFile(file,"rws")){
-      raf.seek(offset);
-      raf.write(data);
-      return true;
-    } catch (IOException e) {
+      try (RandomAccessFile raf = new RandomAccessFile(file.toFile(),"rws")){
+        raf.seek(offset);
+        raf.write(data);
+        return true;
+      }
+    } catch (IOException | IllegalArgumentException e) {
       logger.log(Level.WARN,e);
     }
     return false;

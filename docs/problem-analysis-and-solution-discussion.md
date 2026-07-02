@@ -26,11 +26,11 @@
 | 编号 | 严重级别 | 问题 | 主要证据 | 建议优先级 |
 | --- | --- | --- | --- | --- |
 | P0-1 | 已处理 | Gradle 全局禁用测试任务，CI 容易出现“绿灯但未测试” | 原 `build.gradle:10-15`, `test --dry-run` 全部测试相关任务 skipped | 已改为默认启用测试，跳过需显式 `-PskipTests=true` |
-| P0-2 | 高 | 状态管理器 `isValid()` 与激活流程语义冲突，可能阻止手动激活非活跃数据库 | `DatabaseClusterImpl:1033-1037`, `SimpleStateManager:100-102`, `SQLStateManager:584-586` | 最高 |
-| P0-3 | 高 | 运行库代码在健康启动失败时直接 `System.exit(1)` | `ClusterHealthImpl:110-115` | 最高 |
-| P1-1 | 高 | 集群启动存在无限等待路径，配置或环境错误会挂住调用线程 | `DatabaseClusterImpl:562-573`, `DatabaseClusterImpl:850-853` | 高 |
-| P1-2 | 高 | 主备健康逻辑中用 IP 调 `getDatabase(id)`，数据库 ID 与 IP 不一致时可能抛异常 | `ClusterHealthImpl:463-491`, `DatabaseClusterImpl:531-557` | 高 |
-| P1-3 | 高 | 分布式文件同步下载可能保留旧文件尾部，上传命令缺少路径信任边界 | `SyncMgrImpl:80-133`, `UploadCommand:47-63`, `UploadedCommand:61-77` | 高 |
+| P0-2 | 已处理 | 状态管理器 `isValid()` 与激活流程语义冲突，可能阻止手动激活非活跃数据库 | `DatabaseClusterImpl:1033-1037`, `SimpleStateManager:100-102`, `SQLStateManager:584-586` | 已明确本地状态管理器 `isValid()` 不等同于 active |
+| P0-3 | 已处理 | 运行库代码在健康启动失败时直接 `System.exit(1)` | `ClusterHealthImpl:110-115` | 已改为向调用方抛出启动失败异常 |
+| P1-1 | 已处理 | 集群启动存在无限等待路径，配置或环境错误会挂住调用线程 | `DatabaseClusterImpl:562-573`, `DatabaseClusterImpl:850-853` | 非分布式启动恢复已修复；本地库发现与活动库等待均已加入可配置超时 |
+| P1-2 | 已处理 | 主备健康逻辑中用 IP 调 `getDatabase(id)`，数据库 ID 与 IP 不一致时可能抛异常 | `ClusterHealthImpl:463-491`, `DatabaseClusterImpl:531-557` | 已改为通过 `getDatabaseByIp()` 查找主节点数据库 |
+| P1-3 | 已处理（短期） | 分布式文件同步下载可能保留旧文件尾部，上传/下载命令缺少路径信任边界 | `SyncMgrImpl:82-155`, `UploadCommand:46-62`, `UploadedCommand:60-99`, `DownloadCommand:49-75` | 已改为下载临时文件替换、失败清理临时文件，并增加同步路径白名单 |
 | P1-4 | 已处理 | 发布元数据许可证与仓库 LICENSE/README 不一致 | `LICENSE:1-2`, `README.md:5-7`, `build.gradle:169-173` | 已统一为 LGPL |
 | P2-1 | 中 | 健康检测和诊断配置硬编码 Linux 系统路径 | `ClusterHealthImpl:70`, `ClusterHealthImpl:100`, `Tracer:18-25`, `FileReader:62-66` | 中 |
 | P2-2 | 中 | `TimeoutUtil` 忽略调用方传入的 `TimeUnit` | `TimeoutUtil:59-77` | 中 |
@@ -46,7 +46,7 @@
 
 当前处理：已取消按任务名全局禁用测试，测试默认启用；如果确实需要临时跳过测试，必须显式传入 `-PskipTests=true`。`test` 默认设置 120 秒超时，避免历史测试挂起时形成无期限等待；确有长时间验证需要时，可通过 `-PtestTimeoutSeconds=<seconds>` 显式调整。同时保留 `verifyTestCompilation` 作为“只编译测试源码、不运行测试”的轻量入口。
 
-恢复测试门禁后，`net.sf.hajdbc.sql.BlobTest` 单独执行会挂起；当前已通过测试任务超时把该问题转换为构建失败信号，后续应单独修复该测试或其暴露出的 BLOB 处理行为问题，而不应再次全局跳过测试。
+恢复测试门禁后，`net.sf.hajdbc.sql.BlobTest` 曾暴露启动恢复挂起问题；当前已修复本地状态管理器有效性语义、DataSource 数据库类型识别和非分布式启动激活路径，`BlobTest` 与全量 `test` 已可完成。
 
 ### 集群激活
 
@@ -58,7 +58,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 }
 ```
 
-但多个本地持久化状态管理器的 `isValid(Database<?>)` 直接返回 `getActiveDatabases().contains(database.getId())`。这意味着“非活跃数据库”在进入激活流程前就可能被判定无效，形成语义闭环：未激活所以无效，无效所以不能激活。
+原多个本地持久化状态管理器的 `isValid(Database<?>)` 直接返回 `getActiveDatabases().contains(database.getId())`。这意味着“非活跃数据库”在进入激活流程前就可能被判定无效，形成语义闭环：未激活所以无效，无效所以不能激活。当前已将本地状态管理器的 `isValid()` 明确为拓扑有效性判断，不再等同于 active 集合判断；分布式状态管理器继续按成员 IP 判断。
 
 ### 健康检测与主备
 
@@ -127,7 +127,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 **建议**
 
-优先讨论 B。把“是否活跃”“是否可激活”“是否属于有效成员”拆成不同接口或方法，避免继续复用模糊的 `isValid()`。
+已采用 A 的短期修复：本地状态管理器默认认为配置内数据库拓扑有效，分布式状态管理器继续检查成员有效性。长期仍可讨论 B，将“是否活跃”“是否可激活”“是否属于有效成员”拆成不同接口或方法，避免继续复用模糊的 `isValid()`。
 
 ### P0-3 库代码直接退出 JVM
 
@@ -176,7 +176,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 **建议**
 
-短期采用 A+B：增加超时和明确错误信息。是否允许 C 需要确认产品运行模式。
+已先修复非分布式启动恢复路径：无分布式健康管理器时会尝试激活所有可连接数据库，避免普通本地集群只激活单个本地 IP 命中的数据库。同时已为本地库发现和活动库等待增加可配置超时，分别由 `ha-jdbc.startup.local-database-timeout-millis`、`ha-jdbc.startup.active-database-timeout-millis` 控制，默认 60 秒；重试间隔由 `ha-jdbc.startup.retry-interval-millis` 控制，默认 1 秒。
 
 ### P1-2 主备逻辑混用数据库 ID 与 IP
 
@@ -200,7 +200,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 **建议**
 
-优先采用 A，并补充测试覆盖“数据库 ID 不等于 IP”的分布式场景。若生产确实依赖 ID=IP，也应显式校验和文档化。
+已采用 A：远端 host 处理改用 `getDatabaseByIp(getIp(host))`，并补充测试覆盖“数据库 ID 不等于 IP”的分布式场景。若生产确实依赖 ID=IP，后续仍可追加显式校验和文档化。
 
 ### P1-3 分布式文件同步数据完整性与路径边界
 
@@ -227,7 +227,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 **建议**
 
-生产级修复采用 A+C+D；如果需要快速止血，先做 B+C，并补充大文件、变小文件、断点失败测试。
+已完成短期修复：下载改为先写目标同目录临时文件，块 MD5 校验全部通过且长度达到远端长度后再替换目标文件；失败时保留旧文件并清理临时文件。同步命令路径统一规范化为绝对路径，临时文件固定为目标文件同目录兄弟文件；如设置 `ha-jdbc.sync.allowed-roots`，上传、上传完成和下载命令都会拒绝白名单目录外的路径。长期仍可继续采用 D，引入同步任务 ID、远端全文件摘要和相对路径协议，进一步减少裸 path 传输。
 
 ### P1-4 许可证元数据不一致
 
@@ -425,17 +425,17 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 ### 阶段 2：运行时高风险修复
 
-- 移除 `ClusterHealthImpl` 的运行时 `System.exit`。
-- 为启动等待增加超时和明确错误。
-- 修复 `isValid()` 语义冲突。
+- 移除 `ClusterHealthImpl` 的运行时 `System.exit`。（已完成）
+- 为启动等待增加超时和明确错误。（已完成）
+- 修复 `isValid()` 语义冲突。（已完成本地状态管理器短期修复）
 
 验收：手动激活非活跃数据库的单元/集成测试通过；启动失败能被上层捕获。
 
 ### 阶段 3：分布式与文件同步治理
 
-- 修复 host IP/ID 查找问题。
-- 文件同步改为临时文件加最终摘要校验。
-- 增加路径白名单和同步任务 ID。
+- 修复 host IP/ID 查找问题。（已完成）
+- 文件同步改为临时文件替换，并保留块摘要校验。（短期已完成；最终全文件摘要待协议扩展）
+- 增加路径白名单。（已完成；同步任务 ID 待协议扩展）
 
 验收：双节点 smoke 和文件变小覆盖测试通过。
 
@@ -449,8 +449,8 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 ## 开放问题
 
-- 生产配置中数据库 ID 是否始终等于数据库 IP？如果是历史约定，应写入配置校验；如果不是，P1-2 必须修。
-- `StateManager.isValid()` 最初意图是“活跃状态”还是“成员有效性”？需要结合历史提交或生产行为确认。
+- 生产配置中数据库 ID 是否始终等于数据库 IP？当前实现已不再要求 host 分支 ID=IP；若它是历史约定，仍可补充配置校验和文档化。
+- `StateManager.isValid()` 长期是否应拆分为 `isActive`、`canActivate`、`isMemberValid` 等更明确接口？
 - 健康检测中 `/etc/aio/.mfs_ip` 和 `/proc/mounts` 是通用 HA-JDBC 能力，还是某个产品部署形态的定制逻辑？
-- 文件同步命令的 path 是否只由可信方生成？是否需要安全边界审查？
+- 文件同步命令的 path 是否只由可信方生成？当前可通过 `ha-jdbc.sync.allowed-roots` 增加运行时白名单；长期仍建议改为相对路径加任务 ID 协议。
 - 测试任务被禁用是否因为历史测试不可维护？如果是，第一阶段需要先确定最小可恢复测试集合。

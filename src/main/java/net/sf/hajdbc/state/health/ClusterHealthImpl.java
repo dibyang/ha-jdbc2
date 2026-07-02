@@ -108,15 +108,21 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     arbiter.setLocalIp(localIp);
     arbiter.setIps(this.stateManager.getDatabaseCluster().getNodes());
     try {
-      doTask();
+      runStartupTask();
     } catch (StartFailException e){
-      //操作不允许
-      System.exit(1);
+      throw new IllegalStateException(StartFailException.MESSAGE, e);
     }catch (Exception e) {
       logger.warn("", e);
     }
     scheduledService.scheduleWithFixedDelay(this, 500, 500, TimeUnit.MILLISECONDS);
 
+  }
+
+  /**
+   * 执行启动期健康检查。独立成受保护方法，便于测试启动失败不会退出 JVM。
+   */
+  protected void runStartupTask() throws InterruptedException, StartFailException {
+    doTask();
   }
 
 
@@ -471,7 +477,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       } else {
         DatabaseCluster databaseCluster = stateManager.getDatabaseCluster();
         //补充将主节点直接加入活动数据库
-        Database<?> hostDb = databaseCluster.getDatabase(getIp(host));
+        Database<?> hostDb = databaseCluster.getDatabaseByIp(getIp(host));
         if(hostDb!=null){
           Set<String> activeDatabases = stateManager.getActiveDatabases();
           if(!activeDatabases.contains(hostDb.getId())) {

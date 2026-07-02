@@ -136,7 +136,9 @@ public abstract class AbstractDatabase<Z> implements Database<Z>
 	@Description("type for this database")
 	@Override
 	public String getDbType(){
-		return getDbType(this.location);
+		String type = getDbType(this.location);
+		String url = this.properties.get("url");
+		return (H2.equals(type) && (url != null)) ? getDbType(url) : type;
 	}
 
 	private String getDbType(String url){

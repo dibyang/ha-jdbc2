@@ -9,6 +9,7 @@ import net.sf.hajdbc.util.MD5;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.nio.file.Path;
 import java.security.MessageDigest;
 
 public class DownloadCommand implements SyncCommand<Block> {
@@ -47,7 +48,14 @@ public class DownloadCommand implements SyncCommand<Block> {
   @Override
   public Block execute(StateCommandContext context) {
     Block block = new Block();
-    File file = new File(path);
+    Path target;
+    try {
+      target = SyncFilePath.target(path);
+    } catch (IllegalArgumentException e) {
+      logger.log(Level.WARN, e);
+      return block;
+    }
+    File file = target.toFile();
     MessageDigest md = MD5.newInstance();
     if(file.exists()&&offset<file.length()){
       block.setLength(file.length());

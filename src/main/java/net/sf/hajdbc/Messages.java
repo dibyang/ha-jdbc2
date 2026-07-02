@@ -63,6 +63,7 @@ public enum Messages
 	INSERT_COUNT("insert-count"),
 	INVALID_DATABASE("invalid-database"),
 	INVALID_DATABASE_CLUSTER("invalid-database-cluster"),
+	INVALID_META_DATA_CACHE("invalid-meta-data-cache"),
 	INVALID_PROPERTY("invalid-property"),
 	INVALID_PROPERTY_VALUE("invalid-property-value"),
 	INVALID_SYNC_STRATEGY("invalid-sync-strategy"),

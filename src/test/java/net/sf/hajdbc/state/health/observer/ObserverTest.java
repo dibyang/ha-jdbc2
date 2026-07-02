@@ -12,8 +12,9 @@ public class ObserverTest {
   public void getAdapters() {
     List<ObserveAdapter> adapters = mgr.getAdapters();
     assertEquals("not ping","ping",adapters.get(0).getName());
-    assertEquals("not test2","test2",adapters.get(1).getName());
-    assertEquals("not test1","test1",adapters.get(2).getName());
+    assertEquals("not net-delay-detect","net-delay-detect",adapters.get(1).getName());
+    assertEquals("not test2","test2",adapters.get(2).getName());
+    assertEquals("not test1","test1",adapters.get(3).getName());
   }
 
 

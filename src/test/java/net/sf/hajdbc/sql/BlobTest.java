@@ -15,6 +15,7 @@ import java.sql.Statement;
 import java.util.Arrays;
 
 import net.sf.hajdbc.SimpleDatabaseClusterConfigurationFactory;
+import net.sf.hajdbc.LocalDatabaseTestSupport;
 import net.sf.hajdbc.cache.simple.SimpleDatabaseMetaDataCacheFactory;
 import net.sf.hajdbc.dialect.hsqldb.HSQLDBDialectFactory;
 import net.sf.hajdbc.durability.none.NoDurabilityFactory;
@@ -32,13 +33,23 @@ public class BlobTest
 	{
 		DataSourceDatabase db1 = new DataSourceDatabase();
 		db1.setId("db1");
+		db1.setIp(LocalDatabaseTestSupport.localIp());
 		db1.setLocation(JDBCDataSource.class.getName());
 		db1.setProperty("url", "jdbc:hsqldb:mem:db1");
+		db1.setProperty("user", "sa");
+		db1.setProperty("password", "");
+		db1.setUser("sa");
+		db1.setPassword("");
 		
 		DataSourceDatabase db2 = new DataSourceDatabase();
 		db2.setId("db2");
+		db2.setIp(LocalDatabaseTestSupport.remoteIp());
 		db2.setLocation(JDBCDataSource.class.getName());
 		db2.setProperty("url", "jdbc:hsqldb:mem:db2");
+		db2.setProperty("user", "sa");
+		db2.setProperty("password", "");
+		db2.setUser("sa");
+		db2.setPassword("");
 		
 		DataSourceDatabaseClusterConfiguration config = new DataSourceDatabaseClusterConfiguration();
 		

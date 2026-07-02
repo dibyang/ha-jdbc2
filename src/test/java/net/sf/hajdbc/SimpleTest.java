@@ -104,6 +104,7 @@ public class SimpleTest
 	{
 		DataSourceDatabase db1 = new DataSourceDatabase();
 		db1.setId("db1");
+		db1.setIp(LocalDatabaseTestSupport.localIp());
 		db1.setLocation(JDBCDataSource.class.getName());
 		db1.setProperty("url", "jdbc:hsqldb:mem:db1");
 		db1.setProperty("user", "sa");
@@ -113,6 +114,7 @@ public class SimpleTest
 		
 		DataSourceDatabase db2 = new DataSourceDatabase();
 		db2.setId("db2");
+		db2.setIp(LocalDatabaseTestSupport.remoteIp());
 		db2.setLocation(JDBCDataSource.class.getName());
 		db2.setProperty("url", "jdbc:hsqldb:mem:db2");
 		db2.setProperty("user", "sa");

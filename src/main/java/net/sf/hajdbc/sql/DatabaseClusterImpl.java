@@ -57,6 +57,7 @@ import javax.management.JMException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -73,6 +74,11 @@ import static net.sf.hajdbc.sql.AbstractDatabase.H2;
 public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCluster<Z, D>
 {
 	static final Logger logger = LoggerFactory.getLogger(DatabaseClusterImpl.class);
+	public static final String STARTUP_LOCAL_DATABASE_TIMEOUT_PROPERTY = "ha-jdbc.startup.local-database-timeout-millis";
+	public static final String STARTUP_ACTIVE_DATABASE_TIMEOUT_PROPERTY = "ha-jdbc.startup.active-database-timeout-millis";
+	public static final String STARTUP_RETRY_INTERVAL_PROPERTY = "ha-jdbc.startup.retry-interval-millis";
+	public static final long DEFAULT_STARTUP_TIMEOUT_MILLIS = 60_000L;
+	public static final long DEFAULT_STARTUP_RETRY_INTERVAL_MILLIS = 1_000L;
 	
 	private final String id;
 	
@@ -505,7 +511,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			{
 				listener.deactivated(event);
 			}
-      if(database.isLocal()){
+      if(database.isLocal() && (getClusterHealth() != null)){
         getClusterHealth().setState(NodeState.offline);
       }
 		}
@@ -560,6 +566,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	}
 
 	private void checkLocalDb() throws InterruptedException {
+		long deadline = deadline(STARTUP_LOCAL_DATABASE_TIMEOUT_PROPERTY, DEFAULT_STARTUP_TIMEOUT_MILLIS);
 		while(this.localDbId==null) {
 			for (D db : this.configuration.getDatabaseMap().values()) {
 				if (LocalHost.getAllIp().contains(db.getIp())) {
@@ -568,8 +575,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					break;
 				}
 			}
+			if (isExpired(deadline)) {
+				throw new IllegalStateException("Timed out waiting for local database. all db: " + this.configuration.getDatabaseMap().values());
+			}
 			logger.log(Level.WARN,"checkLocalDb not find local db. all db: {0}",this.configuration.getDatabaseMap().values());
-			Thread.sleep(1000);
+			Thread.sleep(startupRetryInterval());
 		}
 	}
 	/**
@@ -582,7 +592,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		try {
 			checkLocalDb();
 		} catch (InterruptedException e) {
-			//ignore InterruptedException
+			Thread.currentThread().interrupt();
 		}
 		if(localDbId!=null) {
 			Iterator<D> iterator = this.configuration.getDatabaseMap().values().iterator();
@@ -843,13 +853,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			if(starting) {
 				for (D database : this.configuration.getDatabaseMap().values()) {
 					//没有任何活动数据库时只检测本地才检测是否可以激活
-					if (database.isLocal() && this.isAlive(database, Level.WARN)) {
+					if (((this.getClusterHealth() == null) || database.isLocal()) && this.isAlive(database, Level.WARN)) {
 						this.activate(database, this.stateManager);
 					}
 				}
+				long deadline = deadline(STARTUP_ACTIVE_DATABASE_TIMEOUT_PROPERTY, DEFAULT_STARTUP_TIMEOUT_MILLIS);
 				while(this.stateManager.getActiveDatabases().isEmpty()){
+					if (isExpired(deadline)) {
+						throw new IllegalStateException("Timed out waiting for active database. all db: " + this.configuration.getDatabaseMap().values());
+					}
 					logger.log(Level.INFO, "No active database, detect again after 1s");
-					Thread.sleep(1000);
+					Thread.sleep(startupRetryInterval());
 				}
 				logger.log(Level.INFO, "Active database="+this.stateManager.getActiveDatabases());
 			}
@@ -912,6 +926,37 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private static int requiredThreads(CronExpression expression)
 	{
 		return (expression != null) ? 1 : 0;
+	}
+
+	private static long deadline(String property, long defaultTimeoutMillis)
+	{
+		long timeoutMillis = systemMillis(property, defaultTimeoutMillis);
+		return System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+	}
+
+	private static boolean isExpired(long deadline)
+	{
+		return System.nanoTime() >= deadline;
+	}
+
+	private static long startupRetryInterval()
+	{
+		return systemMillis(STARTUP_RETRY_INTERVAL_PROPERTY, DEFAULT_STARTUP_RETRY_INTERVAL_MILLIS);
+	}
+
+	private static long systemMillis(String property, long defaultValue)
+	{
+		String value = System.getProperty(property);
+		if (value == null) {
+			return defaultValue;
+		}
+		try {
+			long millis = Long.parseLong(value);
+			return (millis > 0L) ? millis : defaultValue;
+		} catch (NumberFormatException e) {
+			logger.log(Level.WARN, "Invalid millisecond value for {0}: {1}", property, value);
+			return defaultValue;
+		}
 	}
 	
 	/**
@@ -1036,20 +1081,21 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 				return false;
 			}
-			if(!database.isLocal()){
+			ClusterHealth clusterHealth = this.getClusterHealth();
+			if(clusterHealth != null && !database.isLocal()){
 				//远程节点需要状态正常才允许激活
 				Member find = getDistributedManager().getMember(database.getIp());
 				if (find != null) {
-					NodeHealth nodeHealth = this.getClusterHealth().getNodeHealth(find);
+					NodeHealth nodeHealth = clusterHealth.getNodeHealth(find);
 					if (nodeHealth == null || nodeHealth.getState() == null || NodeState.offline.equals(nodeHealth.getState())) {
 						return false;
 					}
 				} else {
 					return false;
 				}
-			}else{
+			}else if(clusterHealth != null){
 				//本地节点需要状态正常才允许激活
-				if(NodeState.offline.equals(this.getClusterHealth().getState())){
+				if(NodeState.offline.equals(clusterHealth.getState())){
 					return false;
 				}
 			}

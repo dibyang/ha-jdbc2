@@ -109,7 +109,7 @@ public class SQLiteStateManager<Z, D extends Database<Z>> implements StateManage
 
 	@Override
 	public boolean isValid(Database<?> database) {
-		return this.getActiveDatabases().contains(database.getId());
+		return true;
 	}
 
 

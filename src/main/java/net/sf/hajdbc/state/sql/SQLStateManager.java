@@ -582,7 +582,7 @@ public class SQLStateManager<Z, D extends Database<Z>> implements StateManager, 
 
 	@Override
 	public boolean isValid(Database<?> database) {
-		return this.getActiveDatabases().contains(database.getId());
+		return true;
 	}
 
 
