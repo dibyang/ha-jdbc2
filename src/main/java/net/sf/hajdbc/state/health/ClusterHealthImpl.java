@@ -130,6 +130,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public void stop() {
     scheduledService.shutdown();
+    executorService.shutdown();
   }
 
   @Override
@@ -724,12 +725,18 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         arbiter.getLocalTokenStore().setOnlyHost((stateManager.getActiveDatabases().size() < 2));
         DatabasesEvent event2 = new DatabasesEvent(stateManager.getActiveDatabases());
         sendHeartbeat();
-        executorService.submit(new Runnable() {
-          @Override
-          public void run() {
-            updateNewToken();
+        if (!executorService.isShutdown()) {
+          try {
+            executorService.submit(new Runnable() {
+              @Override
+              public void run() {
+                updateNewToken();
+              }
+            });
+          } catch (RejectedExecutionException e) {
+            logger.debug("cluster health executor has been stopped.", e);
           }
-        });
+        }
       }
     }
   }

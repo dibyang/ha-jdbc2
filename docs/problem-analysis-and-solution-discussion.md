@@ -34,7 +34,7 @@
 | P1-4 | 已处理 | 发布元数据许可证与仓库 LICENSE/README 不一致 | `LICENSE:1-2`, `README.md:5-7`, `build.gradle:169-173` | 已统一为 LGPL |
 | P2-1 | 中 | 健康检测和诊断配置硬编码 Linux 系统路径 | `ClusterHealthImpl:70`, `ClusterHealthImpl:100`, `Tracer:18-25`, `FileReader:62-66` | 中 |
 | P2-2 | 已处理 | `TimeoutUtil` 忽略调用方传入的 `TimeUnit` | `TimeoutUtil:59-77` | 已改为使用调用方传入的时间单位，并增加秒级超时与取消测试 |
-| P2-3 | 中 | 资源关闭不完整，健康检测线程池未在 `stop()` 中关闭 | `ClusterHealthImpl:92-121`, `ClusterHealthImpl:721-726` | 中 |
+| P2-3 | 已处理 | 资源关闭不完整，健康检测线程池未在 `stop()` 中关闭 | `ClusterHealthImpl:92-132`, `ClusterHealthImpl:725-733` | 已改为停止健康检测时同时关闭定时线程池和异步执行线程池 |
 | P2-4 | 中 | 日志体系混用和裸 `printStackTrace()`，生产问题难以统一收敛 | `ClusterHealthImpl:773-787`, `ClusterHealthImpl:847-855`, `ZipUtils` 等 | 中 |
 | P3-1 | 低中 | 空 SPI 文件可能造成扩展点配置误导 | `META-INF/services/net.sf.hajdbc.state.health.observer.ObserveAdapter` 长度为 0 | 低中 |
 
@@ -322,6 +322,10 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 - 对 `TimeoutUtil`、`TokenStore` 等静态线程池类补充生命周期管理或复用全局守护线程。
 - 增加线程泄漏测试。
 
+**处理结果**
+
+已完成短期修复：`ClusterHealthImpl.stop()` 现在会同时关闭 `scheduledService` 和 `executorService`；host 节点提交异步 token 更新前会检查 executor 是否已关闭，避免停止过程中继续提交新任务。新增单元测试确认 `stop()` 后两个健康检测线程池均进入 shutdown 状态。`TokenStore` 的静态 `TimeoutUtil` 生命周期仍可作为后续全局资源治理项单独处理。
+
 ### P2-4 异常日志与诊断不统一
 
 **事实证据**
@@ -447,6 +451,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 - 系统路径配置化。
 - 修复 `TimeoutUtil` 的 `TimeUnit` 传递问题。（已完成）
+- 健康检测停止时关闭内部线程池。（已完成；`TokenStore` 静态 `TimeoutUtil` 生命周期可后续单独治理）
 - 清理 `printStackTrace()` 和吞异常。
 - 完善 health/command 日志字段。
 

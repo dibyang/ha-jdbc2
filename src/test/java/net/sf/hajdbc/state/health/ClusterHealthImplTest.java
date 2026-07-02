@@ -1,9 +1,11 @@
 package net.sf.hajdbc.state.health;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 import net.sf.hajdbc.DatabaseCluster;
 import net.sf.hajdbc.MockDatabase;
@@ -78,6 +80,17 @@ public class ClusterHealthImplTest
 	}
 
 	@Test
+	public void stopShutsDownHealthExecutors() throws Exception
+	{
+		ClusterHealthImpl health = new ClusterHealthImpl(stateManager());
+
+		health.stop();
+
+		Assert.assertTrue(executorService(health, "scheduledService").isShutdown());
+		Assert.assertTrue(executorService(health, "executorService").isShutdown());
+	}
+
+	@Test
 	@SuppressWarnings("unchecked")
 	public void remoteHostUsesDatabaseIpInsteadOfDatabaseId()
 	{
@@ -138,6 +151,13 @@ public class ClusterHealthImplTest
 		Address address = new UUID(0, seed);
 		UUID.add(address, ip);
 		return address;
+	}
+
+	private static ExecutorService executorService(ClusterHealthImpl health, String fieldName) throws Exception
+	{
+		Field field = ClusterHealthImpl.class.getDeclaredField(fieldName);
+		field.setAccessible(true);
+		return (ExecutorService) field.get(health);
 	}
 
 	private static class FailingClusterHealth extends ClusterHealthImpl
