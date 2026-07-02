@@ -25,7 +25,7 @@
 
 | 编号 | 严重级别 | 问题 | 主要证据 | 建议优先级 |
 | --- | --- | --- | --- | --- |
-| P0-1 | 高 | Gradle 全局禁用测试任务，CI 容易出现“绿灯但未测试” | `build.gradle:10-15`, `test --dry-run` 全部测试相关任务 skipped | 最高 |
+| P0-1 | 已处理 | Gradle 全局禁用测试任务，CI 容易出现“绿灯但未测试” | 原 `build.gradle:10-15`, `test --dry-run` 全部测试相关任务 skipped | 已改为默认启用测试，跳过需显式 `-PskipTests=true` |
 | P0-2 | 高 | 状态管理器 `isValid()` 与激活流程语义冲突，可能阻止手动激活非活跃数据库 | `DatabaseClusterImpl:1033-1037`, `SimpleStateManager:100-102`, `SQLStateManager:584-586` | 最高 |
 | P0-3 | 高 | 运行库代码在健康启动失败时直接 `System.exit(1)` | `ClusterHealthImpl:110-115` | 最高 |
 | P1-1 | 高 | 集群启动存在无限等待路径，配置或环境错误会挂住调用线程 | `DatabaseClusterImpl:562-573`, `DatabaseClusterImpl:850-853` | 高 |
@@ -42,7 +42,11 @@
 
 ### 构建与测试
 
-`build.gradle` 在 `gradle.taskGraph.whenReady` 中遍历所有任务，只要任务名包含 `"test"` 就设置 `task.enabled = false`。这会同时影响 `test`、`compileTestJava`、`processTestResources`、`testClasses` 等任务。实际执行 `test --dry-run` 时，所有测试相关任务均为 `SKIPPED`。
+原 `build.gradle` 在 `gradle.taskGraph.whenReady` 中遍历所有任务，只要任务名包含 `"test"` 就设置 `task.enabled = false`。这会影响默认测试门禁，使 CI 或本地验证容易出现“构建成功但未运行测试”的错觉。
+
+当前处理：已取消按任务名全局禁用测试，测试默认启用；如果确实需要临时跳过测试，必须显式传入 `-PskipTests=true`。`test` 默认设置 120 秒超时，避免历史测试挂起时形成无期限等待；确有长时间验证需要时，可通过 `-PtestTimeoutSeconds=<seconds>` 显式调整。同时保留 `verifyTestCompilation` 作为“只编译测试源码、不运行测试”的轻量入口。
+
+恢复测试门禁后，`net.sf.hajdbc.sql.BlobTest` 单独执行会挂起；当前已通过测试任务超时把该问题转换为构建失败信号，后续应单独修复该测试或其暴露出的 BLOB 处理行为问题，而不应再次全局跳过测试。
 
 ### 集群激活
 
@@ -97,7 +101,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 **建议**
 
-优先采用 B+C：默认不禁用测试；如确实需要跳过，由显式属性控制。第一阶段至少保证 `compileTestJava` 和核心单测可运行。
+已采用 B+C：默认不禁用测试；如确实需要跳过，由显式属性控制。保留 `verifyTestCompilation` 用于快速确认测试源码可编译。新增测试任务超时，确保挂起测试会使构建失败。
 
 ### P0-2 `isValid()` 与激活流程语义冲突
 

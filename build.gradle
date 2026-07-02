@@ -7,14 +7,6 @@ buildscript {
     dependencies {
         classpath 'net.researchgate:gradle-release:2.6.0'
     }
-    //skip Test tasks
-    gradle.taskGraph.whenReady {
-        tasks.each { task ->
-            if (task.name.contains("test")) {
-                task.enabled = false
-            }
-        }
-    }
 }
 
 apply plugin: 'java'
@@ -101,6 +93,8 @@ configurations.all {
     }
 }
 
+import java.time.Duration
+
 import org.apache.tools.ant.filters.ReplaceTokens
 
 processResources {
@@ -114,9 +108,25 @@ tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
 }
 
+tasks.withType(Test) {
+    enabled = !(project.hasProperty('skipTests') && project.property('skipTests').toString().toBoolean())
+    timeout = Duration.ofSeconds((project.findProperty('testTimeoutSeconds') ?: '120').toString().toLong())
+
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+
+    afterSuite { desc, result ->
+        if (!desc.parent) {
+            logger.lifecycle("Test result: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)")
+        }
+    }
+}
+
 task verifyTestCompilation(type: JavaCompile) {
     group = 'verification'
-    description = 'Compiles test sources without running tests; intended for use while legacy test tasks are disabled.'
+    description = 'Compiles test sources without running tests; useful for quick feedback before running the full test gate.'
     source = sourceSets.test.java
     classpath = sourceSets.test.compileClasspath
     destinationDir = file("$buildDir/classes/java/verifyTestCompilation")
