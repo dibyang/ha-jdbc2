@@ -5,7 +5,6 @@ stages:
 
 variables:
   GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
-  CI_LOCAL_MAVEN_REPOSITORY: "file://$CI_PROJECT_DIR/build/ci-maven-repository"
 
 cache:
   key: gradle-wrapper-jdk8
@@ -17,8 +16,7 @@ test:
   stage: test
   script:
     - ./gradlew --version
-    # PR-0B will defer publication repository validation; ordinary CI uses local placeholders and no release credentials.
-    - ./gradlew clean test --console=plain -PsnapshotsRepository="$CI_LOCAL_MAVEN_REPOSITORY" -PreleasesRepository="$CI_LOCAL_MAVEN_REPOSITORY"
+    - ./gradlew clean test check jar --console=plain -PbuildHash="$CI_COMMIT_SHA" -PrequireKnownBuildHash=true
   artifacts:
     when: always
     reports:

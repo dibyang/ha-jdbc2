@@ -14,20 +14,7 @@ apply plugin: 'maven-publish'
 apply plugin: 'signing'
 apply plugin: 'net.researchgate.release'
 
-File signing_cfg = new File("$project.rootDir/signing.properties")
-if(signing_cfg.exists()) {
-    Properties props = new Properties()
-    props.load(new FileInputStream(signing_cfg))
-    props.each { prop ->
-        project.ext.set(prop.key, prop.value)
-    }
-
-    // 将构建的包签名
-    signing {
-        sign configurations.archives
-    }
-}
-
+File signing_cfg = file(findProperty('signingPropertiesFile') ?: "$project.rootDir/signing.properties")
 
 release {
     failOnUnversionedFiles = true
@@ -94,14 +81,46 @@ configurations.all {
 }
 
 import java.time.Duration
+import java.io.DataInputStream
+import java.util.jar.JarFile
 
 import org.apache.tools.ant.filters.ReplaceTokens
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import org.gradle.plugins.signing.Sign
+
+def capabilityVersion = '1'
+def buildHash = (findProperty('buildHash') ?: 'unknown').toString().trim()
+if (buildHash.isEmpty()) {
+    buildHash = 'unknown'
+}
+def requireKnownBuildHash = (findProperty('requireKnownBuildHash') ?: 'false').toString().toBoolean()
+def buildMetadata = [
+        capabilityVersion     : capabilityVersion,
+        version               : project.version.toString(),
+        buildHash             : buildHash,
+        supportedFeatures     : '',
+        candidateAliasProfiles: ''
+]
 
 processResources {
+    inputs.properties(buildMetadata)
     from('src/main/java') {
         include '**/*.properties'
     }
-    filter(ReplaceTokens, tokens: [version: project.version])
+    filter(ReplaceTokens, tokens: buildMetadata)
+}
+
+jar {
+    inputs.properties(buildMetadata)
+    manifest {
+        attributes(
+                'Implementation-Version': buildMetadata.version,
+                'HA-JDBC-Capability-Version': buildMetadata.capabilityVersion,
+                'HA-JDBC-Build-Hash': buildMetadata.buildHash,
+                'HA-JDBC-Features': buildMetadata.supportedFeatures,
+                'HA-JDBC-Candidate-Alias-Profiles': buildMetadata.candidateAliasProfiles
+        )
+    }
 }
 
 tasks.withType(JavaCompile) {
@@ -212,29 +231,221 @@ publishing {
     }
     repositories {
         maven {
-            // 发布仓库配置，这里基于version后缀是否为SNAPSHOT来区分发布到release库还是snapshots库
-            if(version.endsWith('SNAPSHOT')){
-                it.url = project.property("snapshotsRepository")
-            }else{
-                it.url = project.property("releasesRepository")
-            }
-
-            //认证用户和密码，在配置文件gradle.properties中配置
-            //oss-sonatype的登录用户名和密码
+            // 远端地址和凭据只在真正执行远端发布任务时读取并校验。
             credentials {
-                username = findProperty("ossrhUsername")?:""
-                password = findProperty("ossrhPassword")?:""
             }
-
         }
     }
 }
 
-// 将构建的包签名
 signing {
     required { !version.endsWith("SNAPSHOT") }
-    if (!version.endsWith("SNAPSHOT")) {
-        sign publishing.publications.maven
+    sign configurations.archives
+    sign publishing.publications.maven
+}
+
+def requireProjectProperty = { String propertyName ->
+    def value = project.findProperty(propertyName)
+    if (value == null || value.toString().trim().isEmpty()) {
+        throw new GradleException("Task requires Gradle property '${propertyName}'.")
+    }
+    return value.toString().trim()
+}
+
+def validateKnownBuildHash = {
+    if (!(buildMetadata.buildHash ==~ /(?i)[0-9a-f]{40}/)) {
+        throw new GradleException('Task requires buildHash to be a 40-character hexadecimal Git commit hash.')
     }
 }
 
+def loadAndValidateSigningProperties = {
+    if (!signing_cfg.isFile()) {
+        throw new GradleException("Release publishing requires ${signing_cfg.name}.")
+    }
+
+    Properties signingProperties = new Properties()
+    signing_cfg.withInputStream { input ->
+        signingProperties.load(input)
+    }
+    signingProperties.each { propertyName, propertyValue ->
+        project.ext.set(propertyName.toString(), propertyValue)
+    }
+
+    ['signing.keyId', 'signing.password', 'signing.secretKeyRingFile'].each { propertyName ->
+        requireProjectProperty(propertyName)
+    }
+    File secretKeyRing = file(requireProjectProperty('signing.secretKeyRingFile'))
+    if (!secretKeyRing.isFile()) {
+        throw new GradleException("Signing secret key ring does not exist: ${secretKeyRing}")
+    }
+    if (signing.signatory == null) {
+        throw new GradleException('Release publishing requires a valid signing signatory.')
+    }
+}
+
+def releaseTask = tasks.getByName('release')
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def remotePublishTasks = taskGraph.allTasks.findAll { task ->
+        task instanceof PublishToMavenRepository
+    }
+    boolean releaseRequested = taskGraph.allTasks.contains(releaseTask)
+    boolean localPublishRequested = taskGraph.allTasks.any { task ->
+        task.name == 'publishToMavenLocal'
+    }
+    boolean requiredSignRequested = taskGraph.allTasks.any { task ->
+        task instanceof Sign && task.required
+    }
+    boolean nonSnapshotBuild = !project.version.toString().endsWith('SNAPSHOT')
+
+    if (releaseRequested || requiredSignRequested || (nonSnapshotBuild && localPublishRequested)) {
+        validateKnownBuildHash()
+        loadAndValidateSigningProperties()
+    }
+
+    if (!remotePublishTasks.isEmpty() || releaseRequested) {
+        validateKnownBuildHash()
+        boolean releasePublication = releaseRequested || nonSnapshotBuild
+        String repositoryProperty = releasePublication ? 'releasesRepository' : 'snapshotsRepository'
+        String repositoryUrl = requireProjectProperty(repositoryProperty)
+        String repositoryUsername = requireProjectProperty('ossrhUsername')
+        String repositoryPassword = requireProjectProperty('ossrhPassword')
+
+        remotePublishTasks.each { publishTask ->
+            publishTask.repository.url = uri(repositoryUrl)
+            publishTask.repository.credentials.username = repositoryUsername
+            publishTask.repository.credentials.password = repositoryPassword
+        }
+    }
+}
+
+task verifyBuildMetadata {
+    group = 'verification'
+    description = 'Verifies build identity consistency across the JAR, publication metadata and Java bytecode.'
+    dependsOn jar, generatePomFileForMavenPublication
+    inputs.property('requireKnownBuildHash', requireKnownBuildHash)
+
+    doLast {
+        if (requireKnownBuildHash) {
+            validateKnownBuildHash()
+        }
+
+        File artifact = tasks.jar.archiveFile.get().asFile
+        String expectedArtifactName = "${project.name}-${project.version}.jar"
+        if (artifact.name != expectedArtifactName) {
+            throw new GradleException("Unexpected JAR name: ${artifact.name}; expected ${expectedArtifactName}.")
+        }
+
+        def publication = publishing.publications.getByName('maven')
+        if (publication.groupId != project.group.toString()
+                || publication.artifactId != project.name
+                || publication.version != project.version.toString()) {
+            throw new GradleException('Maven publication coordinates do not match the project identity.')
+        }
+
+        File pomFile = tasks.generatePomFileForMavenPublication.destination
+        def pom = new XmlSlurper().parse(pomFile)
+        if (pom.groupId.text() != publication.groupId
+                || pom.artifactId.text() != publication.artifactId
+                || pom.version.text() != publication.version) {
+            throw new GradleException('Generated Maven POM coordinates do not match the publication identity.')
+        }
+
+        JarFile jarFile = new JarFile(artifact)
+        try {
+            def readEntry = { String entryName ->
+                def entry = jarFile.getJarEntry(entryName)
+                if (entry == null) {
+                    throw new GradleException("JAR is missing required entry ${entryName}.")
+                }
+                jarFile.getInputStream(entry).withCloseable { input ->
+                    return input.getText('UTF-8')
+                }
+            }
+            def loadProperties = { String text ->
+                Properties properties = new Properties()
+                new StringReader(text).withCloseable { reader ->
+                    properties.load(reader)
+                }
+                return properties
+            }
+
+            String versionText = readEntry('net/sf/hajdbc/Version.properties')
+            String buildInfoText = readEntry('net/sf/hajdbc/BuildInfo.properties')
+            Properties versionProperties = loadProperties(versionText)
+            Properties buildInfo = loadProperties(buildInfoText)
+            if (versionProperties.stringPropertyNames() != ['version'] as Set
+                    || versionProperties.getProperty('version') != buildMetadata.version) {
+                throw new GradleException('Version.properties does not match the project version.')
+            }
+
+            def expectedBuildInfo = [
+                    capabilityVersion     : buildMetadata.capabilityVersion,
+                    buildVersion          : buildMetadata.version,
+                    buildHash             : buildMetadata.buildHash,
+                    supportedFeatures     : buildMetadata.supportedFeatures,
+                    candidateAliasProfiles: buildMetadata.candidateAliasProfiles
+            ]
+            if (buildInfo.stringPropertyNames() != expectedBuildInfo.keySet()) {
+                throw new GradleException('BuildInfo.properties contains an unexpected field set.')
+            }
+            expectedBuildInfo.each { propertyName, expectedValue ->
+                if (buildInfo.getProperty(propertyName) != expectedValue) {
+                    throw new GradleException("BuildInfo property ${propertyName} does not match the build identity.")
+                }
+            }
+
+            def manifestAttributes = jarFile.manifest.mainAttributes
+            def expectedManifest = [
+                    'Implementation-Version'             : buildMetadata.version,
+                    'HA-JDBC-Capability-Version'         : buildMetadata.capabilityVersion,
+                    'HA-JDBC-Build-Hash'                 : buildMetadata.buildHash,
+                    'HA-JDBC-Features'                   : buildMetadata.supportedFeatures,
+                    'HA-JDBC-Candidate-Alias-Profiles'   : buildMetadata.candidateAliasProfiles
+            ]
+            expectedManifest.each { attributeName, expectedValue ->
+                if (manifestAttributes.getValue(attributeName) != expectedValue) {
+                    throw new GradleException("Manifest attribute ${attributeName} does not match the build identity.")
+                }
+            }
+            ['HA-JDBC-Trust-Store-Digest', 'HA-JDBC-Certified-Alias-Profiles'].each { forbiddenAttribute ->
+                if (manifestAttributes.getValue(forbiddenAttribute) != null) {
+                    throw new GradleException("Manifest must not declare ${forbiddenAttribute} in PR-0B.")
+                }
+            }
+
+            String manifestText = manifestAttributes.collect { key, value -> "${key}:${value}" }.join('\n')
+            [versionText, buildInfoText, manifestText].each { identityText ->
+                if (identityText =~ /@[A-Za-z0-9_.-]+@/) {
+                    throw new GradleException('Build identity contains an unresolved replacement token.')
+                }
+            }
+
+            int classCount = 0
+            jarFile.entries().each { entry ->
+                if (!entry.directory && entry.name.endsWith('.class')) {
+                    classCount++
+                    jarFile.getInputStream(entry).withCloseable { input ->
+                        DataInputStream data = new DataInputStream(input)
+                        if (data.readInt() != -889275714) {
+                            throw new GradleException("Invalid class header for ${entry.name}.")
+                        }
+                        data.readUnsignedShort()
+                        int majorVersion = data.readUnsignedShort()
+                        if (majorVersion != 52) {
+                            throw new GradleException("${entry.name} has class major ${majorVersion}; expected 52.")
+                        }
+                    }
+                }
+            }
+            if (classCount == 0) {
+                throw new GradleException('JAR contains no Java classes to verify.')
+            }
+        }
+        finally {
+            jarFile.close()
+        }
+    }
+}
+
+check.dependsOn verifyBuildMetadata
