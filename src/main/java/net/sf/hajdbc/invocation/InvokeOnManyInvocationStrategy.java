@@ -43,7 +43,7 @@ public class InvokeOnManyInvocationStrategy implements InvocationStrategy
 	
 	public static interface ResultsCollector
 	{
-		<Z, D extends Database<Z>, T, R, E extends Exception> Map.Entry<SortedMap<D, R>, SortedMap<D, E>> collectResults(ProxyFactory<Z, D, T, E> map, Invoker<Z, D, T, R, E> invoker);
+		<Z, D extends Database<Z>, T, R, E extends Exception> Map.Entry<SortedMap<D, R>, SortedMap<D, E>> collectResults(ProxyFactory<Z, D, T, E> map, Invoker<Z, D, T, R, E> invoker) throws E;
 	}
 
 	private final ResultsCollector collector;

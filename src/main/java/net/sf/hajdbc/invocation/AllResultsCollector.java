@@ -64,7 +64,7 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 	 * {@inheritDoc}
 	 */
 	@Override
-	public <Z, D extends Database<Z>, T, R, E extends Exception> Map.Entry<SortedMap<D, R>, SortedMap<D, E>> collectResults(ProxyFactory<Z, D, T, E> factory, final Invoker<Z, D, T, R, E> invoker)
+	public <Z, D extends Database<Z>, T, R, E extends Exception> Map.Entry<SortedMap<D, R>, SortedMap<D, E>> collectResults(ProxyFactory<Z, D, T, E> factory, final Invoker<Z, D, T, R, E> invoker) throws E
 	{
 		DatabaseCluster<Z, D> cluster = factory.getDatabaseCluster();
 		ExceptionFactory<E> exceptionFactory = factory.getExceptionFactory();
@@ -72,11 +72,6 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 		if(Tracer.invoke.isTrace()) {
 			logger.log(Level.INFO, "databaseSet={0}", databaseSet);
 		}
-		if (databaseSet.isEmpty())
-		{
-			exceptionFactory.createException(Messages.NO_ACTIVE_DATABASES.getMessage(cluster));
-		}
-
 		int size = databaseSet.size();
 		
 		List<Invocation<Z, D, T, R, E>> invocationList = new ArrayList<Invocation<Z, D, T, R, E>>(size);
@@ -84,6 +79,11 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 		for (D database: databaseSet)
 		{
 			invocationList.add(new Invocation<Z, D, T, R, E>(invoker, database, factory.get(database)));
+		}
+
+		if (invocationList.isEmpty())
+		{
+			throw exceptionFactory.createException(Messages.NO_ACTIVE_DATABASES.getMessage(cluster));
 		}
 		
 		try

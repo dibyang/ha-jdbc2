@@ -22,7 +22,10 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collections;
+import java.util.Iterator;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 
 import net.sf.hajdbc.DatabaseCluster;
@@ -38,6 +41,8 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import static org.mockito.Mockito.*;
 
@@ -93,8 +98,9 @@ public class DriverTest
 		DatabaseCluster<java.sql.Driver, DriverDatabase> cluster = mock(DatabaseCluster.class);
 		Balancer<java.sql.Driver, DriverDatabase> balancer = mock(Balancer.class);
 		LockManager lockManager = mock(LockManager.class);
+		ExecutorService executor = Executors.newSingleThreadExecutor();
 		
-		DriverDatabase database = new DriverDatabase();
+		final DriverDatabase database = new DriverDatabase();
 		database.setId("db1");
 		database.setLocation("jdbc:mock:test");
 		
@@ -105,14 +111,20 @@ public class DriverTest
 		
 		when(cluster.isActive()).thenReturn(true);
 		when(cluster.getBalancer()).thenReturn(balancer);
-		when(balancer.iterator()).thenReturn(Collections.singleton(database).iterator());
 		when(cluster.getBalancer()).thenReturn(balancer);
 		when(balancer.contains(database)).thenReturn(true);
 		when(balancer.isEmpty()).thenReturn(false);
 		when(balancer.size()).thenReturn(1);
-		when(balancer.iterator()).thenReturn(Collections.singleton(database).iterator());
+		when(balancer.iterator()).thenAnswer(new Answer<Iterator<DriverDatabase>>()
+		{
+			@Override
+			public Iterator<DriverDatabase> answer(InvocationOnMock invocation)
+			{
+				return Collections.singleton(database).iterator();
+			}
+		});
 		when(balancer.next()).thenReturn(database);
-		when(cluster.getExecutor()).thenReturn(Executors.newCachedThreadPool());
+		when(cluster.getExecutor()).thenReturn(executor);
 		when(cluster.getLockManager()).thenReturn(lockManager);
 		when(lockManager.readLock(null)).thenReturn(mock(Lock.class));
 		when(cluster.getDurability()).thenReturn(mock(Durability.class));
@@ -128,7 +140,15 @@ public class DriverTest
 		}
 		finally
 		{
-			Driver.stop(id);
+			try
+			{
+				Driver.stop(id);
+			}
+			finally
+			{
+				executor.shutdownNow();
+				Assert.assertTrue("Executor did not terminate for cluster " + id, executor.awaitTermination(5, TimeUnit.SECONDS));
+			}
 		}
 	}
 }
