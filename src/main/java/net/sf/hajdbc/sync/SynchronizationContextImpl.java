@@ -25,6 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
@@ -45,6 +46,22 @@ import net.sf.hajdbc.util.Resources;
 public class SynchronizationContextImpl<Z, D extends Database<Z>> implements SynchronizationContext<Z, D>
 {
 	private static final Logger logger = LoggerFactory.getLogger(SynchronizationContextImpl.class);
+	private static final ExecutorFactory DEFAULT_EXECUTOR_FACTORY = new ExecutorFactory()
+	{
+		@Override
+		public ExecutorService create(int size, ThreadFactory threadFactory)
+		{
+			return Executors.newFixedThreadPool(size, threadFactory);
+		}
+	};
+
+	/**
+	 * 只创建由本同步上下文独占的执行器；包级可见性用于确定性验证构造失败清理。
+	 */
+	interface ExecutorFactory
+	{
+		ExecutorService create(int size, ThreadFactory threadFactory);
+	}
 	
 	private final Set<D> activeDatabaseSet;
 	private final D sourceDatabase;
@@ -62,6 +79,11 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 	 */
 	public SynchronizationContextImpl(DatabaseCluster<Z, D> cluster, D database) throws SQLException
 	{
+		this(cluster, database, DEFAULT_EXECUTOR_FACTORY);
+	}
+
+	SynchronizationContextImpl(DatabaseCluster<Z, D> cluster, D database, ExecutorFactory executorFactory) throws SQLException
+	{
 		this.cluster = cluster;
 		
 		Balancer<Z, D> balancer = cluster.getBalancer();
@@ -70,12 +92,30 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 		
 		this.activeDatabaseSet = balancer;
 		this.targetDatabase = database;
-		this.executor = Executors.newFixedThreadPool(this.activeDatabaseSet.size(), this.cluster.getThreadFactory());
-		
-		DatabaseMetaDataCache<Z, D> cache = cluster.getDatabaseMetaDataCache();
-		
-		this.targetDatabaseProperties = cache.getDatabaseProperties(this.targetDatabase, this.getConnection(this.targetDatabase));
-		this.sourceDatabaseProperties = cache.getDatabaseProperties(this.sourceDatabase, this.getConnection(this.sourceDatabase));
+		this.executor = executorFactory.create(this.activeDatabaseSet.size(), this.cluster.getThreadFactory());
+
+		try
+		{
+			DatabaseMetaDataCache<Z, D> cache = cluster.getDatabaseMetaDataCache();
+
+			this.targetDatabaseProperties = cache.getDatabaseProperties(this.targetDatabase, this.getConnection(this.targetDatabase));
+			this.sourceDatabaseProperties = cache.getDatabaseProperties(this.sourceDatabase, this.getConnection(this.sourceDatabase));
+		}
+		catch (SQLException e)
+		{
+			this.cleanupAfterConstructionFailure(e);
+			throw e;
+		}
+		catch (RuntimeException e)
+		{
+			this.cleanupAfterConstructionFailure(e);
+			throw e;
+		}
+		catch (Error e)
+		{
+			this.cleanupAfterConstructionFailure(e);
+			throw e;
+		}
 	}
 	
 	/**
@@ -89,12 +129,92 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 		if (entry == null)
 		{
 			Connection connection = database.connect(database.getConnectionSource(), database.decodePassword(this.cluster.getDecoder()));
-			entry = new AbstractMap.SimpleImmutableEntry<Connection, Boolean>(connection, connection.getAutoCommit());
-			
-			this.connectionMap.put(database, entry);
+			boolean owned = false;
+
+			try
+			{
+				entry = new AbstractMap.SimpleImmutableEntry<Connection, Boolean>(connection, connection.getAutoCommit());
+
+				// put 成功是连接所有权转移点，之后统一由 connectionMap 清理。
+				this.connectionMap.put(database, entry);
+				owned = true;
+			}
+			catch (SQLException e)
+			{
+				this.closeInFlightConnection(connection, e, owned);
+				throw e;
+			}
+			catch (RuntimeException e)
+			{
+				this.closeInFlightConnection(connection, e, owned);
+				throw e;
+			}
+			catch (Error e)
+			{
+				this.closeInFlightConnection(connection, e, owned);
+				throw e;
+			}
 		}
 		
 		return entry.getKey();
+	}
+
+	private void closeInFlightConnection(Connection connection, Throwable failure, boolean owned)
+	{
+		if (!owned)
+		{
+			this.closeAfterConstructionFailure(connection, failure);
+		}
+	}
+
+	private void cleanupAfterConstructionFailure(Throwable failure)
+	{
+		// 构造失败不能恢复 autoCommit；每个清理失败均附加到首个根因，并继续释放后续资源。
+		for (Map.Entry<Connection, Boolean> entry: this.connectionMap.values())
+		{
+			this.closeAfterConstructionFailure(entry.getKey(), failure);
+		}
+
+		try
+		{
+			this.executor.shutdownNow();
+		}
+		catch (RuntimeException e)
+		{
+			addSuppressed(failure, e);
+		}
+		catch (Error e)
+		{
+			addSuppressed(failure, e);
+		}
+	}
+
+	private void closeAfterConstructionFailure(Connection connection, Throwable failure)
+	{
+		try
+		{
+			connection.close();
+		}
+		catch (SQLException e)
+		{
+			addSuppressed(failure, e);
+		}
+		catch (RuntimeException e)
+		{
+			addSuppressed(failure, e);
+		}
+		catch (Error e)
+		{
+			addSuppressed(failure, e);
+		}
+	}
+
+	private static void addSuppressed(Throwable failure, Throwable cleanupFailure)
+	{
+		if (failure != cleanupFailure)
+		{
+			failure.addSuppressed(cleanupFailure);
+		}
 	}
 	
 	/**
