@@ -66,19 +66,10 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile boolean readyElect = false;
   private volatile Member host = null;
   private FileWatchDog fileWatchDog;
+  private final CachedNetworkInterfaceResolver networkInterfaceResolver;
+  private String lastLocalIp;
   private List<String> managerFsIps = new ArrayList<>();
-  private FileWatchDog managerFsIpFileWatchDog = new FileWatchDog(HaJdbcPaths.managerFsIpFile().toFile(), file -> {
-    Path path = file.toPath();
-    managerFsIps.clear();
-    try {
-      List<String> lines = Files.readAllLines(path);
-      if (!lines.isEmpty()) {
-        managerFsIps.addAll(Arrays.asList(lines.get(0).split(",")));
-      }
-    } catch (Exception e) {
-      logger.error("load manager fs ip error", e);
-    }
-  });
+  private final FileWatchDog managerFsIpFileWatchDog;
 
   private final FileReader<Integer> maxUnobservableReader = FileReader.of4int("max_unobservable");
 
@@ -93,7 +84,26 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
 
   public ClusterHealthImpl(DistributedStateManager stateManager) {
+    this(stateManager, new CachedNetworkInterfaceResolver());
+  }
+
+  ClusterHealthImpl(DistributedStateManager stateManager, CachedNetworkInterfaceResolver networkInterfaceResolver) {
     this.stateManager = stateManager;
+    this.networkInterfaceResolver = networkInterfaceResolver;
+    managerFsIpFileWatchDog = new FileWatchDog(HaJdbcPaths.managerFsIpFile().toFile(), file -> {
+      Path path = file.toPath();
+      managerFsIps.clear();
+      try {
+        List<String> lines = Files.readAllLines(path);
+        if (!lines.isEmpty()) {
+          managerFsIps.addAll(Arrays.asList(lines.get(0).split(",")));
+        }
+      } catch (Exception e) {
+        logger.error("load manager fs ip error", e);
+      } finally {
+        networkInterfaceResolver.invalidateAll();
+      }
+    });
     this.stateManager.getDatabaseCluster().addListener(this);
     executorService = Executors.newFixedThreadPool(3, HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(), this);
@@ -854,18 +864,21 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
 
   private boolean isUp() {
-    return isUp(stateManager.getLocalIp(), 1);
+    String localIp = stateManager.getLocalIp();
+    if (!Objects.equals(this.lastLocalIp, localIp)) {
+      this.networkInterfaceResolver.invalidateAll();
+      this.lastLocalIp = localIp;
+    }
+    return isUp(localIp, 1);
   }
 
   private NetworkInterface getNic(String ip) {
-    NetworkInterface nic = null;
     try {
-      InetAddress address = InetAddress.getByName(ip);
-      nic = NetworkInterface.getByInetAddress(address);
+      return this.networkInterfaceResolver.resolve(ip);
     } catch (Exception ex) {
-      ex.printStackTrace();
+      logger.warn("resolve nic for ip {} fail.", ip, ex);
+      return null;
     }
-    return nic;
   }
 
   /**
@@ -877,8 +890,13 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     NetworkInterface nic = getNic(ip);
     if (nic != null) {
       try {
-        return nic.isUp() && isManagerNicUp();
+        boolean up = nic.isUp();
+        if (!up) {
+          this.networkInterfaceResolver.recordCheckFailure(ip);
+        }
+        return up && isManagerNicUp();
       } catch (SocketException e) {
+        this.networkInterfaceResolver.recordCheckFailure(ip);
         logger.warn("is up fail.", e);
         return true;
       }
@@ -912,8 +930,15 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       NetworkInterface nic = getNic(ip);
       if (nic != null) {
         try {
-          up = up || nic.isUp();
+          if (!up) {
+            boolean nicUp = nic.isUp();
+            if (!nicUp) {
+              this.networkInterfaceResolver.recordCheckFailure(ip);
+            }
+            up = nicUp;
+          }
         } catch (SocketException e) {
+          this.networkInterfaceResolver.recordCheckFailure(ip);
           logger.warn("check nic[{}] is up fail.", nic.getName(), e);
           up = true;
         }

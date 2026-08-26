@@ -2,6 +2,9 @@ package net.sf.hajdbc.state.health;
 
 import java.io.File;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -119,6 +122,32 @@ public class ClusterHealthImplTest
 	}
 
 	@Test
+	public void localHealthChecksReuseResolutionAndInvalidateOnIpChange() throws Exception
+	{
+		DistributedStateManager stateManager = stateManager("127.0.0.1");
+		CountingResolver resolver = new CountingResolver();
+		CachedNetworkInterfaceResolver cache = new CachedNetworkInterfaceResolver(resolver, new SystemNanoTimeSource());
+		ClusterHealthImpl health = new ClusterHealthImpl(stateManager, cache);
+
+		try
+		{
+			Assert.assertTrue(invokeIsUp(health));
+			Assert.assertTrue(invokeIsUp(health));
+			Assert.assertEquals(1, resolver.calls);
+
+			when(stateManager.getLocalIp()).thenReturn("127.0.0.2");
+			Assert.assertTrue(invokeIsUp(health));
+			when(stateManager.getLocalIp()).thenReturn("127.0.0.1");
+			Assert.assertTrue(invokeIsUp(health));
+			Assert.assertEquals(3, resolver.calls);
+		}
+		finally
+		{
+			health.stop();
+		}
+	}
+
+	@Test
 	@SuppressWarnings("unchecked")
 	public void remoteHostUsesDatabaseIpInsteadOfDatabaseId()
 	{
@@ -207,6 +236,41 @@ public class ClusterHealthImplTest
 		else
 		{
 			System.setProperty(property, value);
+		}
+	}
+
+	private static boolean invokeIsUp(ClusterHealthImpl health) throws Exception
+	{
+		Method method = ClusterHealthImpl.class.getDeclaredMethod("isUp");
+		method.setAccessible(true);
+		return (Boolean) method.invoke(health);
+	}
+
+	private static final class SystemNanoTimeSource implements CachedNetworkInterfaceResolver.NanoTimeSource
+	{
+		@Override
+		public long nanoTime()
+		{
+			return System.nanoTime();
+		}
+	}
+
+	private static final class CountingResolver implements CachedNetworkInterfaceResolver.Resolver
+	{
+		private final NetworkInterface networkInterface;
+		private int calls;
+
+		private CountingResolver() throws Exception
+		{
+			this.networkInterface = NetworkInterface.getByInetAddress(InetAddress.getLoopbackAddress());
+			Assert.assertNotNull(this.networkInterface);
+		}
+
+		@Override
+		public NetworkInterface resolve(String ip)
+		{
+			++this.calls;
+			return this.networkInterface;
 		}
 	}
 
