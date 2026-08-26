@@ -211,12 +211,16 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
+		Processes.run(this.createDumpProcessBuilder(properties, file, dataOnly, PASSWORD_FILE));
+	}
+
+	ProcessBuilder createDumpProcessBuilder(ConnectionProperties properties, File file, boolean dataOnly, File passwordFile)
+	{
 		ProcessBuilder builder = new ProcessBuilder("mysqldump");
 		List<String> args = builder.command();
 		args.add("--host=" + properties.getHost());
 		args.add("--port=" + properties.getPort());
 		args.add("--user=" + properties.getUser());
-		args.add("--password=" + properties.getPassword());
 		args.add("--result-file=" + file.getPath());
 		args.add("--compress");
 		if (dataOnly)
@@ -225,31 +229,35 @@ public class MySQLDialect extends StandardDialect implements DumpRestoreSupport
 			args.add("--skip-triggers");
 		}
 		args.add(properties.getDatabase());
-		Processes.run(setPassword(builder, properties));
+		return setPassword(builder, properties, passwordFile);
 	}
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception
 	{
 		ConnectionProperties properties = this.getConnectionProperties(database, decoder);
+		Processes.run(this.createRestoreProcessBuilder(properties, file, PASSWORD_FILE));
+	}
+
+	ProcessBuilder createRestoreProcessBuilder(ConnectionProperties properties, File file, File passwordFile)
+	{
 		ProcessBuilder builder = new ProcessBuilder("mysql");
 		List<String> args = builder.command();
 		args.add("--host=" + properties.getHost());
 		args.add("--port=" + properties.getPort());
 		args.add("--user=" + properties.getUser());
-		args.add("--password=" + properties.getPassword());
 		args.add("--database="+properties.getDatabase());
 		args.add("-e");
 		args.add("source "+file.getPath());
-		Processes.run(setPassword(builder, properties));
+		return setPassword(builder, properties, passwordFile);
 	}
-	
-	private static ProcessBuilder setPassword(final ProcessBuilder builder, final ConnectionProperties properties)
+
+	private static ProcessBuilder setPassword(final ProcessBuilder builder, final ConnectionProperties properties, File passwordFile)
 	{
 		String password = properties.getPassword();
-		if ((password != null) && !PASSWORD_FILE.exists())
+		if ((password != null) && !passwordFile.exists())
 		{
-			Processes.environment(builder).put("MYSQL_PWD", properties.getPassword());
+			Processes.environment(builder).put("MYSQL_PWD", password);
 		}
 		return builder;
 	}
