@@ -255,7 +255,7 @@ public class ClusterHealthImplTest
 		}
 	}
 
-	private static final class CountingResolver implements CachedNetworkInterfaceResolver.Resolver
+	private static final class CountingResolver implements CachedNetworkInterfaceResolver.SnapshotProvider
 	{
 		private final NetworkInterface networkInterface;
 		private int calls;
@@ -267,10 +267,10 @@ public class ClusterHealthImplTest
 		}
 
 		@Override
-		public NetworkInterface resolve(String ip)
+		public java.util.Collection<CachedNetworkInterfaceResolver.InterfaceAddresses> load()
 		{
 			++this.calls;
-			return this.networkInterface;
+			return Collections.singletonList(new CachedNetworkInterfaceResolver.InterfaceAddresses(this.networkInterface, java.util.Arrays.asList("127.0.0.1", "127.0.0.2")));
 		}
 	}
 

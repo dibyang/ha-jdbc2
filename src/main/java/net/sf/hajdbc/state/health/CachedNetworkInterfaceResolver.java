@@ -2,24 +2,28 @@ package net.sf.hajdbc.state.health;
 
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 缓存健康检查实际使用的 IP 与网卡映射，避免每个调度周期重复枚举本机地址。
- *
- * <p>成功映射会低频复核；解析失败或网卡检查异常会短暂限流。该类不创建线程，
- * 也不保存系统中的完整地址列表。</p>
+ * 缓存一次批量网卡枚举生成的不可变地址快照，避免按目标 IP 调用 native 查询。
+ * 该类不创建线程，也不对外暴露完整地址列表。
  */
 final class CachedNetworkInterfaceResolver
 {
 	static final long SUCCESS_CACHE_NANOS = TimeUnit.SECONDS.toNanos(60);
 	static final long FAILURE_CACHE_NANOS = TimeUnit.SECONDS.toNanos(5);
 
-	interface Resolver
+	interface SnapshotProvider
 	{
-		NetworkInterface resolve(String ip) throws Exception;
+		Collection<InterfaceAddresses> load() throws Exception;
 	}
 
 	interface NanoTimeSource
@@ -27,18 +31,47 @@ final class CachedNetworkInterfaceResolver
 		long nanoTime();
 	}
 
-	private final Resolver resolver;
+	static final class InterfaceAddresses
+	{
+		private final NetworkInterface networkInterface;
+		private final Collection<String> addresses;
+
+		InterfaceAddresses(NetworkInterface networkInterface, Collection<String> addresses)
+		{
+			this.networkInterface = networkInterface;
+			this.addresses = addresses;
+		}
+	}
+
+	private final SnapshotProvider provider;
 	private final NanoTimeSource timeSource;
-	private final Map<String, Entry> entries = new HashMap<String, Entry>();
+	private Snapshot snapshot;
 
 	CachedNetworkInterfaceResolver()
 	{
-		this(new Resolver()
+		this(new SnapshotProvider()
 		{
 			@Override
-			public NetworkInterface resolve(String ip) throws Exception
+			public Collection<InterfaceAddresses> load() throws Exception
 			{
-				return NetworkInterface.getByInetAddress(InetAddress.getByName(ip));
+				List<InterfaceAddresses> result = new ArrayList<InterfaceAddresses>();
+				Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+				if (interfaces == null)
+				{
+					return result;
+				}
+				while (interfaces.hasMoreElements())
+				{
+					NetworkInterface networkInterface = interfaces.nextElement();
+					List<String> addresses = new ArrayList<String>();
+					Enumeration<InetAddress> interfaceAddresses = networkInterface.getInetAddresses();
+					while (interfaceAddresses.hasMoreElements())
+					{
+						addresses.add(interfaceAddresses.nextElement().getHostAddress());
+					}
+					result.add(new InterfaceAddresses(networkInterface, addresses));
+				}
+				return result;
 			}
 		}, new NanoTimeSource()
 		{
@@ -50,65 +83,145 @@ final class CachedNetworkInterfaceResolver
 		});
 	}
 
-	CachedNetworkInterfaceResolver(Resolver resolver, NanoTimeSource timeSource)
+	CachedNetworkInterfaceResolver(SnapshotProvider provider, NanoTimeSource timeSource)
 	{
-		this.resolver = resolver;
+		this.provider = provider;
 		this.timeSource = timeSource;
 	}
 
 	/**
-	 * 返回 IP 对应网卡。缓存过期前不会再次调用系统解析。
+	 * 返回 IP 对应网卡。一次刷新只枚举一遍所有网卡，后续目标共享同一快照。
 	 */
 	synchronized NetworkInterface resolve(String ip) throws Exception
 	{
 		long now = this.timeSource.nanoTime();
-		Entry entry = this.entries.get(ip);
-		if ((entry != null) && (now < entry.expiresAtNanos))
+		Snapshot current = this.snapshot;
+		if ((current == null) || !current.isValid(now))
 		{
-			return entry.networkInterface;
+			current = this.refresh(now);
 		}
 
+		NetworkInterface networkInterface = current.interfacesByAddress.get(normalize(ip));
+		if ((networkInterface == null) && ((current.expiresAtNanos - now) > FAILURE_CACHE_NANOS))
+		{
+			this.snapshot = current.withExpiry(now + FAILURE_CACHE_NANOS);
+		}
+		return networkInterface;
+	}
+
+	/**
+	 * 网卡对象检查异常后，限制下一次批量枚举的最短间隔。
+	 */
+	synchronized void recordCheckFailure(String ip)
+	{
+		Snapshot current = this.snapshot;
+		if (current != null)
+		{
+			long expiresAt = this.timeSource.nanoTime() + FAILURE_CACHE_NANOS;
+			if (current.expiresAtNanos > expiresAt)
+			{
+				this.snapshot = current.withExpiry(expiresAt);
+			}
+		}
+	}
+
+	/**
+	 * IP 配置变化时丢弃整个小型枚举快照。
+	 */
+	synchronized void invalidateAll()
+	{
+		this.snapshot = null;
+	}
+
+	private Snapshot refresh(long now) throws Exception
+	{
 		try
 		{
-			NetworkInterface networkInterface = this.resolver.resolve(ip);
-			long cacheNanos = (networkInterface != null) ? SUCCESS_CACHE_NANOS : FAILURE_CACHE_NANOS;
-			this.entries.put(ip, new Entry(networkInterface, now + cacheNanos));
-			return networkInterface;
+			Map<String, NetworkInterface> interfacesByAddress = new HashMap<String, NetworkInterface>();
+			for (InterfaceAddresses item: this.provider.load())
+			{
+				for (String address: item.addresses)
+				{
+					String normalized = normalize(address);
+					if (normalized != null)
+					{
+						interfacesByAddress.put(normalized, item.networkInterface);
+					}
+				}
+			}
+			Snapshot result = new Snapshot(Collections.unmodifiableMap(interfacesByAddress), now + SUCCESS_CACHE_NANOS);
+			this.snapshot = result;
+			return result;
 		}
 		catch (Exception e)
 		{
-			this.entries.put(ip, new Entry(null, now + FAILURE_CACHE_NANOS));
+			this.snapshot = new Snapshot(Collections.<String, NetworkInterface>emptyMap(), now + FAILURE_CACHE_NANOS);
 			throw e;
 		}
 	}
 
-	/**
-	 * 网卡对象检查异常后，限制下一次系统解析的最短间隔。
-	 */
-	synchronized void recordCheckFailure(String ip)
+	private static String normalize(String value)
 	{
-		Entry current = this.entries.get(ip);
-		NetworkInterface networkInterface = (current != null) ? current.networkInterface : null;
-		this.entries.put(ip, new Entry(networkInterface, this.timeSource.nanoTime() + FAILURE_CACHE_NANOS));
+		if ((value == null) || value.isEmpty()) return null;
+
+		String ipv4 = normalizeIpv4(value);
+		if (ipv4 != null) return ipv4;
+
+		if (value.indexOf(':') < 0) return null;
+		try
+		{
+			String normalized = InetAddress.getByName(value).getHostAddress().toLowerCase(Locale.ENGLISH);
+			int scope = normalized.indexOf('%');
+			return (scope >= 0) ? normalized.substring(0, scope) : normalized;
+		}
+		catch (Exception e)
+		{
+			return null;
+		}
 	}
 
-	/**
-	 * IP 配置变化时清除全部少量目标缓存。
-	 */
-	synchronized void invalidateAll()
+	private static String normalizeIpv4(String value)
 	{
-		this.entries.clear();
+		String[] parts = value.split("\\.", -1);
+		if (parts.length != 4) return null;
+		StringBuilder builder = new StringBuilder(value.length());
+		for (int i = 0; i < parts.length; ++i)
+		{
+			String part = parts[i];
+			if (part.isEmpty() || (part.length() > 3)) return null;
+			int number = 0;
+			for (int j = 0; j < part.length(); ++j)
+			{
+				char character = part.charAt(j);
+				if ((character < '0') || (character > '9')) return null;
+				number = (number * 10) + (character - '0');
+			}
+			if (number > 255) return null;
+			if (i > 0) builder.append('.');
+			builder.append(number);
+		}
+		return builder.toString();
 	}
 
-	private static final class Entry
+	private static final class Snapshot
 	{
-		private final NetworkInterface networkInterface;
+		private final Map<String, NetworkInterface> interfacesByAddress;
 		private final long expiresAtNanos;
 
-		private Entry(NetworkInterface networkInterface, long expiresAtNanos)
+		private Snapshot(Map<String, NetworkInterface> interfacesByAddress, long expiresAtNanos)
 		{
-			this.networkInterface = networkInterface;
+			this.interfacesByAddress = interfacesByAddress;
 			this.expiresAtNanos = expiresAtNanos;
+		}
+
+		private boolean isValid(long now)
+		{
+			return (now - this.expiresAtNanos) < 0L;
+		}
+
+		private Snapshot withExpiry(long expiresAtNanos)
+		{
+			return new Snapshot(this.interfacesByAddress, expiresAtNanos);
 		}
 	}
 }

@@ -68,7 +68,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private FileWatchDog fileWatchDog;
   private final CachedNetworkInterfaceResolver networkInterfaceResolver;
   private String lastLocalIp;
-  private List<String> managerFsIps = new ArrayList<>();
+  private volatile List<String> managerFsIps = Collections.emptyList();
   private final FileWatchDog managerFsIpFileWatchDog;
 
   private final FileReader<Integer> maxUnobservableReader = FileReader.of4int("max_unobservable");
@@ -92,15 +92,16 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     this.networkInterfaceResolver = networkInterfaceResolver;
     managerFsIpFileWatchDog = new FileWatchDog(HaJdbcPaths.managerFsIpFile().toFile(), file -> {
       Path path = file.toPath();
-      managerFsIps.clear();
+      List<String> loaded = Collections.emptyList();
       try {
         List<String> lines = Files.readAllLines(path);
         if (!lines.isEmpty()) {
-          managerFsIps.addAll(Arrays.asList(lines.get(0).split(",")));
+          loaded = Collections.unmodifiableList(new ArrayList<String>(Arrays.asList(lines.get(0).split(","))));
         }
       } catch (Exception e) {
         logger.error("load manager fs ip error", e);
       } finally {
+        managerFsIps = loaded;
         networkInterfaceResolver.invalidateAll();
       }
     });
@@ -869,7 +870,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       this.networkInterfaceResolver.invalidateAll();
       this.lastLocalIp = localIp;
     }
-    return isUp(localIp, 1);
+    return isUp(localIp, 1, new IdentityHashMap<NetworkInterface, Boolean>());
   }
 
   private NetworkInterface getNic(String ip) {
@@ -886,15 +887,22 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * @param failedTryCount 失败后的尝试次数
    * @return
    */
-  private boolean isUp(String ip, int failedTryCount) {
+  private boolean isUp(String ip, int failedTryCount, Map<NetworkInterface, Boolean> checkedInterfaces) {
     NetworkInterface nic = getNic(ip);
     if (nic != null) {
       try {
-        boolean up = nic.isUp();
+        Boolean checked = checkedInterfaces.get(nic);
+        boolean up;
+        if ((checked != null) || checkedInterfaces.containsKey(nic)) {
+          up = checked;
+        } else {
+          up = nic.isUp();
+          checkedInterfaces.put(nic, up);
+        }
         if (!up) {
           this.networkInterfaceResolver.recordCheckFailure(ip);
         }
-        return up && isManagerNicUp();
+        return up && isManagerNicUp(checkedInterfaces);
       } catch (SocketException e) {
         this.networkInterfaceResolver.recordCheckFailure(ip);
         logger.warn("is up fail.", e);
@@ -905,7 +913,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
       if (failedTryCount > 1) {
         try {
           Thread.sleep(1000);
-          return isUp(ip, failedTryCount - 1);
+          return isUp(ip, failedTryCount - 1, checkedInterfaces);
         } catch (InterruptedException e) {
           //e.printStackTrace();
           return false;
@@ -920,31 +928,36 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * 判断manager节点里文件系统里的网卡是否有启动的
    * @return
    */
-  private boolean isManagerNicUp() {
+  private boolean isManagerNicUp(Map<NetworkInterface, Boolean> checkedInterfaces) {
     managerFsIpFileWatchDog.watch();
-    if (managerFsIps.isEmpty()) {
+    List<String> targets = this.managerFsIps;
+    if (targets.isEmpty()) {
       return true;
     }
-    boolean up = false;
-    for (String ip : managerFsIps) {
+    for (String ip : targets) {
       NetworkInterface nic = getNic(ip);
       if (nic != null) {
         try {
-          if (!up) {
-            boolean nicUp = nic.isUp();
-            if (!nicUp) {
-              this.networkInterfaceResolver.recordCheckFailure(ip);
-            }
-            up = nicUp;
+          Boolean checked = checkedInterfaces.get(nic);
+          boolean nicUp;
+          if ((checked != null) || checkedInterfaces.containsKey(nic)) {
+            nicUp = checked;
+          } else {
+            nicUp = nic.isUp();
+            checkedInterfaces.put(nic, nicUp);
           }
+          if (nicUp) {
+            return true;
+          }
+          this.networkInterfaceResolver.recordCheckFailure(ip);
         } catch (SocketException e) {
           this.networkInterfaceResolver.recordCheckFailure(ip);
           logger.warn("check nic[{}] is up fail.", nic.getName(), e);
-          up = true;
+          return true;
         }
       }
     }
-    return up;
+    return false;
   }
 
   @Override
