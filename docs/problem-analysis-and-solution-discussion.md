@@ -32,7 +32,7 @@
 | P1-2 | 已处理 | 主备健康逻辑中用 IP 调 `getDatabase(id)`，数据库 ID 与 IP 不一致时可能抛异常 | `ClusterHealthImpl:463-491`, `DatabaseClusterImpl:531-557` | 已改为通过 `getDatabaseByIp()` 查找主节点数据库 |
 | P1-3 | 已处理（短期） | 分布式文件同步下载可能保留旧文件尾部，上传/下载命令缺少路径信任边界 | `SyncMgrImpl:82-155`, `UploadCommand:46-62`, `UploadedCommand:60-99`, `DownloadCommand:49-75` | 已改为下载临时文件替换、失败清理临时文件，并增加同步路径白名单 |
 | P1-4 | 已处理 | 发布元数据许可证与仓库 LICENSE/README 不一致 | `LICENSE:1-2`, `README.md:5-7`, `build.gradle:169-173` | 已统一为 LGPL |
-| P2-1 | 中 | 健康检测和诊断配置硬编码 Linux 系统路径 | `ClusterHealthImpl:70`, `ClusterHealthImpl:100`, `Tracer:18-25`, `FileReader:62-66` | 中 |
+| P2-1 | 已处理（短期） | 健康检测和诊断配置硬编码 Linux 系统路径 | `ClusterHealthImpl`, `Tracer`, `FileReader`, `DistributedLock`, `NetworkDetectObserveAdapter` | 已集中到 `HaJdbcPaths`，并保留既有默认路径 |
 | P2-2 | 已处理 | `TimeoutUtil` 忽略调用方传入的 `TimeUnit` | `TimeoutUtil:59-77` | 已改为使用调用方传入的时间单位，并增加秒级超时与取消测试 |
 | P2-3 | 已处理 | 资源关闭不完整，健康检测线程池未在 `stop()` 中关闭 | `ClusterHealthImpl:92-132`, `ClusterHealthImpl:725-733` | 已改为停止健康检测时同时关闭定时线程池和异步执行线程池 |
 | P2-4 | 中 | 日志体系混用和裸 `printStackTrace()`，生产问题难以统一收敛 | `ClusterHealthImpl:773-787`, `ClusterHealthImpl:847-855`, `ZipUtils` 等 | 中 |
@@ -62,7 +62,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 ### 健康检测与主备
 
-`ClusterHealthImpl.start()` 会先同步执行一次 `doTask()`，遇到 `StartFailException` 时直接 `System.exit(1)`。健康检测还依赖本地 IP、JGroups member IP、`/proc/mounts`、`/etc/aio/.mfs_ip`、`/etc/ha-jdbc/*` 等运行环境。
+`ClusterHealthImpl.start()` 会先同步执行一次 `doTask()`，遇到 `StartFailException` 时已改为向调用方抛出启动失败异常。健康检测还依赖本地 IP、JGroups member IP、`/proc/mounts`、`/proc/net/tcp`、`/etc/aio/.mfs_ip`、`/etc/ha-jdbc/*` 等运行环境。当前与健康检测和诊断相关的系统路径已集中到 `HaJdbcPaths`，可通过系统属性覆盖，默认值保持兼容。
 
 ### 分布式文件同步
 
@@ -279,9 +279,19 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 | B | 保留默认路径，但允许覆盖，并在不可用时降级 |
 | C | 对 Linux-only 能力加显式开关和启动校验 |
 
-**建议**
+**处理结果**
 
-采用 A+B。默认兼容现有部署，但测试和新环境可注入临时目录。
+已采用 A+B 的短期修复：新增 `HaJdbcPaths` 集中管理运行时文件系统路径，默认仍使用既有 `/etc/ha-jdbc`、`/etc/ha-jdbc/trace`、`/proc/mounts` 和 `/etc/aio/.mfs_ip`。测试和非标准部署可通过以下系统属性覆盖：
+
+| 系统属性 | 默认值 | 用途 |
+| --- | --- | --- |
+| `ha-jdbc.config-dir` | `/etc/ha-jdbc` | `FileReader` 读取诊断/健康配置的目录 |
+| `ha-jdbc.trace-dir` | `${ha-jdbc.config-dir}/trace` | `Tracer`、健康检测和分布式锁 trace 标记目录 |
+| `ha-jdbc.mounts-file` | `/proc/mounts` | 健康检测监听的挂载信息文件 |
+| `ha-jdbc.manager-fs-ip-file` | `/etc/aio/.mfs_ip` | 健康检测监听的管理文件系统 IP 文件 |
+| `ha-jdbc.net-tcp-file` | `/proc/net/tcp` | 网络探测读取的 TCP 链路信息文件 |
+
+新增测试覆盖配置目录、trace 目录、health watchdog 系统文件和网络探测 TCP 文件覆盖能力。
 
 ### P2-2 `TimeoutUtil` 忽略传入 `TimeUnit`
 
@@ -400,7 +410,7 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 | `isValid()` 语义拆分 | 保留旧方法一版，新增方法逐步迁移调用点 |
 | 移除 `System.exit` | 增加兼容开关，例如 `ha-jdbc.health.exitOnStartFail=true`，默认 false |
 | 文件同步改为临时文件 | 保留旧协议版本字段，混部期间按能力协商 |
-| 路径配置化 | 默认值保持现有 `/etc` 和 `/proc` 路径，不破坏旧部署 |
+| 路径配置化 | 已集中到 `HaJdbcPaths`，默认值保持现有 `/etc` 和 `/proc` 路径，不破坏旧部署 |
 
 ## 兼容性
 
@@ -449,13 +459,13 @@ if (!this.isAlive(database, Level.INFO) || !stateManager.isValid(database)) {
 
 ### 阶段 4：环境适配与可观测性
 
-- 系统路径配置化。
+- 系统路径配置化。（已完成短期修复）
 - 修复 `TimeoutUtil` 的 `TimeUnit` 传递问题。（已完成）
 - 健康检测停止时关闭内部线程池。（已完成；`TokenStore` 静态 `TimeoutUtil` 生命周期可后续单独治理）
 - 清理 `printStackTrace()` 和吞异常。
 - 完善 health/command 日志字段。
 
-验收：非标准目录测试、线程泄漏测试、日志断言通过。
+验收：非标准目录测试、线程泄漏测试、日志断言通过；当前非标准目录测试和线程泄漏测试已覆盖，日志断言随 P2-4 推进。
 
 ## 开放问题
 

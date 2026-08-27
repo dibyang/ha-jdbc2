@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.List;
 
 /**
@@ -48,7 +47,7 @@ public enum MountPathHolder implements FileObserver {
           }
         }
       } catch (IOException e) {
-        LOG.error("read /proc/mounts file failed", e);
+        LOG.error("read mounts file failed", e);
       }
     }
   }

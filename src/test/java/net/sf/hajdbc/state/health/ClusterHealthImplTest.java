@@ -14,6 +14,7 @@ import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.distributed.jgroups.AddressMember;
 import net.sf.hajdbc.exception.StartFailException;
 import net.sf.hajdbc.state.distributed.DistributedStateManager;
+import net.sf.hajdbc.util.HaJdbcPaths;
 
 import org.jgroups.Address;
 import org.junit.After;
@@ -35,11 +36,15 @@ public class ClusterHealthImplTest
 	public final TemporaryFolder temporaryFolder = new TemporaryFolder();
 
 	private String originalAppRoot;
+	private String originalMountsFile;
+	private String originalManagerFsIpFile;
 
 	@Before
 	public void setAppRoot() throws Exception
 	{
 		this.originalAppRoot = System.getProperty("app.root");
+		this.originalMountsFile = System.getProperty(HaJdbcPaths.MOUNTS_FILE_PROPERTY);
+		this.originalManagerFsIpFile = System.getProperty(HaJdbcPaths.MANAGER_FS_IP_FILE_PROPERTY);
 		File root = this.temporaryFolder.newFolder("app-root");
 		System.setProperty("app.root", root.getAbsolutePath());
 	}
@@ -55,6 +60,8 @@ public class ClusterHealthImplTest
 		{
 			System.setProperty("app.root", this.originalAppRoot);
 		}
+		restore(HaJdbcPaths.MOUNTS_FILE_PROPERTY, this.originalMountsFile);
+		restore(HaJdbcPaths.MANAGER_FS_IP_FILE_PROPERTY, this.originalManagerFsIpFile);
 	}
 
 	@Test
@@ -88,6 +95,27 @@ public class ClusterHealthImplTest
 
 		Assert.assertTrue(executorService(health, "scheduledService").isShutdown());
 		Assert.assertTrue(executorService(health, "executorService").isShutdown());
+	}
+
+	@Test
+	public void healthWatchDogsUseConfiguredSystemFiles() throws Exception
+	{
+		File mounts = this.temporaryFolder.newFile("mounts");
+		File managerFsIps = this.temporaryFolder.newFile("mfs_ip");
+		System.setProperty(HaJdbcPaths.MOUNTS_FILE_PROPERTY, mounts.getAbsolutePath());
+		System.setProperty(HaJdbcPaths.MANAGER_FS_IP_FILE_PROPERTY, managerFsIps.getAbsolutePath());
+
+		ClusterHealthImpl health = new ClusterHealthImpl(stateManager());
+
+		try
+		{
+			Assert.assertEquals(mounts.getAbsoluteFile(), fileWatchDogFile(health, "fileWatchDog"));
+			Assert.assertEquals(managerFsIps.getAbsoluteFile(), fileWatchDogFile(health, "managerFsIpFileWatchDog"));
+		}
+		finally
+		{
+			health.stop();
+		}
 	}
 
 	@Test
@@ -158,6 +186,28 @@ public class ClusterHealthImplTest
 		Field field = ClusterHealthImpl.class.getDeclaredField(fieldName);
 		field.setAccessible(true);
 		return (ExecutorService) field.get(health);
+	}
+
+	private static File fileWatchDogFile(ClusterHealthImpl health, String fieldName) throws Exception
+	{
+		Field field = ClusterHealthImpl.class.getDeclaredField(fieldName);
+		field.setAccessible(true);
+		FileWatchDog watchDog = (FileWatchDog) field.get(health);
+		Field file = FileWatchDog.class.getDeclaredField("file");
+		file.setAccessible(true);
+		return ((File) file.get(watchDog)).getAbsoluteFile();
+	}
+
+	private static void restore(String property, String value)
+	{
+		if (value == null)
+		{
+			System.clearProperty(property);
+		}
+		else
+		{
+			System.setProperty(property, value);
+		}
 	}
 
 	private static class FailingClusterHealth extends ClusterHealthImpl

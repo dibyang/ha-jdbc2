@@ -4,6 +4,7 @@ import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 import net.sf.hajdbc.util.FileReader;
+import net.sf.hajdbc.util.HaJdbcPaths;
 import net.sf.hajdbc.util.Tracer;
 
 import java.net.InetAddress;
@@ -39,7 +40,7 @@ public class NetworkDetectObserveAdapter implements ObserveAdapter {
   public boolean isObservable(boolean needDown, String localIp, List<String> ips) {
     DetectMode detectMode = getDetectMode();
     if(!DetectMode.disabled.equals(detectMode)) {
-      List<TcpLink> tcpLinks = TcpLink.readTcpLinks("/proc/net/tcp");
+      List<TcpLink> tcpLinks = TcpLink.readTcpLinks(HaJdbcPaths.netTcpFile().toString());
       Set<String> ips1 = new HashSet<>(tcpLinks.stream().filter(e -> e.getLocal().getIp().equals(localIp)
               && !e.getRemote().getIp().equals(localIp))
           .map(e -> e.getRemote().getIp())

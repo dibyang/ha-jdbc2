@@ -7,8 +7,6 @@ import net.sf.hajdbc.logging.LoggerFactory;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -62,7 +60,7 @@ public class FileReader<T> {
   private FileReader(String name, Function<byte[],Optional<T>> reader) {
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(reader);
-    this.file = Paths.get("/etc/ha-jdbc", name).toFile();
+    this.file = HaJdbcPaths.configFile(name).toFile();
     this.reader = reader;
   }
 

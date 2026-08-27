@@ -5,7 +5,6 @@ import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
 
 import java.io.File;
-import java.nio.file.Paths;
 
 public enum Tracer {
   invoke,
@@ -16,7 +15,7 @@ public enum Tracer {
   private Boolean trace;
 
   Tracer() {
-    this.traceFile = Paths.get("/etc/ha-jdbc/trace", this.name()).toFile();
+    this.traceFile = HaJdbcPaths.traceFile(this.name()).toFile();
   }
 
   public boolean isTrace(){

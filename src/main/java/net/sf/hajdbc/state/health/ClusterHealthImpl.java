@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.net.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.*;
@@ -27,6 +26,7 @@ import net.sf.hajdbc.state.distributed.DistributedStateManager;
 import net.sf.hajdbc.state.distributed.NodeState;
 import net.sf.hajdbc.state.distributed.SyncActiveDbsCommand;
 import net.sf.hajdbc.util.FileReader;
+import net.sf.hajdbc.util.HaJdbcPaths;
 import net.sf.hajdbc.util.HaJdbcThreadFactory;
 import net.sf.hajdbc.util.StopWatch;
 import org.joda.time.DateTime;
@@ -67,7 +67,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   private volatile Member host = null;
   private FileWatchDog fileWatchDog;
   private List<String> managerFsIps = new ArrayList<>();
-  private FileWatchDog managerFsIpFileWatchDog = new FileWatchDog(new File("/etc/aio/.mfs_ip"), file -> {
+  private FileWatchDog managerFsIpFileWatchDog = new FileWatchDog(HaJdbcPaths.managerFsIpFile().toFile(), file -> {
     Path path = file.toPath();
     managerFsIps.clear();
     try {
@@ -97,7 +97,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     this.stateManager.getDatabaseCluster().addListener(this);
     executorService = Executors.newFixedThreadPool(3, HaJdbcThreadFactory.c("cluster-executor-Thread"));
     stateManager.setExtContext(ClusterHealth.class.getName(), this);
-    fileWatchDog = new FileWatchDog(new File("/proc/mounts"), MountPathHolder.H);
+    fileWatchDog = new FileWatchDog(HaJdbcPaths.mountsFile().toFile(), MountPathHolder.H);
     arbiter = new Arbiter(stateManager.getDatabaseCluster().getId());
   }
 
@@ -802,7 +802,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   private boolean isTrace() {
-    return Files.exists(Paths.get("/etc/ha-jdbc/trace/health"));
+    return Files.exists(HaJdbcPaths.traceFile("health"));
   }
 
   private void updateNewToken() {

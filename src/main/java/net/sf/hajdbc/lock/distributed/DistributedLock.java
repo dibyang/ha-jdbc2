@@ -3,13 +3,13 @@ package net.sf.hajdbc.lock.distributed;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.Member;
 import net.sf.hajdbc.lock.WriteLock;
+import net.sf.hajdbc.util.HaJdbcPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -153,7 +153,7 @@ class DistributedLock implements Lock {
   }
 
   private boolean isTrace(){
-    return Files.exists(Paths.get("/etc/ha-jdbc/trace/lock"));
+    return Files.exists(HaJdbcPaths.traceFile("lock"));
   }
 
   private boolean lockMembers() {
