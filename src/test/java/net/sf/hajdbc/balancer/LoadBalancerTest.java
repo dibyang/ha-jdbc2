@@ -18,13 +18,19 @@
 package net.sf.hajdbc.balancer;
 
 import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import net.sf.hajdbc.MockDatabase;
 import net.sf.hajdbc.balancer.load.LoadBalancerFactory;
+import org.junit.Test;
 
 import static org.junit.Assert.*;
 
@@ -93,6 +99,102 @@ public class LoadBalancerTest extends AbstractBalancerTest
 		finally
 		{
 			executor.shutdownNow();
+		}
+	}
+
+	@Test
+	public void databasesAreCachedInLocalFirstOrderAndCannotBeModified()
+	{
+		this.databases[2].setLocal(true);
+		Balancer<Void, MockDatabase> balancer = this.factory.createBalancer(new HashSet<MockDatabase>(Arrays.asList(this.databases)));
+
+		Set<MockDatabase> snapshot = balancer.getDatabases();
+		assertArrayEquals(new MockDatabase[] { this.databases[2], this.databases[0], this.databases[1] }, snapshot.toArray(new MockDatabase[3]));
+		assertSame(this.databases[2], balancer.primary());
+		assertSame(this.databases[2], balancer.local());
+
+		for (int i = 0; i < 100000; ++i)
+		{
+			assertSame(snapshot, balancer.getDatabases());
+		}
+
+		assertUnsupported(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				snapshot.clear();
+			}
+		});
+		assertUnsupported(new Runnable()
+		{
+			@Override
+			public void run()
+			{
+				Iterator<MockDatabase> iterator = snapshot.iterator();
+				iterator.next();
+				iterator.remove();
+			}
+		});
+	}
+
+	@Test
+	public void noOpChangesReuseSnapshot()
+	{
+		Balancer<Void, MockDatabase> balancer = this.factory.createBalancer(Collections.singleton(this.databases[1]));
+		Set<MockDatabase> snapshot = balancer.getDatabases();
+
+		assertFalse(balancer.add(this.databases[1]));
+		assertSame(snapshot, balancer.getDatabases());
+		assertFalse(balancer.addAll(Collections.singleton(this.databases[1])));
+		assertSame(snapshot, balancer.getDatabases());
+		assertFalse(balancer.remove(this.databases[2]));
+		assertSame(snapshot, balancer.getDatabases());
+	}
+
+	@Test
+	public void mixedAddAllPreservesExistingLoad() throws Exception
+	{
+		Balancer<Void, MockDatabase> balancer = this.factory.createBalancer(new HashSet<MockDatabase>(Arrays.asList(this.databases[1], this.databases[2])));
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		CountDownLatch started = new CountDownLatch(1);
+		WaitingInvoker invoker = new WaitingInvoker(started);
+		Future<Void> future = executor.submit(new InvocationTask(balancer, invoker, this.databases[2]));
+
+		try
+		{
+			assertTrue(started.await(5, TimeUnit.SECONDS));
+			assertTrue(balancer.addAll(Arrays.asList(this.databases[2], this.databases[0])));
+			assertSame(this.databases[1], balancer.next());
+		}
+		finally
+		{
+			try
+			{
+				synchronized (invoker)
+				{
+					invoker.notifyAll();
+				}
+				future.get(5, TimeUnit.SECONDS);
+			}
+			finally
+			{
+				executor.shutdownNow();
+				assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+			}
+		}
+	}
+
+	private static void assertUnsupported(Runnable action)
+	{
+		try
+		{
+			action.run();
+			fail("Expected UnsupportedOperationException");
+		}
+		catch (UnsupportedOperationException e)
+		{
+			// Expected: the cached snapshot must not be mutable by callers.
 		}
 	}
 }

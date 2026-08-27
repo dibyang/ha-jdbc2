@@ -21,13 +21,10 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Collectors;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.balancer.AbstractBalancer;
 import net.sf.hajdbc.invocation.Invoker;
-import net.sf.hajdbc.state.StateManager;
-import net.sf.hajdbc.util.Collections;
 
 /**
  * Balancer implementation whose {@link #next()} implementation returns the database with the least load.
@@ -38,10 +35,13 @@ import net.sf.hajdbc.util.Collections;
 public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, D>
 {
 	private final Lock lock = new ReentrantLock();
-	
-	private volatile SortedMap<D, AtomicInteger> databaseMap = Collections.emptySortedMap();
 
-	private Comparator<Map.Entry<D, AtomicInteger>> comparator = new Comparator<Map.Entry<D, AtomicInteger>>()
+	/**
+	 * 负载映射和 local-first 只读集合必须作为同一代状态一起发布。
+	 */
+	private volatile BalancerState<D> state;
+
+	private final Comparator<Map.Entry<D, AtomicInteger>> comparator = new Comparator<Map.Entry<D, AtomicInteger>>()
 	{
 		@Override
 		public int compare(Map.Entry<D, AtomicInteger> mapEntry1, Map.Entry<D, AtomicInteger> mapEntry2)
@@ -74,25 +74,12 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	 */
 	public LoadBalancer(Set<D> databases)
 	{
-		if (databases.isEmpty())
+		SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>();
+		for (D database: databases)
 		{
-			this.databaseMap = Collections.emptySortedMap();
+			map.put(database, new AtomicInteger(1));
 		}
-		else if (databases.size() == 1)
-		{
-			this.databaseMap = Collections.singletonSortedMap(databases.iterator().next(), new AtomicInteger(1));
-		}
-		else
-		{
-			SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>();
-			
-			for (D database: databases)
-			{
-				map.put(database, new AtomicInteger(1));
-			}
-			
-			this.databaseMap = map;
-		}
+		this.state = this.createState(map);
 	}
 	
 	/**
@@ -102,30 +89,12 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	@Override
 	public D primary()
 	{
-		try
-		{
-			return this.getDatabases().stream()
-          .findFirst()
-          .orElse(null);
-		}
-		catch (NoSuchElementException e)
-		{
-			return null;
-		}
+		return this.state.primary;
 	}
 
 	@Override
 	public D local() {
-		try
-		{
-			return getDatabases().stream()
-					.filter(e->e.isLocal()).findFirst()
-					.orElse(null);
-		}
-		catch (NoSuchElementException e)
-		{
-			return null;
-		}
+		return this.state.local;
 	}
 
 	/**
@@ -135,9 +104,8 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	@Override
 	public Set<D> getDatabases()
 	{
-    return this.databaseMap.keySet().stream()
-        .sorted(Comparator.comparing(e -> !e.isLocal()))
-        .collect(Collectors.toCollection(LinkedHashSet::new));
+		// 共享快照必须只读，否则调用方会破坏 balancer 的同代状态。
+		return this.state.databases;
 	}
 
 	/**
@@ -151,18 +119,22 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			SortedMap<D, AtomicInteger> addMap = new TreeMap<D, AtomicInteger>(this.databaseMap);
+			SortedMap<D, AtomicInteger> addMap = new TreeMap<D, AtomicInteger>(this.state.databaseMap);
 			
 			boolean added = false;
 			
 			for (D database: databases)
 			{
-				added = (addMap.put(database, new AtomicInteger(1)) == null) || added;
+				if (!addMap.containsKey(database))
+				{
+					addMap.put(database, new AtomicInteger(1));
+					added = true;
+				}
 			}
 			
 			if (added)
 			{
-				this.databaseMap = addMap;
+				this.state = this.createState(addMap);
 			}
 			
 			return added;
@@ -184,13 +156,13 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.databaseMap);
+			SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.state.databaseMap);
 			
 			boolean removed = map.keySet().removeAll(databases);
 
 			if (removed)
 			{
-				this.databaseMap = map;
+				this.state = this.createState(map);
 			}
 			
 			return removed;
@@ -212,13 +184,13 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.databaseMap);
+			SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.state.databaseMap);
 			
 			boolean retained = map.keySet().retainAll(databases);
 
 			if (retained)
 			{
-				this.databaseMap = map;
+				this.state = this.createState(map);
 			}
 			
 			return retained;
@@ -240,9 +212,9 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			if (!this.databaseMap.isEmpty())
+			if (!this.state.databaseMap.isEmpty())
 			{
-				this.databaseMap = new TreeMap<D, AtomicInteger>();
+				this.state = this.createState(new TreeMap<D, AtomicInteger>());
 			}
 		}
 		finally
@@ -262,22 +234,13 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			boolean remove = this.databaseMap.containsKey(database);
+			boolean remove = this.state.databaseMap.containsKey(database);
 			
 			if (remove)
 			{
-				if (this.databaseMap.size() == 1)
-				{
-					this.databaseMap = Collections.emptySortedMap();
-				}
-				else
-				{
-					SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.databaseMap);
-
-					map.remove(database);
-					
-					this.databaseMap = map;
-				}
+				SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.state.databaseMap);
+				map.remove(database);
+				this.state = this.createState(map);
 			}
 			
 			return remove;
@@ -295,7 +258,7 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	@Override
 	public D next()
 	{
-		Set<Map.Entry<D, AtomicInteger>> entrySet = this.databaseMap.entrySet();
+		Set<Map.Entry<D, AtomicInteger>> entrySet = this.state.databaseMap.entrySet();
 		
 		return !entrySet.isEmpty() ? java.util.Collections.min(entrySet, this.comparator).getKey() : null;
 	}
@@ -311,24 +274,15 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 		
 		try
 		{
-			boolean add = !this.databaseMap.containsKey(database);
+			boolean add = !this.state.databaseMap.containsKey(database);
 			
 			if (add)
 			{
 				AtomicInteger load = new AtomicInteger(1);
 				
-				if (this.databaseMap.isEmpty())
-				{
-					this.databaseMap = Collections.singletonSortedMap(database, load);
-				}
-				else
-				{
-					SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.databaseMap);
-					
-					map.put(database, load);
-					
-					this.databaseMap = map;
-				}
+				SortedMap<D, AtomicInteger> map = new TreeMap<D, AtomicInteger>(this.state.databaseMap);
+				map.put(database, load);
+				this.state = this.createState(map);
 			}
 			
 			return add;
@@ -346,7 +300,7 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 	@Override
 	public <T, R, E extends Exception> R invoke(Invoker<Z, D, T, R, E> invoker, D database, T object) throws E
 	{
-		AtomicInteger load = this.databaseMap.get(database);
+		AtomicInteger load = this.state.databaseMap.get(database);
 		
 		if (load != null)
 		{
@@ -363,6 +317,55 @@ public class LoadBalancer<Z, D extends Database<Z>> extends AbstractBalancer<Z, 
 			{
 				load.decrementAndGet();
 			}
+		}
+	}
+
+	/**
+	 * 在写锁内构造完整状态，保证读线程不会观察到跨代的映射和顺序集合。
+	 */
+	private BalancerState<D> createState(SortedMap<D, AtomicInteger> source)
+	{
+		SortedMap<D, AtomicInteger> map = java.util.Collections.unmodifiableSortedMap(source);
+		LinkedHashSet<D> ordered = new LinkedHashSet<D>(map.size());
+		D local = null;
+
+		for (D database: map.keySet())
+		{
+			if (database.isLocal())
+			{
+				if (local == null)
+				{
+					local = database;
+				}
+				ordered.add(database);
+			}
+		}
+		for (D database: map.keySet())
+		{
+			if (!database.isLocal())
+			{
+				ordered.add(database);
+			}
+		}
+
+		Set<D> databases = java.util.Collections.unmodifiableSet(ordered);
+		D primary = ordered.isEmpty() ? null : ordered.iterator().next();
+		return new BalancerState<D>(map, databases, primary, local);
+	}
+
+	private static final class BalancerState<D>
+	{
+		private final SortedMap<D, AtomicInteger> databaseMap;
+		private final Set<D> databases;
+		private final D primary;
+		private final D local;
+
+		private BalancerState(SortedMap<D, AtomicInteger> databaseMap, Set<D> databases, D primary, D local)
+		{
+			this.databaseMap = databaseMap;
+			this.databases = databases;
+			this.primary = primary;
+			this.local = local;
 		}
 	}
 }
