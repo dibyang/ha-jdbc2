@@ -88,6 +88,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private Dialect dialect;
 	private Durability<Z, D> durability;
 	private DatabaseMetaDataCache<Z, D> databaseMetaDataCache;
+	private DatabaseClusterListener databaseMetaDataCacheListener;
 	private ExecutorService executor;
 	private Decoder decoder;
 	private CronThreadPoolExecutor cronExecutor;
@@ -876,6 +877,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			this.durability.recover(invokers);
 		}
 		this.databaseMetaDataCache = this.configuration.getDatabaseMetaDataCacheFactory().createCache(this);
+		if (this.databaseMetaDataCache instanceof DatabaseClusterListener)
+		{
+			this.databaseMetaDataCacheListener = (DatabaseClusterListener) this.databaseMetaDataCache;
+			this.addListener(this.databaseMetaDataCacheListener);
+		}
 		try
 		{
 			this.flushMetaDataCache();
@@ -1016,6 +1022,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		if (this.balancer != null)
 		{
 			this.balancer.clear();
+		}
+
+		if (this.databaseMetaDataCacheListener != null)
+		{
+			this.removeListener(this.databaseMetaDataCacheListener);
+			this.databaseMetaDataCacheListener = null;
 		}
 	}
 

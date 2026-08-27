@@ -25,6 +25,7 @@ import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicReference;
 
 import net.sf.hajdbc.QualifiedName;
+import net.sf.hajdbc.QualifiedNameFactory;
 import net.sf.hajdbc.SequenceProperties;
 import net.sf.hajdbc.SequencePropertiesFactory;
 import net.sf.hajdbc.SequenceSupport;
@@ -51,7 +52,15 @@ public class LazyDatabaseProperties extends AbstractDatabaseProperties
 	public LazyDatabaseProperties(DatabaseMetaDataProvider provider, Dialect dialect) throws SQLException
 	{
 		super(provider.getDatabaseMetaData(), dialect);
+		this.provider = provider;
+		this.dialect = dialect;
+		SequenceSupport support = dialect.getSequenceSupport();
+		this.sequenceFactory = (support != null) ? support.createSequencePropertiesFactory(this.nameFactory) : null;
+	}
 
+	protected LazyDatabaseProperties(DatabaseMetaDataProvider provider, Dialect dialect, boolean supportsSelectForUpdate, boolean locatorsUpdateCopy, QualifiedNameFactory nameFactory)
+	{
+		super(supportsSelectForUpdate, locatorsUpdateCopy, nameFactory);
 		this.provider = provider;
 		this.dialect = dialect;
 		SequenceSupport support = dialect.getSequenceSupport();

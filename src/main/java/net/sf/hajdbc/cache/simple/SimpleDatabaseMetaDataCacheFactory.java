@@ -23,6 +23,10 @@ import net.sf.hajdbc.cache.DatabaseMetaDataCache;
 import net.sf.hajdbc.cache.DatabaseMetaDataCacheFactory;
 
 /**
+ * Creates the minimal metadata cache. The historical {@code none} id is retained for
+ * configuration compatibility; only connection-independent statement-classification
+ * metadata is shared.
+ *
  * @author Paul Ferraro
  *
  */

@@ -45,9 +45,14 @@ public abstract class AbstractDatabaseProperties implements DatabaseProperties
 	
 	public AbstractDatabaseProperties(DatabaseMetaData metaData, Dialect dialect) throws SQLException
 	{
-		this.supportsSelectForUpdate = metaData.supportsSelectForUpdate();
-		this.locatorsUpdateCopy = metaData.locatorsUpdateCopy();
-		this.nameFactory = dialect.createQualifiedNameFactory(metaData, dialect.createIdentifierNormalizer(metaData));
+		this(metaData.supportsSelectForUpdate(), metaData.locatorsUpdateCopy(), dialect.createQualifiedNameFactory(metaData, dialect.createIdentifierNormalizer(metaData)));
+	}
+
+	protected AbstractDatabaseProperties(boolean supportsSelectForUpdate, boolean locatorsUpdateCopy, QualifiedNameFactory nameFactory)
+	{
+		this.supportsSelectForUpdate = supportsSelectForUpdate;
+		this.locatorsUpdateCopy = locatorsUpdateCopy;
+		this.nameFactory = nameFactory;
 	}
 	
 	/**
