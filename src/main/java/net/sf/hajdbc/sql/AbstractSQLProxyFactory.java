@@ -161,7 +161,12 @@ public abstract class AbstractSQLProxyFactory<Z, D extends Database<Z>, P, T> ex
 	@Override
 	public boolean isSelectForUpdate(String sql) throws SQLException
 	{
-		return this.getDatabaseProperties().supportsSelectForUpdate() ? this.getDatabaseCluster().getDialect().isSelectForUpdate(sql) : false;
+		if (!this.getDatabaseCluster().getDialect().isSelectForUpdate(sql))
+		{
+			return false;
+		}
+
+		return this.getDatabaseProperties().supportsSelectForUpdate();
 	}
 
 	@Override
