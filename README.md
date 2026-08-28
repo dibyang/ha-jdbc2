@@ -6,6 +6,8 @@
 
 - [设计文档](docs/design.md)
 - [当前问题扫描与解决方案讨论稿](docs/problem-analysis-and-solution-discussion.md)
+- [变更记录](CHANGELOG.md)
+- [发布说明](src/main/resources/release-note.md)
 
 ## Verification
 
