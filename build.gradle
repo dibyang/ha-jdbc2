@@ -299,12 +299,10 @@ gradle.taskGraph.whenReady { taskGraph ->
     boolean nonSnapshotBuild = !project.version.toString().endsWith('SNAPSHOT')
 
     if (releaseRequested || requiredSignRequested || (nonSnapshotBuild && localPublishRequested)) {
-        validateKnownBuildHash()
         loadAndValidateSigningProperties()
     }
 
     if (!remotePublishTasks.isEmpty() || releaseRequested) {
-        validateKnownBuildHash()
         boolean releasePublication = releaseRequested || nonSnapshotBuild
         String repositoryProperty = releasePublication ? 'releasesRepository' : 'snapshotsRepository'
         String repositoryUrl = requireProjectProperty(repositoryProperty)
