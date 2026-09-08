@@ -88,7 +88,11 @@ public class AllResultsCollector implements InvokeOnManyInvocationStrategy.Resul
 		
 		try
 		{
-			List<Future<R>> futureList = this.provider.getExecutor(cluster).invokeAll(invocationList);
+			ExecutorService executor = this.provider.getExecutor(cluster);
+			// 仅显式监控作用域等待物理退出；旧调用方保持原有取消与异常契约。
+			List<Future<R>> futureList = PhysicalInvocationScope.isActive()
+					? PhysicalInvocationScope.invokeAll(executor, invocationList)
+					: executor.invokeAll(invocationList);
 			
 			final SortedMap<D, R> resultMap = new TreeMap<D, R>();
 			final SortedMap<D, E> exceptionMap = new TreeMap<D, E>();

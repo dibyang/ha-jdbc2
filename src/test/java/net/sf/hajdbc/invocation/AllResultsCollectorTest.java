@@ -18,6 +18,7 @@
 package net.sf.hajdbc.invocation;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -29,11 +30,18 @@ import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 import java.sql.SQLException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import java.util.Properties;
 import java.util.Collections;
 import java.util.Map;
 import java.util.SortedMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
@@ -42,6 +50,7 @@ import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.balancer.Balancer;
 import net.sf.hajdbc.dialect.Dialect;
 import net.sf.hajdbc.sql.ProxyFactory;
+import net.sf.hajdbc.sql.TransactionModeEnum;
 import net.sf.hajdbc.util.concurrent.SynchronousExecutor;
 
 import org.junit.Before;
@@ -189,6 +198,96 @@ public class AllResultsCollectorTest
 		}
 	}
 
+	@Test
+	public void explicitScopePropagatesToInvocationWithoutChangingResult() throws Exception
+	{
+		Database<Object> database = this.useSingleDatabase();
+		Object object = new Object();
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		when(this.factory.get(database)).thenReturn(object);
+		when(this.executorProvider.getExecutor(this.cluster)).thenReturn(executor);
+		when(this.invoker.invoke(database, object)).thenAnswer(invocation -> {
+			assertTrue(PhysicalInvocationScope.isActive());
+			return "scoped";
+		});
+		try (PhysicalInvocationScope ignored = PhysicalInvocationScope.open())
+		{
+			assertEquals("scoped", this.createStrategy().invoke(this.factory, this.invoker).get(database));
+		}
+		finally
+		{
+			executor.shutdownNow();
+			assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+		}
+	}
+
+	@Test
+	public void interruptedInvocationAllowsH2RollbackAndCloseBeforeScopeExit() throws Exception
+	{
+		for (TransactionModeEnum mode : TransactionModeEnum.values())
+		{
+			Database<Object> database = this.useSingleDatabase();
+			ExecutorService executor = Executors.newSingleThreadExecutor();
+			CountDownLatch release = new CountDownLatch(1);
+			Future<?> blocker = executor.submit(() -> {
+				try { release.await(); }
+				catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+			});
+			try (Connection connection = new org.h2.Driver().connect("jdbc:h2:mem:scope_cleanup_" + mode, new Properties()))
+			{
+				try (Statement statement = connection.createStatement())
+				{
+					statement.execute("CREATE TABLE scope_test(id INT)");
+					connection.setAutoCommit(false);
+					statement.executeUpdate("INSERT INTO scope_test VALUES (1)");
+				}
+				when(this.factory.get(database)).thenReturn(connection);
+				when(this.cluster.getExecutor()).thenReturn(executor);
+				when(this.cluster.getTransactionMode()).thenReturn(mode);
+				try (PhysicalInvocationScope ignored = PhysicalInvocationScope.open())
+				{
+					Thread.currentThread().interrupt();
+					try
+					{
+						InvocationStrategies.INVOKE_ON_ALL.invoke(this.factory, (db, object) -> "query");
+						fail("Expected interrupted collector");
+					}
+					catch (IllegalStateException expected)
+					{
+						assertTrue(expected.getCause() instanceof InterruptedException);
+					}
+					assertFalse(Thread.currentThread().isInterrupted());
+					release.countDown();
+					blocker.get(2, TimeUnit.SECONDS);
+					InvocationStrategies.END_TRANSACTION_INVOKE_ON_ALL.invoke(this.factory, (db, object) -> {
+						((Connection) object).rollback();
+						return null;
+					});
+					try (Statement statement = connection.createStatement();
+							ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM scope_test"))
+					{
+						assertTrue(rows.next());
+						assertEquals(0, rows.getInt(1));
+					}
+					InvocationStrategies.INVOKE_ON_ALL.invoke(this.factory, (db, object) -> {
+						((Connection) object).close();
+						return null;
+					});
+					assertTrue(connection.isClosed());
+					assertFalse(Thread.currentThread().isInterrupted());
+				}
+				assertTrue(Thread.currentThread().isInterrupted());
+			}
+			finally
+			{
+				Thread.interrupted();
+				release.countDown();
+				executor.shutdownNow();
+				assertTrue(executor.awaitTermination(2, TimeUnit.SECONDS));
+			}
+		}
+	}
+
 	private void useEmptyBalancer()
 	{
 		when(this.balancer.size()).thenReturn(0);
@@ -199,7 +298,7 @@ public class AllResultsCollectorTest
 	{
 		Database<Object> database = mock(Database.class);
 		when(this.balancer.size()).thenReturn(1);
-		when(this.balancer.iterator()).thenReturn(Collections.singleton(database).iterator());
+		when(this.balancer.iterator()).thenAnswer(invocation -> Collections.singleton(database).iterator());
 		when(this.balancer.contains(database)).thenReturn(true);
 		return database;
 	}
