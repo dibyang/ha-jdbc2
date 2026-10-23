@@ -1208,11 +1208,21 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	
 	class AutoActivationTask implements Runnable
 	{
+		private final Logger taskLogger;
 
+		AutoActivationTask() {
+			this(logger);
+		}
+
+		// 包内日志接缝，验证定时任务异常不会被 Future 静默保存。
+		AutoActivationTask(Logger taskLogger) {
+			this.taskLogger = taskLogger;
+		}
 
 		@Override
 		public void run()
 		{
+			String targetDatabaseId = "<not-selected>";
 			try
 			{
         if(isActive()) {
@@ -1242,6 +1252,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 					for (D database: DatabaseClusterImpl.this.configuration.getDatabaseMap().values())
 					{
 						if(!activeDatabases.contains(database)) {
+							targetDatabaseId = database.getId();
 							try {
 								if (DatabaseClusterImpl.this.activate(database, DatabaseClusterImpl.this.configuration.getSynchronizationStrategyMap().get(DatabaseClusterImpl.this.configuration.getDefaultSynchronizationStrategy()))) {
 									logger.log(Level.INFO, Messages.DATABASE_ACTIVATED.getMessage(), database, DatabaseClusterImpl.this);
@@ -1258,6 +1269,14 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			catch (InterruptedException e)
 			{
 				logger.log(Level.WARN,e);
+			}
+			catch (RuntimeException e)
+			{
+				// ScheduledFuture 不会自动打印任务异常；记录后原样抛出，保持本轮失败语义。
+				taskLogger.log(Level.WARN, e,
+						"Automatic database activation failed: cluster={0}, database={1}",
+						DatabaseClusterImpl.this.id, targetDatabaseId);
+				throw e;
 			}
 		}
 	}

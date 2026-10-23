@@ -26,6 +26,58 @@ import static org.mockito.Mockito.when;
 
 public class DatabaseClusterImplTest
 {
+	@Test
+	@SuppressWarnings("unchecked")
+	public void autoActivationLogsTargetAndRethrowsOriginalRuntimeFailure() throws Exception
+	{
+		ConcurrentMap<String, MockDatabase> databases = new ConcurrentHashMap<String, MockDatabase>();
+		MockDatabase target = new MockDatabase("replica");
+		databases.put(target.getId(), target);
+		DatabaseClusterImpl<Void, MockDatabase> cluster = org.mockito.Mockito.spy(
+				new DatabaseClusterImpl<Void, MockDatabase>("cluster", configuration(databases), null));
+		org.mockito.Mockito.doReturn(null).when(cluster).getLocalDatabase();
+		net.sf.hajdbc.state.health.ClusterHealth health = mock(net.sf.hajdbc.state.health.ClusterHealth.class);
+		org.mockito.Mockito.doReturn(health).when(cluster).getClusterHealth();
+		net.sf.hajdbc.balancer.Balancer<Void, MockDatabase> balancer = mock(net.sf.hajdbc.balancer.Balancer.class);
+		org.mockito.Mockito.doReturn(balancer).when(cluster).getBalancer();
+		IllegalStateException failure = new IllegalStateException("schema initialization failed");
+		org.mockito.Mockito.doThrow(failure).when(cluster).activate(
+				org.mockito.Mockito.same(target), org.mockito.Mockito.<net.sf.hajdbc.SynchronizationStrategy>any());
+		net.sf.hajdbc.logging.Logger log = mock(net.sf.hajdbc.logging.Logger.class);
+		Runnable task = cluster.new AutoActivationTask(log);
+		// 下一次调度仍执行同一任务；只补日志，不改变异常身份或自动激活结果。
+		for (int attempt = 0; attempt < 2; attempt++) {
+			try {
+				task.run();
+				Assert.fail("Expected original failure");
+			} catch (IllegalStateException e) {
+				Assert.assertSame(failure, e);
+			}
+		}
+		org.mockito.Mockito.verify(log, org.mockito.Mockito.times(2)).log(net.sf.hajdbc.logging.Level.WARN,
+				failure, "Automatic database activation failed: cluster={0}, database={1}", "cluster", "replica");
+		Assert.assertFalse(target.isActive());
+	}
+
+	@Test
+	public void autoActivationLogsFailureBeforeTargetSelection()
+	{
+		DatabaseClusterImpl<Void, MockDatabase> cluster = org.mockito.Mockito.spy(
+				new DatabaseClusterImpl<Void, MockDatabase>("cluster",
+						configuration(new ConcurrentHashMap<String, MockDatabase>()), null));
+		IllegalStateException failure = new IllegalStateException("local database lookup failed");
+		org.mockito.Mockito.doThrow(failure).when(cluster).getLocalDatabase();
+		net.sf.hajdbc.logging.Logger log = mock(net.sf.hajdbc.logging.Logger.class);
+		try {
+			cluster.new AutoActivationTask(log).run();
+			Assert.fail("Expected original failure");
+		} catch (IllegalStateException e) {
+			Assert.assertSame(failure, e);
+		}
+		org.mockito.Mockito.verify(log).log(net.sf.hajdbc.logging.Level.WARN,
+				failure, "Automatic database activation failed: cluster={0}, database={1}", "cluster", "<not-selected>");
+	}
+
 	@After
 	public void clearStartupProperties()
 	{
