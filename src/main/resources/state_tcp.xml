@@ -10,6 +10,7 @@
         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
         xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/JGroups-3.4.xsd">
   <TCP_NIO2 bind_addr="${jgroups.bind_addr:127.0.0.1}"
+       defer_client_bind_addr="${ha.jdbc.jgroups.defer_client_bind_addr:false}"
        bind_port="${jgroups.tcp.bind_port_state:7801}"
        port_range="${jgroups.tcp.port_range:0}"
        loopback="false"

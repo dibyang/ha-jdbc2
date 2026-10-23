@@ -17,17 +17,13 @@
  */
 package net.sf.hajdbc.distributed.jgroups;
 
-import java.util.List;
-import java.util.Map;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Stateful;
 
-import org.jgroups.Channel;
 import org.jgroups.JChannel;
 import org.jgroups.conf.ConfiguratorFactory;
-import org.jgroups.conf.ProtocolConfiguration;
 import org.jgroups.conf.ProtocolStackConfigurator;
 
 /**
@@ -65,12 +61,22 @@ public class JGroupsCommandDispatcherFactory implements CommandDispatcherFactory
 			jstack = "state_"+this.stack;
 		}
 		ProtocolStackConfigurator configurator = ConfiguratorFactory.getStackConfigurator(jstack);
-		Channel channel = new JChannel(configurator);
-		if (this.name != null)
+		JChannel channel = new JChannel(configurator);
+		try
 		{
-			channel.setName(this.name);
+			OutboundBindingConfiguration.validateAndLog(id, channel);
+			if (this.name != null)
+			{
+				channel.setName(this.name);
+			}
+			return new JGroupsCommandDispatcher<C>(id, channel, this.timeout, context, stateful, membershipListener);
 		}
-		return new JGroupsCommandDispatcher<C>(id, channel, this.timeout, context, stateful, membershipListener);
+		catch (Exception | Error failure)
+		{
+			try { channel.close(); }
+			catch (RuntimeException | Error cleanup) { if (cleanup != failure) failure.addSuppressed(cleanup); }
+			throw failure;
+		}
 	}
 
 	public String getName()

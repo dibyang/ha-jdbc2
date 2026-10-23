@@ -104,21 +104,35 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	{
 		Channel channel = this.dispatcher.getChannel();
 		
-		channel.setDiscardOwnMessages(false);
-		
-		// Connect and fetch state
-		int failCount = 0;
-		boolean connected = false;
-		while(!connected) {
-			try {
-				channel.connect(this.id, null, 2000);
-				connected = true;
-			}catch (Exception e){
-				failCount++;
-				if(failCount>=5){
-					throw e;
+		try
+		{
+			channel.setDiscardOwnMessages(false);
+			// 保留原有五次连接/状态获取尝试；诊断不参与连接重试。
+			for (int attempt = 1; ; attempt++)
+			{
+				try
+				{
+					channel.connect(this.id, null, 2000);
+					break;
+				}
+				catch (Exception failure)
+				{
+					if (attempt >= 5) throw failure;
 				}
 			}
+			if (channel instanceof JChannel && ((JChannel) channel).getProtocolStack()
+				.findProtocol(org.jgroups.protocols.TCP_NIO2.class) != null)
+			{
+				logger.log(Level.INFO, "JGroups channel={0}, started physical address={1}", this.id,
+					channel.down(new Event(Event.GET_PHYSICAL_ADDRESS, channel.getAddress())));
+			}
+		}
+		catch (Exception | Error failure)
+		{
+			// 启动未成功交付，关闭整个通道；清理异常不得覆盖原始失败。
+			try { channel.close(); }
+			catch (RuntimeException | Error cleanup) { if (cleanup != failure) failure.addSuppressed(cleanup); }
+			throw failure;
 		}
 	}
 
