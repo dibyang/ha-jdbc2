@@ -90,7 +90,9 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 		try
 		{
 			String dbId = context.getSourceDatabase().getId();
-			File file = Files.createTempFile("_"+dbId +DUMP_FILE_SUFFIX);
+			net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.Session recovery =
+				net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.current(context.getDatabaseCluster());
+			File file = recovery == null ? Files.createTempFile("_"+dbId +DUMP_FILE_SUFFIX) : recovery.dumpFile();
 			File zipFile = Paths.get(file.getPath() + ".zip").toFile();
 			try
 			{
@@ -100,8 +102,10 @@ public class DumpRestoreSynchronizationStrategy implements SynchronizationStrate
 			finally
 			{
 				//不再删除该文件
-				Files.delete(file);
-				Files.delete(zipFile);
+				if (recovery == null) {
+					Files.delete(file);
+					Files.delete(zipFile);
+				}
 			}
 		}
 		catch (Exception e)

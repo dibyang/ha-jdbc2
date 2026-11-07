@@ -38,6 +38,7 @@ public class H2RunScriptCommand implements SyncCommand<Boolean> {
 
   @Override
   public Boolean execute(StateCommandContext context) {
+    if (H2RecoveryCoordinator.installed(context)) return false;
     try {
       if(path!=null) {
         Database database = context.getDatabaseCluster().getLocalDatabase();

@@ -47,6 +47,10 @@ public class MemberAcquireLockCommand implements Command<Boolean, LockCommandCon
 	@Override
 	public Boolean execute(LockCommandContext context)
 	{
+		if (descriptor instanceof RestoreLockDescriptor) {
+			return context instanceof DistributedLockManager
+				&& ((DistributedLockManager) context).isRestoreLockHeld((RestoreLockDescriptor) descriptor);
+		}
 		Lock lock = context.getLock(this.descriptor);
 
 		boolean locked = lock.tryLock();

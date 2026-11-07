@@ -49,6 +49,11 @@ public class MemberReleaseLockCommand implements Command<Void, LockCommandContex
 	@Override
 	public Void execute(LockCommandContext context)
 	{
+		if (descriptor instanceof RestoreLockDescriptor) {
+			if (context instanceof DistributedLockManager)
+				((DistributedLockManager) context).requestRestoreRelease((RestoreLockDescriptor) descriptor);
+			return null;
+		}
 		Lock lock = context.getLock(descriptor);
 		lock.unlock();
 		return null;

@@ -34,6 +34,7 @@ import net.sf.hajdbc.Messages;
 import net.sf.hajdbc.distributed.Command;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.Member;
+import net.sf.hajdbc.distributed.MembershipSnapshot;
 import net.sf.hajdbc.distributed.MembershipListener;
 import net.sf.hajdbc.distributed.Stateful;
 import net.sf.hajdbc.exception.CommandNotFoundException;
@@ -93,6 +94,18 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 
 	public LockService getLockService() {
 		return lockService;
+	}
+
+	/** 固定一次 JGroups View，避免分别读取视图代次和成员时混入新旧两轮。 */
+	@Override
+	public MembershipSnapshot membershipSnapshot() {
+		Channel channel = dispatcher.getChannel();
+		if (!channel.isConnected()) throw new IllegalStateException("Channel is not connected");
+		View view = channel.getView();
+		if (view == null) throw new IllegalStateException("Channel membership is unavailable");
+		java.util.List<Member> members = new java.util.ArrayList<>();
+		for (Address address : view.getMembers()) members.add(new AddressMember(address));
+		return new MembershipSnapshot(new AddressMember(view.getViewId().getCreator()), view.getViewId().getId(), members);
 	}
 
 	/**
@@ -160,6 +173,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	public <R> Map<Member, R> executeAll(Command<R, C> command, Member... excludedMembers)
 	{
 		Message message = new Message(null, this.getLocalAddress(), Objects.serialize(command));
+		if (command.isOutOfBand()) message.setFlag(Message.Flag.OOB);
 		RequestOptions options = new RequestOptions(ResponseMode.GET_ALL, this.timeout);
 
 		if ((excludedMembers != null) && (excludedMembers.length > 0))
@@ -203,6 +217,7 @@ public class JGroupsCommandDispatcher<C> implements RequestHandler, CommandDispa
 	public <R> R execute(Command<R, C> command, Member member)
 	{
 		Message message = new Message(((AddressMember) member).getAddress(), this.getLocalAddress(), Objects.serialize(command));
+		if (command.isOutOfBand()) message.setFlag(Message.Flag.OOB);
 
 		try
 		{

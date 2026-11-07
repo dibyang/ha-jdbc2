@@ -50,13 +50,21 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	private final ConcurrentMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>> remoteInvokerMap = new ConcurrentHashMap<Member, Map<InvocationEvent, Map<String, InvokerEvent>>>();
 	private final Set<Member> members = Collections.newSetFromMap(new ConcurrentHashMap<Member, Boolean>());
   private final List<MembershipListener> membershipListeners = new CopyOnWriteArrayList<>();
-  private final Map<String,Object> extContexts = new HashMap<>();
+  private final Map<String,Object> extContexts = new ConcurrentHashMap<>();
 	private final ClusterHealth health;
 	private final SyncMgr syncMgr;
+	private final Collection<D> configuredDatabases;
+	private net.sf.hajdbc.dialect.h2.H2RecoveryRuntime<Z, D> recovery;
 
 
 	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception {
+		this(cluster, dispatcherFactory, null);
+	}
+
+	public DistributedStateManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory,
+		Collection<D> configuredDatabases) throws Exception {
 		this.cluster = cluster;
+		this.configuredDatabases = configuredDatabases == null ? null : Collections.unmodifiableList(new ArrayList<>(configuredDatabases));
 		this.stateManager = cluster.getStateManager();
 		StateCommandContext<Z, D> context = this;
 		this.dispatcher = dispatcherFactory.createCommandDispatcher(cluster.getId() + ".state", context, this, this);
@@ -179,9 +187,16 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void start() throws Exception
 	{
-		this.stateManager.start();
-		this.dispatcher.start();
-		this.health.start();
+		try {
+			this.stateManager.start();
+			this.recovery = net.sf.hajdbc.dialect.h2.H2RecoveryRuntime.install(this, configuredDatabases);
+			this.dispatcher.start();
+			if (this.recovery != null) this.recovery.discover();
+			this.health.start();
+		} catch (Exception | Error failure) {
+			try { stop(); } catch (RuntimeException | Error cleanup) { if (cleanup != failure) failure.addSuppressed(cleanup); }
+			throw failure;
+		}
 
 	}
 
@@ -192,9 +207,21 @@ public class DistributedStateManager<Z, D extends Database<Z>> implements StateM
 	@Override
 	public void stop()
 	{
-    this.health.stop();
-		this.dispatcher.stop();
-		this.stateManager.stop();
+		Throwable failure = cleanup(this.health::stop, null);
+		if (this.recovery != null) failure = cleanup(this.recovery::stop, failure);
+		failure = cleanup(this.dispatcher::stop, failure);
+		failure = cleanup(this.stateManager::stop, failure);
+		// 保留已停止的恢复接缝作旧命令拒绝标记，直到本 StateCommandContext 本身被丢弃。
+		if (failure instanceof RuntimeException) throw (RuntimeException) failure;
+		if (failure instanceof Error) throw (Error) failure;
+	}
+
+	private static Throwable cleanup(Runnable action, Throwable failure) {
+		try { action.run(); } catch (RuntimeException | Error next) {
+			if (failure == null) return next;
+			if (failure != next) failure.addSuppressed(next);
+		}
+		return failure;
 	}
 
 

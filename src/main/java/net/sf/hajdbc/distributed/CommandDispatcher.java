@@ -61,5 +61,10 @@ public interface CommandDispatcher<C> extends Lifecycle
 	 */
 	Member getCoordinator();
 
+		/** 返回同一时刻的精确成员视图。旧分发实现默认拒绝恢复协议，不猜测成员集合。 */
+		default MembershipSnapshot membershipSnapshot() {
+			throw new UnsupportedOperationException("Atomic membership snapshot is not supported");
+		}
+
 	LockService getLockService();
 }

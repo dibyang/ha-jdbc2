@@ -273,6 +273,31 @@ public class SynchronizationContextImplTest
 		return new SynchronizationContextImpl<Object, Database<Object>>(this.cluster, this.targetDatabase, this.executorFactory);
 	}
 
+	@Test public void explicitDonorDoesNotUseLoadBalancerNextAndOwnExecutorIsClosed() throws Exception {
+		when(this.balancer.contains(this.sourceDatabase)).thenReturn(true);
+		when(this.balancer.next()).thenThrow(new AssertionError("H2 donor must be explicit"));
+		ExecutorService owned;
+		try (SynchronizationContextImpl<Object, Database<Object>> context =
+			new SynchronizationContextImpl<>(this.cluster, this.targetDatabase, this.sourceDatabase)) {
+			assertSame(this.sourceDatabase, context.getSourceDatabase());
+			owned = context.getExecutor(); assertFalse(owned.isShutdown());
+		}
+		assertTrue(owned.isShutdown());
+		verify(this.balancer, never()).next();
+		verify(this.targetConnection).close(); verify(this.sourceConnection).close();
+		verify(this.cluster, never()).getExecutor();
+	}
+
+	@Test public void invalidExplicitDonorIsRejectedBeforeResourcesAreCreated() throws Exception {
+		try { new SynchronizationContextImpl<>(this.cluster, this.targetDatabase, this.sourceDatabase); fail(); }
+		catch (SQLException expected) { }
+		when(this.balancer.contains(this.targetDatabase)).thenReturn(true);
+		try { new SynchronizationContextImpl<>(this.cluster, this.targetDatabase, this.targetDatabase); fail(); }
+		catch (SQLException expected) { }
+		verify(this.cluster, never()).getThreadFactory();
+		verify(this.targetDatabase, never()).getConnectionSource(); verify(this.sourceDatabase, never()).getConnectionSource();
+	}
+
 	private SQLException assertConstructionFailure(SQLException failure) throws Exception
 	{
 		try

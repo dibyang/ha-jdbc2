@@ -101,6 +101,41 @@ public class ClusterHealthImplTest
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	public void everyElectionCandidatePathRejectsIsolatedDatabaseWithoutRemovingItsVote() throws Exception
+	{
+		ClusterHealthImpl health = new ClusterHealthImpl(stateManager());
+		try {
+			Member isolated = new AddressMember(UUID.randomUUID()), healthy = new AddressMember(UUID.randomUUID());
+			NodeHealth denied = new NodeHealth(), accepted = new NodeHealth();
+			denied.setRecoveryEligible(false); denied.setLastOnlyHost(true);
+			accepted.setRecoveryEligible(true); accepted.setLastOnlyHost(true);
+			java.util.Map<Member, NodeHealth> all = new java.util.LinkedHashMap<>();
+			all.put(isolated, denied); all.put(healthy, accepted);
+			for (String path : new String[] {"findNodeByToken", "findNodeByEmpty", "findNodeByLastOnlyHost", "findNodeByValidLocal"}) {
+				boolean empty = path.equals("findNodeByEmpty");
+				denied.setLocal(empty ? 0 : 100); denied.setArbiter(empty ? 0 : 1);
+				accepted.setLocal(empty ? 0 : 2); accepted.setArbiter(empty ? 0 : 1);
+				Method method = ClusterHealthImpl.class.getDeclaredMethod(path, java.util.Map.class);
+				method.setAccessible(true);
+				java.util.Map.Entry<Member, NodeHealth> elected = (java.util.Map.Entry<Member, NodeHealth>) method.invoke(health, all);
+				Assert.assertEquals(path, healthy, elected.getKey()); Assert.assertEquals(2, all.size());
+			}
+			for (net.sf.hajdbc.state.distributed.NodeState state : new net.sf.hajdbc.state.distributed.NodeState[] {
+				net.sf.hajdbc.state.distributed.NodeState.host, net.sf.hajdbc.state.distributed.NodeState.backup }) {
+				denied.setState(state); accepted.setState(state);
+				Method method = ClusterHealthImpl.class.getDeclaredMethod("findNodeByState", java.util.Map.class, net.sf.hajdbc.state.distributed.NodeState.class);
+				method.setAccessible(true);
+				Assert.assertEquals(healthy, ((java.util.Map.Entry<Member, NodeHealth>) method.invoke(health, all, state)).getKey());
+				Assert.assertEquals(2, all.size());
+			}
+			NodeHealth copied = net.sf.hajdbc.util.Objects.deserialize(net.sf.hajdbc.util.Objects.serialize(denied));
+			Assert.assertFalse(copied.isRecoveryEligible());
+			Assert.assertTrue("An old optional field keeps its old semantics", new NodeHealth().isRecoveryEligible());
+		} finally { health.stop(); }
+	}
+
+	@Test
 	public void healthWatchDogsUseConfiguredSystemFiles() throws Exception
 	{
 		File mounts = this.temporaryFolder.newFile("mounts");
@@ -160,12 +195,14 @@ public class ClusterHealthImplTest
 		DistributedStateManager stateManager = stateManager(localIp);
 		DatabaseCluster cluster = stateManager.getDatabaseCluster();
 		Balancer balancer = mock(Balancer.class);
-		Set<String> activeDatabases = new HashSet<String>();
+		Set<String> activeDatabases = Collections.unmodifiableSet(new HashSet<String>());
+		net.sf.hajdbc.state.StateManager localState = mock(net.sf.hajdbc.state.StateManager.class);
 		MockDatabase hostDatabase = new MockDatabase("db-host");
 		hostDatabase.setIp(hostIp);
 
 		when(stateManager.getLocal()).thenReturn(local);
 		when(stateManager.getActiveDatabases()).thenReturn(activeDatabases);
+		when(stateManager.getLocalStateManager()).thenReturn(localState);
 		when(cluster.getDatabase(hostIp)).thenThrow(new IllegalArgumentException("database id is not ip"));
 		when(cluster.getDatabaseByIp(hostIp)).thenReturn(hostDatabase);
 		when(cluster.getBalancer()).thenReturn(balancer);
@@ -176,7 +213,8 @@ public class ClusterHealthImplTest
 			ClusterHealthImpl health = new ClusterHealthImpl(stateManager);
 			health.host(host, 1L);
 
-			Assert.assertTrue(activeDatabases.contains("db-host"));
+			Assert.assertTrue(activeDatabases.isEmpty());
+			verify(cluster).activate(hostDatabase, localState);
 			verify(cluster).getDatabaseByIp(hostIp);
 			verify(cluster, never()).getDatabase(hostIp);
 		}

@@ -34,4 +34,7 @@ public interface Command<R, C> extends Serializable
 	 * @return the result of this command.
 	 */
 	R execute(C context);
+
+	/** 仅无副作用查询可绕过发送方顺序队列，供处理命令时核对持久证据，避免嵌套 RPC 自锁。 */
+	default boolean isOutOfBand() { return false; }
 }

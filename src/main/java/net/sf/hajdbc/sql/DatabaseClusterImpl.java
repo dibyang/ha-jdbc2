@@ -466,6 +466,12 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	@Override
 	public boolean activate(D database, StateManager manager)
 	{
+		if (!recoveryAllows(database)) {
+			this.balancer.remove(database);
+			database.setActive(false);
+			logger.log(Level.WARN, "Keep isolated H2 database inactive: {0}", database.getId());
+			return false;
+		}
 		boolean added = this.balancer.add(database);
 		
 		if (added)
@@ -802,7 +808,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		if (dispatcherFactory != null)
 		{
 			this.lockManager = new DistributedLockManager(this, dispatcherFactory);
-			this.stateManager = new DistributedStateManager<Z, D>(this, dispatcherFactory);
+			this.stateManager = new DistributedStateManager<Z, D>(this, dispatcherFactory, this.configuration.getDatabaseMap().values());
 		}
 		
 		this.balancer = this.configuration.getBalancerFactory().createBalancer(new TreeSet<D>());
@@ -811,17 +817,18 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		this.executor = this.configuration.getExecutorProvider().getExecutor(this.configuration.getThreadFactory());
 		this.sinkSourceFactory = this.configuration.getInputSinkProvider().createInputSinkStrategy();
 		
-		this.lockManager.start();
-		this.stateManager.start();
-
-		if(this.getLocalDatabase()!=null) {
-			recoverDatabase(true);
-
-			scheduleDetection();
-
-			registerMBean();
-
-			this.active = true;
+		try {
+			this.lockManager.start();
+			this.stateManager.start();
+			if(this.getLocalDatabase()!=null) {
+				recoverDatabase(true);
+				scheduleDetection();
+				registerMBean();
+				this.active = true;
+			}
+		} catch (Exception | Error failure) {
+			try { stop(); } catch (RuntimeException | Error cleanup) { if (cleanup != failure) failure.addSuppressed(cleanup); }
+			throw failure;
 		}
 	}
 
@@ -840,6 +847,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 				D database = this.getDatabase(databaseId);
 				if (database != null)
 				{
+					if (!recoveryAllows(database)) { this.balancer.remove(database); database.setActive(false); continue; }
 					this.balancer.add(database);
 					database.setActive(true);
 				}
@@ -854,12 +862,17 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			if(starting) {
 				for (D database : this.configuration.getDatabaseMap().values()) {
 					//没有任何活动数据库时只检测本地才检测是否可以激活
-					if (((this.getClusterHealth() == null) || database.isLocal()) && this.isAlive(database, Level.WARN)) {
+						if (recoveryAllows(database) && ((this.getClusterHealth() == null) || database.isLocal()) && this.isAlive(database, Level.WARN)) {
 						this.activate(database, this.stateManager);
 					}
 				}
 				long deadline = deadline(STARTUP_ACTIVE_DATABASE_TIMEOUT_PROPERTY, DEFAULT_STARTUP_TIMEOUT_MILLIS);
 				while(this.stateManager.getActiveDatabases().isEmpty()){
+						net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery = net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(this);
+						if (recovery != null && !recovery.isLocalEligible()) {
+							logger.log(Level.WARN, "H2 database remains isolated; keep state channel available for automatic recovery");
+							break;
+						}
 					if (isExpired(deadline)) {
 						throw new IllegalStateException("Timed out waiting for active database. all db: " + this.configuration.getDatabaseMap().values());
 					}
@@ -989,39 +1002,36 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 */
 		MBeanRegistrar<Z, D> registrar = this.configuration.getMBeanRegistrar();
 
-		if (registrar != null)
-		{
-			registrar.unregister(this);
-			
+		Throwable failure = null;
+		if (registrar != null) {
+			failure = cleanupStop(() -> registrar.unregister(this), failure);
 			for (D database: this.configuration.getDatabaseMap().values())
-			{
-				registrar.unregister(this, database);
-			}
+				failure = cleanupStop(() -> registrar.unregister(this, database), failure);
 		}
 		
 		if (this.cronExecutor != null)
 		{
-			this.cronExecutor.shutdownNow();
+			failure = cleanupStop(() -> this.cronExecutor.shutdownNow(), failure);
 		}
 		
 		if (this.stateManager != null)
 		{
-			this.stateManager.stop();
+			failure = cleanupStop(this.stateManager::stop, failure);
 		}
 		
 		if (this.lockManager != null)
 		{
-			this.lockManager.stop();
+			failure = cleanupStop(this.lockManager::stop, failure);
 		}
 
 		if (this.executor != null)
 		{
-			this.executor.shutdownNow();
+			failure = cleanupStop(() -> this.executor.shutdownNow(), failure);
 		}
 
 		if (this.balancer != null)
 		{
-			this.balancer.clear();
+			failure = cleanupStop(this.balancer::clear, failure);
 		}
 
 		if (this.databaseMetaDataCacheListener != null)
@@ -1029,6 +1039,16 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			this.removeListener(this.databaseMetaDataCacheListener);
 			this.databaseMetaDataCacheListener = null;
 		}
+		if (failure instanceof RuntimeException) throw (RuntimeException) failure;
+		if (failure instanceof Error) throw (Error) failure;
+	}
+
+	private static Throwable cleanupStop(Runnable action, Throwable failure) {
+		try { action.run(); } catch (RuntimeException | Error next) {
+			if (failure == null) return next;
+			if (failure != next) failure.addSuppressed(next);
+		}
+		return failure;
 	}
 
 
@@ -1077,6 +1097,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		for(String db : activeDatabases){
 			logger.log(Level.INFO,"sync active database: {0} from other node.", db);
 			D database = getDatabase(db);
+			if (!recoveryAllows(database)) { this.balancer.remove(database); database.setActive(false); continue; }
 			boolean add = this.balancer.add(database);
 			if(add){
 				logger.log(Level.INFO,"active database {0} is add.", db);
@@ -1086,6 +1107,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	}
 
   final AtomicBoolean activating = new AtomicBoolean(false);
+
+		private boolean recoveryAllows(D database) {
+			net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery = net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(this);
+			return recovery == null || recovery.isEligible(database.getId()) || recovery.isApplying(database.getId());
+		}
 
 	boolean activate(D database, SynchronizationStrategy strategy) throws SQLException, InterruptedException {
 
@@ -1114,7 +1140,11 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			if(Tracer.db_state.isTrace()){
 				logger.log(Level.WARN, new Exception("trace db_state"),"activate {0}", database.getId());
 			}
-			StopWatch stopWatch = StopWatch.createStarted();
+				net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery = net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(this);
+				if (recovery != null && strategy instanceof net.sf.hajdbc.sync.DumpRestoreSynchronizationStrategy)
+					return activateProtectedH2(database, strategy, recovery);
+				if (!recoveryAllows(database)) throw new SQLException("Isolated H2 target requires protected dump-restore synchronization");
+				StopWatch stopWatch = StopWatch.createStarted();
 			Lock lock = this.lockManager.writeLock(null);
 
 			lock.lockInterruptibly();
@@ -1158,6 +1188,34 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 			}
 		}
 	}
+
+		private boolean activateProtectedH2(D database, SynchronizationStrategy strategy,
+			net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery) throws SQLException, InterruptedException {
+			if (this.balancer.contains(database)) return false;
+			StopWatch watch = StopWatch.createStarted();
+			activating.set(true);
+			try {
+				recovery.synchronize(database.getId(), () -> {
+					D source = getLocalDatabase();
+					if (source == null || !recovery.isEligible(source.getId())) throw new SQLException("No eligible local H2 synchronization source");
+					try (SynchronizationContextImpl<Z, D> context = new SynchronizationContextImpl<Z, D>(this, database, source)) {
+						DatabaseEvent event = new DatabaseEvent(database);
+						logger.log(Level.INFO, Messages.DATABASE_SYNC_START.getMessage(this, database));
+						for (SynchronizationListener listener : this.synchronizationListeners) listener.beforeSynchronization(event);
+						strategy.synchronize(context);
+						for (SynchronizationListener listener : this.synchronizationListeners) listener.afterSynchronization(event);
+					}
+				});
+				logger.log(Level.INFO, Messages.DATABASE_SYNC_END.getMessage(this, database));
+				return this.balancer.contains(database) && database.isActive();
+			} catch (SQLException | InterruptedException failure) { throw failure; }
+			catch (Exception failure) { throw new SQLException("Protected H2 synchronization did not complete", failure); }
+			finally {
+				activating.set(false);
+				watch.stop();
+				logger.log(Level.INFO, "Protected H2 synchronization time {0}", watch.toString());
+			}
+		}
 
 	class FailureDetectionTask implements Runnable
 	{

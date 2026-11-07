@@ -43,7 +43,7 @@ import net.sf.hajdbc.util.Resources;
  * @author Paul Ferraro
  * @param <D> Driver or DataSource
  */
-public class SynchronizationContextImpl<Z, D extends Database<Z>> implements SynchronizationContext<Z, D>
+public class SynchronizationContextImpl<Z, D extends Database<Z>> implements SynchronizationContext<Z, D>, AutoCloseable
 {
 	private static final Logger logger = LoggerFactory.getLogger(SynchronizationContextImpl.class);
 	private static final ExecutorFactory DEFAULT_EXECUTOR_FACTORY = new ExecutorFactory()
@@ -84,11 +84,25 @@ public class SynchronizationContextImpl<Z, D extends Database<Z>> implements Syn
 
 	SynchronizationContextImpl(DatabaseCluster<Z, D> cluster, D database, ExecutorFactory executorFactory) throws SQLException
 	{
+			this(cluster, database, null, executorFactory);
+		}
+
+		/** H2 受保护同步固定使用发起节点的活动本地库，避免服务端 SCRIPT 路径落到另一台机器。 */
+		public SynchronizationContextImpl(DatabaseCluster<Z, D> cluster, D database, D source) throws SQLException
+		{
+			this(cluster, database, source, DEFAULT_EXECUTOR_FACTORY);
+		}
+
+		private SynchronizationContextImpl(DatabaseCluster<Z, D> cluster, D database, D source,
+			ExecutorFactory executorFactory) throws SQLException
+		{
 		this.cluster = cluster;
 		
 		Balancer<Z, D> balancer = cluster.getBalancer();
 		
-		this.sourceDatabase = balancer.next();
+			if (source != null && (!balancer.contains(source) || source.equals(database)))
+				throw new SQLException("Synchronization source must be active and distinct from target");
+			this.sourceDatabase = source == null ? balancer.next() : source;
 		
 		this.activeDatabaseSet = balancer;
 		this.targetDatabase = database;

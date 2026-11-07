@@ -55,4 +55,12 @@ public interface SyncMgr {
    * @param <R>
    */
   <R> R execute(Member target, SyncCommand<R> cmd);
+
+  /**
+   * 单次发送有副作用的命令；空响应表示结果未知，禁止自动重发。
+   * 旧实现默认拒绝，不能回退到可能重试的 execute。
+   */
+  default <R> R executeOnce(Member target, SyncCommand<R> cmd) {
+    throw new UnsupportedOperationException("Single-attempt sync execution is not supported");
+  }
 }

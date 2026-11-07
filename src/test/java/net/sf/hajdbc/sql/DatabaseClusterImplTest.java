@@ -161,4 +161,51 @@ public class DatabaseClusterImplTest
 		when(configuration.getDatabaseMetaDataCacheFactory()).thenReturn(new SimpleDatabaseMetaDataCacheFactory());
 		return configuration;
 	}
+
+	@Test
+	public void stopContinuesAcrossCleanupErrorsAndKeepsTheOriginalError() throws Exception {
+		DatabaseClusterImpl<Void, MockDatabase> cluster = new DatabaseClusterImpl<>("cluster", configuration(new ConcurrentHashMap<>()), null);
+		net.sf.hajdbc.state.StateManager state = mock(net.sf.hajdbc.state.StateManager.class);
+		net.sf.hajdbc.lock.LockManager locks = mock(net.sf.hajdbc.lock.LockManager.class);
+		java.util.concurrent.ExecutorService executor = mock(java.util.concurrent.ExecutorService.class);
+		set(cluster, "stateManager", state); set(cluster, "lockManager", locks); set(cluster, "executor", executor);
+		AssertionError root = new AssertionError("state stop");
+		IllegalStateException lockFailure = new IllegalStateException("lock stop");
+		IllegalArgumentException executorFailure = new IllegalArgumentException("executor stop");
+		org.mockito.Mockito.doThrow(root).when(state).stop();
+		org.mockito.Mockito.doThrow(lockFailure).when(locks).stop();
+		when(executor.shutdownNow()).thenThrow(executorFailure);
+		try { cluster.stop(); Assert.fail("Expected original cleanup Error"); }
+		catch (AssertionError failure) {
+			Assert.assertSame(root, failure);
+			Assert.assertArrayEquals(new Throwable[] {lockFailure, executorFailure}, failure.getSuppressed());
+		}
+		org.mockito.Mockito.verify(locks).stop(); org.mockito.Mockito.verify(executor).shutdownNow();
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	public void failedStartClosesOwnedLocksAndExecutorEvenWhenStateCleanupFails() throws Exception {
+		DatabaseClusterConfiguration<Void, MockDatabase> config = configuration(new ConcurrentHashMap<>());
+		net.sf.hajdbc.state.StateManager state = mock(net.sf.hajdbc.state.StateManager.class);
+		net.sf.hajdbc.state.StateManagerFactory stateFactory = mock(net.sf.hajdbc.state.StateManagerFactory.class);
+		net.sf.hajdbc.lock.LockManager locks = mock(net.sf.hajdbc.lock.LockManager.class);
+		net.sf.hajdbc.lock.LockManagerFactory lockFactory = mock(net.sf.hajdbc.lock.LockManagerFactory.class);
+		java.util.concurrent.ExecutorService executor = mock(java.util.concurrent.ExecutorService.class);
+		net.sf.hajdbc.ExecutorServiceProvider provider = mock(net.sf.hajdbc.ExecutorServiceProvider.class);
+		when(config.getStateManagerFactory()).thenReturn(stateFactory); when(stateFactory.createStateManager(org.mockito.Mockito.any())).thenReturn(state);
+		when(config.getLockManagerFactory()).thenReturn(lockFactory); when(lockFactory.createLockManager()).thenReturn(locks);
+		when(config.getExecutorProvider()).thenReturn(provider); when(provider.getExecutor(org.mockito.Mockito.any())).thenReturn(executor);
+		java.io.IOException root = new java.io.IOException("persistent recovery record missing");
+		IllegalStateException cleanup = new IllegalStateException("state cleanup");
+		org.mockito.Mockito.doThrow(root).when(state).start(); org.mockito.Mockito.doThrow(cleanup).when(state).stop();
+		DatabaseClusterImpl<Void, MockDatabase> cluster = new DatabaseClusterImpl<>("cluster", config, null);
+		try { cluster.start(); Assert.fail("Expected failed startup"); }
+		catch (java.io.IOException failure) { Assert.assertSame(root, failure); Assert.assertArrayEquals(new Throwable[] {cleanup}, failure.getSuppressed()); }
+		org.mockito.Mockito.verify(locks).stop(); org.mockito.Mockito.verify(executor).shutdownNow();
+	}
+
+	private static void set(Object owner, String name, Object value) throws Exception {
+		java.lang.reflect.Field field = DatabaseClusterImpl.class.getDeclaredField(name); field.setAccessible(true); field.set(owner, value);
+	}
 }

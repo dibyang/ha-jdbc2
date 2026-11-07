@@ -147,6 +147,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   @Override
   public NodeHealth getNodeHealth() {
     NodeHealth health = new NodeHealth();
+    health.setRecoveryEligible(recoveryEligible());
     health.setState(state);
     health.setLastOnlyHost(arbiter.getLocalTokenStore().isOnlyHost());
     health.setLocal(arbiter.getLocalTokenStore().getToken());
@@ -262,6 +263,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * @return Can it elect.
    */
   private boolean canElect() {
+    if (!recoveryEligible()) return false;
     if (isUp()) {
       if (arbiter.isObservable(false)) {
         DatabaseCluster cluster = stateManager.getDatabaseCluster();
@@ -282,6 +284,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
    * start elect host node.
    */
   private synchronized void elect() throws InterruptedException, StartFailException {
+    if (!recoveryEligible()) return;
     //准备开始选主
     this.readyElect = true;
     Lock lock = stateManager.getDatabaseCluster().getLockManager().onlyLock(HOST_ELECT);
@@ -479,6 +482,15 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
 
   @Override
   public void host(Member host, long token) {
+    net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery =
+        net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(stateManager.getDatabaseCluster());
+    if (recovery != null && host != null) {
+      Database<?> database = stateManager.getLocal().equals(host) ? null
+          : stateManager.getDatabaseCluster().getDatabaseByIp(getIp(host));
+      boolean eligible = stateManager.getLocal().equals(host) ? recovery.isLocalEligible()
+          : database != null && recovery.isEligible(database.getId());
+      if (!eligible) { this.host = null; this.readyElect = false; setState(NodeState.ready); return; }
+    }
     this.host = host;
     if (host != null) {
       if (stateManager.getLocal().equals(host)) {
@@ -491,13 +503,8 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
         //补充将主节点直接加入活动数据库
         Database<?> hostDb = databaseCluster.getDatabaseByIp(getIp(host));
         if(hostDb!=null){
-          Set<String> activeDatabases = stateManager.getActiveDatabases();
-          if(!activeDatabases.contains(hostDb.getId())) {
-            logger.info("add host db {} to active dbs.", hostDb);
-            activeDatabases.add(hostDb.getId());
-          }else{
-            logger.info("active dbs {}  contains host.", activeDatabases);
-          }
+          // StateManager 返回防御副本；必须经过实际激活入口，继续核对 H2 隔离资格。
+          databaseCluster.activate(hostDb, stateManager.getLocalStateManager());
         }
         if(databaseCluster.getBalancer().size()>1){
           Database localDatabase = databaseCluster.getLocalDatabase();
@@ -538,7 +545,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (health != null) {
+      if (health != null && health.isRecoveryEligible()) {
         if (find == null || health.getLocal() > find.getValue().getLocal()) {
           find = next;
         }
@@ -553,7 +560,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (health != null && health.isEmpty()) {
+      if (health != null && health.isRecoveryEligible() && health.isEmpty()) {
         find = next;
         break;
       }
@@ -568,7 +575,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (health != null && health.isLastOnlyHost()) {
+      if (health != null && health.isRecoveryEligible() && health.isLastOnlyHost()) {
         if (find == null || health.getLocal() > find.getValue().getLocal()) {
           find = next;
         }
@@ -583,7 +590,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (health != null && health.isValidLocal()) {
+      if (health != null && health.isRecoveryEligible() && health.isValidLocal()) {
         if (find == null || health.getLocal() > find.getValue().getLocal()) {
           find = next;
         }
@@ -598,7 +605,7 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     while (iterator.hasNext()) {
       Entry<Member, NodeHealth> next = iterator.next();
       NodeHealth health = next.getValue();
-      if (health != null && health.getState().equals(state)) {
+      if (health != null && health.isRecoveryEligible() && health.getState().equals(state)) {
         find = next;
         break;
       }
@@ -714,11 +721,25 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
   }
 
   private void doTask() throws InterruptedException, StartFailException {
+    Object recovery = stateManager.getExtContext(net.sf.hajdbc.dialect.h2.H2RecoveryRuntime.class.getName());
+    if (recovery instanceof net.sf.hajdbc.dialect.h2.H2RecoveryRuntime)
+      ((net.sf.hajdbc.dialect.h2.H2RecoveryRuntime<?, ?>) recovery).onHealthRound();
+    if (!recoveryEligible()) {
+      host = null;
+      if (!NodeState.ready.equals(state)) setState(NodeState.ready);
+      return;
+    }
     if (NodeState.host.equals(state)) {
       watchHostNode();
     } else {
       watchNotHostNode();
     }
+  }
+
+  private boolean recoveryEligible() {
+    net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery =
+        net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(stateManager.getDatabaseCluster());
+    return recovery == null || recovery.isLocalEligible();
   }
 
 

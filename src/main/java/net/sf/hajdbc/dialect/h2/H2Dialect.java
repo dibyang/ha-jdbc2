@@ -21,7 +21,6 @@ import net.sf.hajdbc.*;
 import net.sf.hajdbc.codec.Decoder;
 import net.sf.hajdbc.dialect.StandardDialect;
 import net.sf.hajdbc.distributed.Member;
-import net.sf.hajdbc.exception.CommandNotFoundException;
 import net.sf.hajdbc.logging.Level;
 import net.sf.hajdbc.logging.Logger;
 import net.sf.hajdbc.logging.LoggerFactory;
@@ -174,13 +173,24 @@ public class H2Dialect extends StandardDialect
 
 	@Override
 	public <Z, D extends Database<Z>> void dump(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		H2RecoveryCoordinator.Session recovery = H2RecoveryCoordinator.current(context == null ? null : context.getDatabaseCluster());
+		if (recovery != null) recovery.checkSource(database.getId());
+		else {
+			H2RecoveryCoordinator<?, ?> coordinator = coordinator(context);
+			if (coordinator != null && !coordinator.isEligible(database.getId()))
+				throw new SQLException("H2 synchronization source is isolated");
+		}
 		final String password = database.decodePassword(decoder);
 		StopWatch stopWatch = StopWatch.createStarted();
 		try(Connection conn = DriverManager.getConnection(database.getLocation(), database.getUser(), password);
         Statement stmt = conn.createStatement())
 		{
       stmt.setQueryTimeout(60);
-      stmt.execute("SCRIPT TO  '" + file.getPath() + "'");
+      // 导出失败不能在新会话自动重放 SCRIPT；完成结果未知时拒绝继续恢复。
+      conn.setAutoCommit(false);
+      H2RestoreDatabaseChecks.requireUserTables(conn, "synchronization source");
+      stmt.execute("SCRIPT TO  '" + file.getPath().replace("'", "''") + "'");
+      conn.commit();
 		}
 		stopWatch.stop();
 		logger.log(Level.INFO,"h2 dump time={0} path={1}", stopWatch.toString(), file.getPath());
@@ -194,27 +204,39 @@ public class H2Dialect extends StandardDialect
 
 	@Override
 	public <Z, D extends Database<Z>> void restore(SynchronizationContext<Z,D> context, D database, Decoder decoder, File file, boolean dataOnly) throws Exception {
+		H2RecoveryCoordinator.Session recovery = H2RecoveryCoordinator.current(context.getDatabaseCluster());
+		if (recovery != null) { recovery.restore(database, file); return; }
+		if (coordinator(context) != null) throw new SQLException("H2 restore requires the protected synchronization operation");
 		File zipFile = Paths.get(file.getPath() + ".zip").toFile();
-		if(!database.isLocal()) {
-			StopWatch stopWatch = StopWatch.createStarted();
-			SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
-			Member target = syncMgr.getMember(database);
-			if(syncMgr.upload(target, zipFile)){
-				H2RunScriptCommand2 cmd2 = new H2RunScriptCommand2();
-				cmd2.setPath(file.getPath());
-				try {
-					syncMgr.execute(target, cmd2);
-				}catch (CommandNotFoundException e){
-					H2RunScriptCommand cmd = new H2RunScriptCommand();
-					cmd.setPath(file.getPath());
-					if(syncMgr.upload(target,file)){
-						syncMgr.execute(target, cmd);
-					}
-				}
-				stopWatch.stop();
-				logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
-			}
+		if(database.isLocal()) {
+			throw new SQLException("H2 local restore is not supported by this synchronization path");
 		}
+		StopWatch stopWatch = StopWatch.createStarted();
+		SyncMgr syncMgr = context.getDatabaseCluster().getSyncMgr();
+		Member target = syncMgr.getMember(database);
+		if (target == null) {
+			throw new SQLException("H2 restore target member is unavailable");
+		}
+		if (!syncMgr.upload(target, zipFile)) {
+			throw new SQLException("H2 restore upload failed");
+		}
+		H2RunScriptCommand2 cmd2 = new H2RunScriptCommand2();
+		cmd2.setPath(file.getPath());
+		// 清库请求只发送一次；未知结果不能重试，也不能降级到旧恢复命令。
+		Boolean restored = syncMgr.executeOnce(target, cmd2);
+		if (!Boolean.TRUE.equals(restored)) {
+			throw new SQLException(restored == null
+				? "H2 restore result is unknown; request was not retried"
+				: "H2 restore failed on target");
+		}
+		stopWatch.stop();
+		logger.log(Level.INFO,"h2 restore time={0}", stopWatch.toString());
+	}
+
+	private static H2RecoveryCoordinator<?, ?> coordinator(SynchronizationContext<?, ?> context) {
+		if (context == null || context.getDatabaseCluster() == null || context.getDatabaseCluster().getDistributedManager() == null) return null;
+		Object value = context.getDatabaseCluster().getDistributedManager().getExtContext(H2RecoveryCoordinator.class.getName());
+		return value instanceof H2RecoveryCoordinator ? (H2RecoveryCoordinator<?, ?>) value : null;
 	}
 
 }

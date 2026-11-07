@@ -31,6 +31,8 @@ import java.util.concurrent.locks.Lock;
 
 import net.sf.hajdbc.Database;
 import net.sf.hajdbc.DatabaseCluster;
+import net.sf.hajdbc.dialect.h2.H2ActivationIntent;
+import net.sf.hajdbc.dialect.h2.H2RestoreWriteFence;
 import net.sf.hajdbc.distributed.CommandDispatcher;
 import net.sf.hajdbc.distributed.CommandDispatcherFactory;
 import net.sf.hajdbc.distributed.Member;
@@ -55,6 +57,86 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 	
 	private final LockManager lockManager;
 	private final ConcurrentMap<Member, Map<LockDescriptor, Lock>> remoteLockDescriptorMap = new ConcurrentHashMap<Member, Map<LockDescriptor, Lock>>();
+	// 每目标只保留最新恢复锁；旧代次由持久记录拒绝，避免无限保存历史描述符。
+	private final Map<String, RestoreBinding> restoreFences = new HashMap<>();
+
+	/** 恢复命令的专用准备入口；确认前取得本地写锁并持久记录未决激活。 */
+	public H2RestoreWriteFence prepareRestoreLock(RestoreLockDescriptor descriptor, H2ActivationIntent intent,
+		String owner, String digest, Set<String> participants) throws IOException {
+		return prepareRestoreLock(descriptor, intent, owner, owner, "local", digest, participants);
+	}
+
+	/** 双通道恢复准备使用的完整持久身份。 */
+	public H2RestoreWriteFence prepareRestoreLock(RestoreLockDescriptor descriptor, H2ActivationIntent intent,
+		String owner, String ownerDatabase, String membership, String digest, Set<String> participants) throws IOException {
+		return prepareRestoreLock(descriptor, intent, owner, ownerDatabase, membership, digest, participants, Collections.emptySet());
+	}
+	public H2RestoreWriteFence prepareRestoreLock(RestoreLockDescriptor descriptor, H2ActivationIntent intent,
+		String owner, String ownerDatabase, String membership, String digest, Set<String> participants, Set<String> databases) throws IOException {
+		synchronized (restoreFences) {
+			RestoreBinding previous = restoreFences.get(descriptor.getDatabase());
+			if (previous != null && previous.intent != intent) throw new IOException("Restore intent owner changed");
+			if (previous != null && previous.descriptor.equals(descriptor)) {
+				if (previous.intent != intent) throw new IOException("Restore intent owner changed");
+				previous.fence.prepare(descriptor.getEpoch(), descriptor.getOperation(), owner, ownerDatabase, membership, digest, participants, databases);
+				return previous.fence;
+			}
+			if (previous != null && (previous.fence.isHeld() || previous.fence.isUnresolved()))
+				throw new IOException("Previous recovery activation is unresolved");
+			// 先核对持久代次再创建锁对象，迟到请求不能重新创建已完成的锁。
+			H2ActivationIntent.Snapshot snapshot = intent.snapshot();
+			if (descriptor.getEpoch() <= snapshot.epoch && !descriptor.getOperation().equals(snapshot.operation))
+				throw new IOException("Stale recovery lock");
+			WriteLock raw = (WriteLock) getLock(descriptor);
+			H2RestoreWriteFence fence = previous == null ? new H2RestoreWriteFence(intent, raw)
+				: previous.fence.nextOperation(raw);
+			RestoreBinding binding = new RestoreBinding(descriptor, intent, fence);
+			restoreFences.put(descriptor.getDatabase(), binding);
+			if (previous != null) getLocks(previous.descriptor.getMember()).remove(previous.descriptor);
+			fence.prepare(descriptor.getEpoch(), descriptor.getOperation(), owner, ownerDatabase, membership, digest, participants, databases);
+			return fence;
+		}
+	}
+
+	/** 旧获取锁命令不能重新获取恢复锁；只允许核对已准备且仍持有的同一身份。 */
+	public boolean isRestoreLockHeld(RestoreLockDescriptor descriptor) {
+		RestoreBinding binding;
+		synchronized (restoreFences) {
+			binding = restoreFences.get(descriptor.getDatabase());
+		}
+		return binding != null && binding.descriptor.equals(descriptor) && binding.fence.isHeld();
+	}
+
+	/** 恢复协议使用锁通道自己的视图和所有者，不能用状态通道地址冒充。 */
+	public net.sf.hajdbc.distributed.MembershipSnapshot membershipSnapshot() {
+		return dispatcher.membershipSnapshot();
+	}
+
+	public Member getLocalMember() { return dispatcher.getLocal(); }
+
+	/** 成员离开和旧释放消息都不得绕过持久未决状态。 */
+	public boolean requestRestoreRelease(RestoreLockDescriptor descriptor) {
+		RestoreBinding binding;
+		synchronized (restoreFences) {
+			binding = restoreFences.get(descriptor.getDatabase());
+		}
+		if (binding == null || !binding.descriptor.equals(descriptor)) return false;
+		try {
+			return binding.fence.requestRelease(descriptor.getEpoch(), descriptor.getOperation());
+		} catch (IOException failure) {
+			LOG.error("Keep unresolved H2 recovery write fence: {}", descriptor, failure);
+			return false;
+		}
+	}
+
+	private static final class RestoreBinding {
+		final RestoreLockDescriptor descriptor;
+		final H2ActivationIntent intent;
+		final H2RestoreWriteFence fence;
+		RestoreBinding(RestoreLockDescriptor descriptor, H2ActivationIntent intent, H2RestoreWriteFence fence) {
+			this.descriptor = descriptor; this.intent = intent; this.fence = fence;
+		}
+	}
 
 
 	public <Z, D extends Database<Z>> DistributedLockManager(DatabaseCluster<Z, D> cluster, CommandDispatcherFactory dispatcherFactory) throws Exception
@@ -228,7 +310,9 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 		{
 			output.writeObject(entry.getKey());
 			
-			Set<LockDescriptor> descriptors = entry.getValue().keySet();
+			// 恢复锁依靠持久意向重建，不能降格成无代次的旧锁状态传输。
+			Set<LockDescriptor> descriptors = new HashSet<>(entry.getValue().keySet());
+			descriptors.removeIf(descriptor -> descriptor instanceof RestoreLockDescriptor);
 			
 			output.writeInt(descriptors.size());
 			
@@ -300,9 +384,14 @@ public class DistributedLockManager implements LockManager, LockCommandContext, 
 
 		if (locks != null)
 		{
-			for (Lock lock: locks.values())
+				for (Map.Entry<LockDescriptor, Lock> entry: locks.entrySet())
 			{
-				lock.unlock();
+					if (entry.getKey() instanceof RestoreLockDescriptor) {
+						if (!requestRestoreRelease((RestoreLockDescriptor) entry.getKey()))
+							getLocks(member).putIfAbsent(entry.getKey(), entry.getValue());
+					} else {
+						entry.getValue().unlock();
+					}
 			}
 
 		}

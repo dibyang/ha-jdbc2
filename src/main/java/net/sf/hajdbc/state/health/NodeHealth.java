@@ -14,6 +14,10 @@ public class NodeHealth implements Serializable {
   private volatile long local;
   private volatile long arbiter;
   private volatile boolean lastOnlyHost = false;
+  // 旧成员未发送该可选字段时维持原候选语义；新恢复协议在混合版本上拒绝开始破坏性恢复。
+  private Boolean recoveryEligible;
+  public boolean isRecoveryEligible() { return !Boolean.FALSE.equals(recoveryEligible); }
+  public void setRecoveryEligible(boolean eligible) { recoveryEligible = eligible; }
 
   public Set<String> getActiveDBs() {
     return activeDBs;

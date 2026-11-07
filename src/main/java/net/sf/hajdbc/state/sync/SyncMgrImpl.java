@@ -167,6 +167,15 @@ public class SyncMgrImpl implements SyncMgr{
   }
 
   @Override
+  public <R> R executeOnce(Member target, SyncCommand<R> cmd) {
+    if (target == null) {
+      throw new IllegalArgumentException("Sync target is required");
+    }
+    // 超时不能证明远端没有执行，破坏性操作不能复用 execute 的重试循环。
+    return (R) stateManager.execute(cmd, target);
+  }
+
+  @Override
   public <R> R execute(Member target, SyncCommand<R> cmd) {
     int fails = 0;
     while(fails<3) {

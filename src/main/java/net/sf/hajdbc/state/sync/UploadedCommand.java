@@ -74,10 +74,13 @@ public class UploadedCommand implements SyncCommand<Boolean> {
         MessageDigest md = MD5.newInstance();
         byte[] buffer = new byte[BUFFER_SIZE];
         int len = 0;
-        try (FileInputStream fis = new FileInputStream(file)) {
-          while ((len = fis.read(buffer)) != -1) {
-            md.update(buffer,0,len);
+        try {
+          try (FileInputStream fis = new FileInputStream(file)) {
+            while ((len = fis.read(buffer)) != -1) {
+              md.update(buffer,0,len);
+            }
           }
+          // 校验流先关闭，Windows 才能移动临时文件；移动成功后才确认上传完成。
           String digest = MD5.md5DigestToString(md.digest());
           if(digest.equals(md5)){
             logger.log(Level.INFO,"uploaded file size={0} path={1} use time {2}",size,path, StopWatch.formatDuration(nanos));

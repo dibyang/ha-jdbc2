@@ -31,6 +31,7 @@ public class H2RunScriptCommand2 implements SyncCommand<Boolean> {
 
   @Override
   public Boolean execute(StateCommandContext context) {
+    if (H2RecoveryCoordinator.installed(context)) return false;
     try {
       if(path!=null) {
         File file = Paths.get(path).toFile();

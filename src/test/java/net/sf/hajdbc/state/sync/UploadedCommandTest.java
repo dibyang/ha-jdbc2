@@ -41,6 +41,24 @@ public class UploadedCommandTest
   }
 
   @Test
+  public void uploadedClosesVerificationStreamBeforeReplacingTarget() throws Exception
+  {
+    File root = this.temporaryFolder.newFolder("complete");
+    File target = new File(root, "target.bin");
+    File temp = new File(root, "target.bin" + SyncFilePath.TMP_FILE_SUFFIX);
+    byte[] bytes = "verified-upload".getBytes("UTF-8");
+    Files.write(temp.toPath(), bytes);
+    Files.write(target.toPath(), "old".getBytes("UTF-8"));
+    UploadedCommand command = new UploadedCommand();
+    command.setPath(target.getAbsolutePath()); command.setSize(bytes.length);
+    command.setMd5(MD5.md5DigestToString(MD5.newInstance().digest(bytes)));
+    Assert.assertTrue(command.execute(null));
+    Assert.assertArrayEquals(bytes, Files.readAllBytes(target.toPath()));
+    Assert.assertFalse(Files.exists(temp.toPath()));
+    Files.delete(target.toPath());
+  }
+
+  @Test
   public void uploadedDeletesTempFileWhenDigestIsInvalid() throws Exception
   {
     File root = this.temporaryFolder.newFolder("root");
