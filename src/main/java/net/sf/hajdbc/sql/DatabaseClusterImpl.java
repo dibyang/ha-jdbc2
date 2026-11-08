@@ -97,7 +97,7 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	private InputSinkStrategy<? extends Object> sinkSourceFactory;
 	
 	private boolean active = false;
-	private String localDbId = null;
+	private volatile String localDbId = null;
 
 	
 	private final List<DatabaseClusterConfigurationListener<Z, D>> configurationListeners = new CopyOnWriteArrayList<DatabaseClusterConfigurationListener<Z, D>>();	
@@ -577,8 +577,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		while(this.localDbId==null) {
 			for (D db : this.configuration.getDatabaseMap().values()) {
 				if (LocalHost.getAllIp().contains(db.getIp())) {
-					this.localDbId = db.getId();
 					db.setLocal(true);
+					this.localDbId = db.getId();
 					break;
 				}
 			}
@@ -594,18 +594,26 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 	 * @see DatabaseCluster#getLocalDatabase()
 	 */
 	@Override
-	public synchronized D getLocalDatabase() {
+		public D getLocalDatabase() {
 		D local = null;
-		try {
-			checkLocalDb();
-		} catch (InterruptedException e) {
-			Thread.currentThread().interrupt();
+			String id = this.localDbId;
+			if (id == null) {
+				synchronized (this) {
+					try {
+						checkLocalDb();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+					}
+					id = this.localDbId;
+				}
 		}
-		if(localDbId!=null) {
+			// 启动等待持有实例监视器；已识别的配置读取不能挡住负责激活的健康/恢复线程。
+			// 这里只读取本机标识，活动资格仍由恢复记录与既有激活入口控制。
+			if(id!=null) {
 			Iterator<D> iterator = this.configuration.getDatabaseMap().values().iterator();
 			while (iterator.hasNext()) {
 				D database = iterator.next();
-				if (database.getId().equals(localDbId)) {
+					if (database.getId().equals(id)) {
 					local = database;
 					break;
 				}
@@ -866,23 +874,22 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 						this.activate(database, this.stateManager);
 					}
 				}
-				long deadline = deadline(STARTUP_ACTIVE_DATABASE_TIMEOUT_PROPERTY, DEFAULT_STARTUP_TIMEOUT_MILLIS);
-				while(this.stateManager.getActiveDatabases().isEmpty()){
-						net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator<?, ?> recovery = net.sf.hajdbc.dialect.h2.H2RecoveryCoordinator.get(this);
-						if (recovery != null && !recovery.isLocalEligible()) {
-							logger.log(Level.WARN, "H2 database remains isolated; keep state channel available for automatic recovery");
-							break;
-						}
-					if (isExpired(deadline)) {
-						throw new IllegalStateException("Timed out waiting for active database. all db: " + this.configuration.getDatabaseMap().values());
-					}
-					logger.log(Level.INFO, "No active database, detect again after 1s");
-					Thread.sleep(startupRetryInterval());
-				}
-				logger.log(Level.INFO, "Active database="+this.stateManager.getActiveDatabases());
 			}
 		}
 
+		if (starting) {
+			// 发现尚未完成和明确隔离都不能交出空路由；旧活动列表也不代表过滤后仍可服务。
+			// 状态通道和健康轮已运行，受保护的激活可在等待期间补齐路由，不需放宽隔离。
+			long deadline = deadline(STARTUP_ACTIVE_DATABASE_TIMEOUT_PROPERTY, DEFAULT_STARTUP_TIMEOUT_MILLIS);
+			while (this.balancer.isEmpty()) {
+				if (isExpired(deadline)) {
+					throw new IllegalStateException("Timed out waiting for active database. all db: " + this.configuration.getDatabaseMap().values());
+				}
+				logger.log(Level.INFO, "No usable active database yet; waiting for discovery or automatic recovery");
+				Thread.sleep(startupRetryInterval());
+			}
+			logger.log(Level.INFO, "Active database=" + this.getActiveDatabases());
+		}
 
 		Map<InvocationEvent, Map<String, InvokerEvent>> invokers = this.stateManager.recover();
 		if (!invokers.isEmpty())

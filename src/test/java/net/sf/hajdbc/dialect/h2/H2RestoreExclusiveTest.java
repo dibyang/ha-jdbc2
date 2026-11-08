@@ -143,6 +143,71 @@ public class H2RestoreExclusiveTest {
     } finally { server.stop(); }
   }
 
+  @Test(timeout = 20000) public void restoreOutlivesConfiguredSocketTimeoutAndReleasesExclusiveOwner() throws Exception {
+    restoreOutlivesSocketTimeout(false);
+  }
+
+  @Test(timeout = 20000) public void failedRestoreOutlivesConfiguredSocketTimeoutAndReleasesExclusiveOwner() throws Exception {
+    restoreOutlivesSocketTimeout(true);
+  }
+
+  /** 真实 TCP 读超时不能先丢失拥有独占的会话；主调超时与物理收尾必须分开。 */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private void restoreOutlivesSocketTimeout(boolean failImport) throws Exception {
+    entered = new CountDownLatch(1);
+    proceed = new CountDownLatch(1);
+    String name = "socket_timeout_" + UUID.randomUUID().toString().replace("-", "");
+    Server server = Server.createTcpServer("-tcpPort", "0", "-ifNotExists").start();
+    java.util.concurrent.ExecutorService worker = java.util.concurrent.Executors.newSingleThreadExecutor();
+    try (Connection observer = DriverManager.getConnection("jdbc:h2:mem:" + name + ";DB_CLOSE_DELAY=-1", "sa", "")) {
+      observer.createStatement().execute("CREATE TABLE OLD_DATA(ID INT)");
+      org.h2.engine.Database nativeDatabase = ((org.h2.engine.SessionLocal)
+          ((org.h2.jdbc.JdbcConnection) observer).getSession()).getDatabase();
+      String url = "jdbc:h2:tcp://localhost:" + server.getPort() + "/mem:" + name + ";NETWORK_TIMEOUT=250";
+      Path input = temporary.newFile("socket-timeout.sql").toPath();
+      Files.write(input, ("CREATE TABLE RESTORED(ID INT);\nCREATE ALIAS PAUSE_IMPORT FOR \""
+          + H2RestoreExclusiveTest.class.getName() + ".pauseImport\";\nCALL PAUSE_IMPORT();\n"
+          + (failImport ? "INVALID_IMPORT_SQL;\n" : "INSERT INTO RESTORED VALUES(7);\n")).getBytes(StandardCharsets.UTF_8));
+      net.sf.hajdbc.Database database = org.mockito.Mockito.mock(net.sf.hajdbc.Database.class);
+      net.sf.hajdbc.codec.Decoder decoder = org.mockito.Mockito.mock(net.sf.hajdbc.codec.Decoder.class);
+      org.mockito.Mockito.when(database.getLocation()).thenReturn(url);
+      org.mockito.Mockito.when(database.getUser()).thenReturn("sa");
+      org.mockito.Mockito.when(database.decodePassword(decoder)).thenReturn("");
+      DbRestore restore = new DbRestore() {
+        @Override String getBakPath(String location) { return temporary.getRoot().toPath().resolve("old.sql").toString(); }
+      };
+      java.util.concurrent.Future<Boolean> task = worker.submit(() -> restore.restore(database, decoder, input.toFile(), true));
+      try {
+        assertTrue("Server must enter the real import", entered.await(5, TimeUnit.SECONDS));
+        org.h2.engine.SessionLocal owner = nativeDatabase.getExclusiveSession();
+        assertNotNull(owner);
+        try {
+          task.get(1, TimeUnit.SECONDS);
+          fail("Restore abandoned the physical session at the configured socket timeout");
+        } catch (java.util.concurrent.TimeoutException expected) { }
+        assertSame(owner, nativeDatabase.getExclusiveSession());
+        proceed.countDown();
+        assertEquals(!failImport, task.get(5, TimeUnit.SECONDS));
+        try (Connection next = connectAfterExclusiveEnds(url, nativeDatabase, owner)) {
+          assertFalse(next.isClosed());
+        }
+      } finally {
+        proceed.countDown();
+        worker.shutdown();
+        assertTrue("Restore worker must terminate", worker.awaitTermination(5, TimeUnit.SECONDS));
+        // 失败实现可能泄漏原 socket；仅测试兜底关闭本测试库会话，防止污染后续用例。
+        org.h2.engine.SessionLocal remaining = nativeDatabase.getExclusiveSession();
+        if (remaining != null) remaining.close();
+      }
+    } finally {
+      proceed.countDown();
+      worker.shutdownNow();
+      server.stop();
+      try (Connection cleanup = DriverManager.getConnection("jdbc:h2:mem:" + name, "sa", "");
+           Statement statement = cleanup.createStatement()) { statement.execute("SHUTDOWN"); }
+    }
+  }
+
   /** 独立客户端，服务端与 JUnit 仍留在父 JVM。 */
   public static class Client {
     public static void main(String[] args) throws Exception {

@@ -725,7 +725,9 @@ public class ClusterHealthImpl implements Runnable, ClusterHealth, DatabaseClust
     if (recovery instanceof net.sf.hajdbc.dialect.h2.H2RecoveryRuntime)
       ((net.sf.hajdbc.dialect.h2.H2RecoveryRuntime<?, ?>) recovery).onHealthRound();
     if (!recoveryEligible()) {
-      host = null;
+      // 备库同步暂时撤销本机资格，不代表已确认的远端主机丢失。
+      // 否则 COMMIT 后误重选会再次撤销本地激活；远端离开仍由 removed 清除。
+      if (host != null && host.equals(stateManager.getLocal())) host = null;
       if (!NodeState.ready.equals(state)) setState(NodeState.ready);
       return;
     }

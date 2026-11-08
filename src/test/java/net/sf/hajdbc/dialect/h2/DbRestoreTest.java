@@ -54,6 +54,31 @@ public class DbRestoreTest {
 
   @After public void deregister() throws Exception { DriverManager.deregisterDriver(driver); }
 
+  @Test public void onlyRecoveryLocationDisablesNetworkTimeoutWithoutRewritingOtherSettings() {
+    assertEquals("jdbc:h2:mem:test;NETWORK_TIMEOUT=0", DbRestore.restoreLocation("jdbc:h2:mem:test"));
+    assertEquals("jdbc:h2:tcp://localhost/db;NETWORK_TIMEOUT=0;AUTO_RECONNECT=TRUE",
+        DbRestore.restoreLocation("jdbc:h2:tcp://localhost/db;network_timeout=60000;AUTO_RECONNECT=TRUE"));
+    String init = "jdbc:h2:mem:test;INIT=CREATE TABLE A(ID INT)\\;CALL 'NETWORK_TIMEOUT=42';NETWORK_TIMEOUT=20";
+    assertEquals(init.substring(0, init.length() - 2) + "0", DbRestore.restoreLocation(init));
+    String escaped = "jdbc:h2:mem:test;INIT=CALL 'a'\\;NETWORK_TIMEOUT=42";
+    assertEquals(escaped + ";NETWORK_TIMEOUT=0", DbRestore.restoreLocation(escaped));
+    assertEquals("jdbc:h2:mem:test;INIT=CALL 'a'\\\\;NETWORK_TIMEOUT=0",
+        DbRestore.restoreLocation("jdbc:h2:mem:test;INIT=CALL 'a'\\\\;NETWORK_TIMEOUT=42"));
+    assertEquals(url, DbRestore.restoreLocation(url));
+  }
+
+  @Test public void executionDisablesSocketTimeoutButVerificationRetainsOriginalLocation() throws Exception {
+    String original = "jdbc:h2:tcp://localhost/db;NETWORK_TIMEOUT=60000";
+    String physical = "jdbc:h2:tcp://localhost/db;NETWORK_TIMEOUT=0";
+    when(database.getLocation()).thenReturn(original);
+    when(driver.connect(eq(physical), any(Properties.class))).thenReturn(execution);
+    when(driver.connect(eq(original), any(Properties.class))).thenReturn(verification);
+    assertTrue(restore.restore(database, decoder, script, true));
+    verify(driver).connect(eq(physical), any(Properties.class));
+    verify(driver).connect(eq(original), any(Properties.class));
+    assertEquals(original, database.getLocation());
+  }
+
   @Test public void successKeepsExclusiveThroughImportThenChecksIndependentConnection() throws Exception {
     assertTrue(restore.restore(database, decoder, script, true));
     InOrder ordered = inOrder(statement, execution, verification, tables);

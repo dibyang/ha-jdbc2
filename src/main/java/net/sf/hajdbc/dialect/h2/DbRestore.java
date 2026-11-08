@@ -65,7 +65,7 @@ public class DbRestore {
         StopWatch stopWatch = StopWatch.createStarted();
         stage = Stage.CONNECT; progress.before(stage);
         final String password = database.decodePassword(decoder);
-        try (Connection connection = DriverManager.getConnection(database.getLocation(), database.getUser(), password); Statement statTarget = connection.createStatement()) {
+        try (Connection connection = DriverManager.getConnection(restoreLocation(database.getLocation()), database.getUser(), password); Statement statTarget = connection.createStatement()) {
           statTarget.setQueryTimeout(60);
           // 禁用此恢复会话的自动重连：重连后的新会话不再持有原独占资格。
           // DDL 仍不可回滚，这不是把清库和导入包装为原子事务。
@@ -111,6 +111,29 @@ public class DbRestore {
         database.setSyncing(false);
       }
     }
+  }
+
+  /** 仅恢复执行连接等待物理完成；H2 读超时会丢失 transfer，普通 close 不再能释放服务端独占。 */
+  static String restoreLocation(String location) {
+    if (!location.startsWith("jdbc:h2:")) return location;
+    StringBuilder result = new StringBuilder(location.length() + 20);
+    boolean replaced = false;
+    int start = 0;
+    for (int i = 0; i <= location.length(); i++) {
+      // H2 URL 的反斜杠转义下一个字符，INIT 等参数内的分号不是设置边界。
+      if (i + 1 < location.length() && location.charAt(i) == '\\') { i++; continue; }
+      if (i == location.length() || location.charAt(i) == ';') {
+        String setting = location.substring(start, i);
+        if (start > 0 && setting.regionMatches(true, 0, "NETWORK_TIMEOUT=", 0, 16)) {
+          result.append("NETWORK_TIMEOUT=0");
+          replaced = true;
+        } else result.append(setting);
+        if (i < location.length()) result.append(';');
+        start = i + 1;
+      }
+    }
+    if (!replaced) result.append(";NETWORK_TIMEOUT=0");
+    return result.toString();
   }
 
   enum Stage { INPUT, CONNECT, EXCLUSIVE, BACKUP, DROP, IMPORT, COMMIT, VERIFY }
