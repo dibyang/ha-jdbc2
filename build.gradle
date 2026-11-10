@@ -103,6 +103,7 @@ def buildMetadata = [
 ]
 
 processResources {
+    filteringCharset = 'UTF-8'
     inputs.properties(buildMetadata)
     from('src/main/java') {
         include '**/*.properties'
