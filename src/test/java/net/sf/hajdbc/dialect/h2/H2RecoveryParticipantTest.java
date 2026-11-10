@@ -318,6 +318,104 @@ public class H2RecoveryParticipantTest {
     assertTrue(rawLocks.readLock(null).tryLock()); rawLocks.readLock(null).unlock();
   }
 
+  @Test(timeout = 10000) public void restartReplaysCompletedDecisionBeforeRetainingPendingGlobalFence() throws Exception {
+    assertMixedReplay("source", "target", H2ActivationIntent.Decision.COMMIT);
+  }
+
+  @Test(timeout = 10000) public void reverseDatabaseNameOrderKeepsTheSamePendingProtection() throws Exception {
+    assertMixedReplay("target", "source", H2ActivationIntent.Decision.COMMIT);
+  }
+
+  @Test(timeout = 10000) public void unappliedAbortIsReplayedBeforeRetainingAnotherPendingFence() throws Exception {
+    assertMixedReplay("source", "target", H2ActivationIntent.Decision.ABORT);
+  }
+
+  private void assertMixedReplay(String pendingId, String completedId, H2ActivationIntent.Decision decision) throws Exception {
+    prepareReplayHistory(pendingId, completedId, decision);
+    participant.restoreWriteFences();
+    assertEquals(H2ActivationIntent.Decision.PENDING, store.target(pendingId).intent.snapshot().decision);
+    assertFalse(participant.isEligible(pendingId));
+    assertFalse("Pending recovery must still exclude ordinary readers", rawLocks.readLock(null).tryLock());
+    if (decision == H2ActivationIntent.Decision.COMMIT) verify(cluster).activate(database, localState);
+    else {
+      verify(cluster).deactivate(database, localState);
+      assertTrue(store.target(completedId).intent.snapshot().finished);
+    }
+    verify(database, never()).setSyncing(anyBoolean());
+  }
+
+  private void prepareReplayHistory(String pendingId, String otherId, H2ActivationIntent.Decision otherDecision) throws Exception {
+    store.close();
+    directory = temporary.getRoot().toPath().resolve("mixed-replay");
+    Map<String, String> identities = new LinkedHashMap<>();
+    identities.put("source", SHA); identities.put("target", SHA);
+    H2RecoveryStore.initialize(directory, "cluster", pendingId, identities, Collections.emptySet());
+    store = new H2RecoveryStore(directory, "cluster", pendingId, identities);
+    H2ActivationIntent pending = store.target(pendingId).intent;
+    pending.prepare(1, "pending", "owner", SHA, Collections.singleton("owner"));
+    H2ActivationIntent committed = store.target(otherId).intent;
+    committed.prepare(2, "committed", "owner", SHA, Collections.singleton("owner"));
+    if (otherDecision == H2ActivationIntent.Decision.COMMIT) {
+      committed.commit(2, "committed", 1); committed.applied(2, "committed");
+    } else if (otherDecision == H2ActivationIntent.Decision.ABORT) {
+      committed.decide(2, "committed", otherDecision);
+    }
+    rawLocks = new SemaphoreLockManager(false); when(cluster.getLockManager()).thenReturn(rawLocks);
+    CommandDispatcherFactory factory = mock(CommandDispatcherFactory.class);
+    when(factory.createCommandDispatcher(anyString(), any(), any(), any())).thenReturn(lockDispatcher);
+    when(cluster.getDatabase(otherId)).thenReturn(database);
+    participant = new H2RecoveryParticipant(store, state, new DistributedLockManager(cluster, factory), pendingId);
+  }
+
+  @Test(timeout = 10000) public void restartNeverIgnoresARealOrdinaryReaderConflict() throws Exception {
+    prepareReplayHistory("source", "target", H2ActivationIntent.Decision.COMMIT);
+    java.util.concurrent.locks.Lock reader = rawLocks.readLock(null);
+    reader.lock();
+    try {
+      try { participant.restoreWriteFences(); fail("An external reader must still prevent exclusive replay"); }
+      catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("write fence")); }
+      assertFalse(participant.isEligible("source"));
+      verify(cluster, never()).activate(any(), any());
+    } finally { reader.unlock(); }
+  }
+
+  @Test(timeout = 10000) public void conflictingPendingRecordsCannotOpenAnUnprotectedRoute() throws Exception {
+    prepareReplayHistory("source", "target", H2ActivationIntent.Decision.PENDING);
+    try { participant.restoreWriteFences(); fail("Conflicting pending operations must remain closed"); }
+    catch (java.io.IOException expected) { assertTrue(expected.getMessage().contains("write fence")); }
+    assertFalse(participant.isEligible("source"));
+    assertFalse(participant.isEligible("target"));
+    assertFalse(rawLocks.readLock(null).tryLock());
+    verify(cluster, never()).activate(any(), any());
+  }
+
+  @Test public void repeatedStopDoesNotReadTargetsFromAnAlreadyClosedStore() throws Exception {
+    participant.stop();
+    participant.stop();
+    assertFalse(participant.isEligible("target"));
+  }
+
+  @Test(timeout = 25000) public void repeatedStopKeepsPhysicalOwnershipAndCanCloseAfterSqlExits() throws Exception {
+    H2RecoveryCommand command = prepare(artifact("CREATE TABLE RECOVERED(ID INT); CREATE ALIAS PAUSE_IMPORT FOR \""
+        + getClass().getName() + ".pauseImport\"; CALL PAUSE_IMPORT();"));
+    executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+    java.util.concurrent.Future<Reply> running = executor.submit(() -> participant.handle(command));
+    assertTrue(entered.await(10, TimeUnit.SECONDS));
+    for (int i = 0; i < 2; i++) {
+      try { participant.stop(); fail("Physical SQL must retain file ownership"); }
+      catch (java.io.IOException expected) { }
+      assertFalse(participant.isEligible("target"));
+      assertFalse(rawLocks.readLock(null).tryLock());
+    }
+    proceed.countDown();
+    assertEquals(Status.FAILED, running.get(10, TimeUnit.SECONDS).status);
+    participant.stop(); participant.stop();
+    Map<String, String> identities = new LinkedHashMap<>(); identities.put("source", SHA); identities.put("target", SHA);
+    try (H2RecoveryStore reopened = new H2RecoveryStore(directory, "cluster", "target", identities)) {
+      assertFalse(reopened.isEligible("target"));
+    }
+  }
+
   @Test(timeout = 20000) public void decisionOwnerPersistsCommitOnlyForTheExactRestoreReceiptBeforeApplying() throws Exception {
     Path artifact = artifact("CREATE TABLE RECOVERED(ID INT);"); String digest = H2RecoveryParticipant.digest(artifact);
     Operation operation = new Operation("target", SHA, "target", 1, "operation", 0, local, localLock, stateView, lockView,

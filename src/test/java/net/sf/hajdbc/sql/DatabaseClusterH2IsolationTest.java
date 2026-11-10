@@ -156,6 +156,33 @@ public class DatabaseClusterH2IsolationTest {
     }
   }
 
+  @Test(timeout = 10000) public void startupRetryCanIdentifyAnAlreadyLocalActiveDatabaseWithoutReconfiguringIt() throws Exception {
+    try (StartupFixture fixture = new StartupFixture(true, false)) {
+      fixture.source.setIp(net.sf.hajdbc.util.LocalHost.getAllIp().iterator().next());
+      fixture.source.setLocal(true);
+      fixture.source.clean();
+      fixture.source.setActive(true);
+      assertSame(fixture.source, fixture.cluster.getLocalDatabase());
+      assertTrue(fixture.source.isActive());
+      assertTrue(fixture.source.isLocal());
+      assertFalse(fixture.source.isDirty());
+      assertTrue("Identifying config must not grant a route", fixture.balancer.isEmpty());
+      verify(fixture.local, never()).activated(any());
+    }
+  }
+
+  @Test(timeout = 10000) public void identifyingAnActiveNonLocalConfigCannotSilentlyRewriteItsLocalFlag() throws Exception {
+    try (StartupFixture fixture = new StartupFixture(true, false)) {
+      fixture.source.setIp(net.sf.hajdbc.util.LocalHost.getAllIp().iterator().next());
+      fixture.source.setActive(true);
+      try { fixture.cluster.getLocalDatabase(); fail("Active config must not be rewritten"); }
+      catch (IllegalStateException expected) { }
+      assertTrue(fixture.source.isActive());
+      assertFalse(fixture.source.isLocal());
+      assertTrue(fixture.balancer.isEmpty());
+    }
+  }
+
   /** 只把首次 JDBC 元数据初始化放在真实恢复入口之后，避免用模型掩盖空路由交接。 */
   private static void invokeStartupReplay(DatabaseClusterImpl cluster) throws Exception {
     java.lang.reflect.Method replay = DatabaseClusterImpl.class.getDeclaredMethod("recoverDatabase", boolean.class);

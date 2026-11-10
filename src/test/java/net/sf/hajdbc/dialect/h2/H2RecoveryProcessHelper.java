@@ -120,13 +120,15 @@ public final class H2RecoveryProcessHelper {
               case "DISCOVER": coordinator.discover(); result = "OK"; break;
               case "STATUS":
                 result = "eligible=" + coordinator.isEligible("target") + ",state=" + dispatcher.membershipSnapshot().getMembers().size()
-                    + ",lock=" + locks.membershipSnapshot().getMembers().size(); break;
-              case "SYNC": case "FAIL_IMPORT":
+                    + ",lock=" + locks.membershipSnapshot().getMembers().size()
+                    + ",sourceEligible=" + coordinator.isEligible("source"); break;
+              case "SYNC": case "FAIL_IMPORT": case "SYNC_SOURCE":
                 failImport[0] = request[1].equals("FAIL_IMPORT");
-                coordinator.synchronize("target", () -> {
+                boolean reverse = request[1].equals("SYNC_SOURCE");
+                coordinator.synchronize(reverse ? "source" : "target", () -> {
                   SynchronizationContext context = mock(SynchronizationContext.class);
-                  when(context.getDatabaseCluster()).thenReturn(cluster); when(context.getSourceDatabase()).thenReturn(source);
-                  when(context.getTargetDatabase()).thenReturn(target); when(context.getDecoder()).thenReturn(decoder);
+                  when(context.getDatabaseCluster()).thenReturn(cluster); when(context.getSourceDatabase()).thenReturn(reverse ? target : source);
+                  when(context.getTargetDatabase()).thenReturn(reverse ? source : target); when(context.getDecoder()).thenReturn(decoder);
                   when(context.getDialect()).thenReturn(dialect); new DumpRestoreSynchronizationStrategy().synchronize(context);
                 }); result = "OK"; break;
               case "RECONCILE": installed.onHealthRound(); result = "OK"; break;

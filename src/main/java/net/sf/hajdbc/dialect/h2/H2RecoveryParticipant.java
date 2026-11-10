@@ -45,17 +45,21 @@ public final class H2RecoveryParticipant<Z, D extends Database<Z>> implements H2
 
   /** 必须在注册接收器、恢复活动库及开始健康调度之前完成。 */
   public void restoreWriteFences() throws Exception {
-    for (String database : store.databases()) {
-      H2RecoveryStore.Target target = store.target(database);
-      synchronized (target) {
-        H2ActivationIntent.Snapshot record = target.intent.snapshot();
-        if (record.decision == H2ActivationIntent.Decision.NONE) continue;
-        Session session = sessions.get(database);
-        session.fence = locks.prepareRestoreLock(new RestoreLockDescriptor(locks.getLocalMember(), database,
-            record.epoch, record.operation), target.intent, record.owner, record.ownerDatabase,
-            record.membership, record.digest, record.participants, record.databases);
-        // 已落盘的终局可以在启动时重建本地路由，PENDING 必须继续保持写保护。
-        if (record.decision != H2ActivationIntent.Decision.PENDING) apply(database, target, session, record);
+    // 所有目标共用不可重入的全局写锁。先收口终局，再保留 PENDING，避免自己阻塞后续重放。
+    // 本方法仍在状态通道/健康调度启动前执行，过程中的路由尚未交给业务调用。
+    for (boolean pending : new boolean[] {false, true}) {
+      for (String database : store.databases()) {
+        H2RecoveryStore.Target target = store.target(database);
+        synchronized (target) {
+          H2ActivationIntent.Snapshot record = target.intent.snapshot();
+          if (record.decision == H2ActivationIntent.Decision.NONE
+              || (record.decision == H2ActivationIntent.Decision.PENDING) != pending) continue;
+          Session session = sessions.get(database);
+          session.fence = locks.prepareRestoreLock(new RestoreLockDescriptor(locks.getLocalMember(), database,
+              record.epoch, record.operation), target.intent, record.owner, record.ownerDatabase,
+              record.membership, record.digest, record.participants, record.databases);
+          if (!pending) apply(database, target, session, record);
+        }
       }
     }
   }
@@ -346,17 +350,20 @@ public final class H2RecoveryParticipant<Z, D extends Database<Z>> implements H2
   }
 
   /** 只撤销当前进程会话，不反转持久 COMMIT；物理调用结束前文件锁仍由 store 持有。 */
-  public void stop() throws IOException {
-    stopped = true;
-    for (String database : store.databases()) {
-      H2RecoveryStore.Target target = store.target(database);
-      synchronized (target) {
-        Session session = sessions.get(database);
-        if (session.operation != null && localDatabase.equals(database))
-          target.journal.invalidateSession(session.operation.epoch, session.operation.id);
-        session.operation = null;
+  public synchronized void stop() throws IOException {
+    if (!stopped) {
+      stopped = true;
+      for (String database : store.databases()) {
+        H2RecoveryStore.Target target = store.target(database);
+        synchronized (target) {
+          Session session = sessions.get(database);
+          if (session.operation != null && localDatabase.equals(database))
+            target.journal.invalidateSession(session.operation.epoch, session.operation.id);
+          session.operation = null;
+        }
       }
     }
+    // 第一次关闭可能因真实 SQL 尚在运行而失败；重复 stop 仍须完成文件所有权收口。
     store.close();
   }
 

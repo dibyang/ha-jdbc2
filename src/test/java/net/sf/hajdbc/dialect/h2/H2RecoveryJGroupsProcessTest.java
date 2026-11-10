@@ -70,6 +70,62 @@ public class H2RecoveryJGroupsProcessTest {
     assertTrue(restarted.process.waitFor(10, TimeUnit.SECONDS)); assertEquals(0, restarted.process.exitValue());
   }
 
+  @Test(timeout = 180000) public void mixedPendingAndCommittedHistoryCanRestartBothRealChannelsAndRepairAutomatically() throws Exception {
+    ports = freePorts(6);
+    server = org.h2.tools.Server.createTcpServer("-tcpPort", "0", "-ifNotExists").start();
+    ports[4] = ports[5] = Integer.toString(server.getPort());
+    Node source = start("source"), target = start("target");
+    awaitMembers(source); awaitMembers(target);
+    assertEquals("OK", command(source, "DISCOVER")); assertEquals("OK", command(target, "DISCOVER"));
+    assertEquals("OK", command(source, "SYNC")); assertRows(42);
+    stopNormally(source); stopNormally(target);
+    // 仅在两个测试进程均退出后，使用正式持久 API 构造旧发起者遗留的 PENDING。
+    // 排序靠前的 source 是 PENDING，排序靠后的 target 保留刚才真实同步的 COMMIT。
+    installMixedHistory(source); installMixedHistory(target);
+    Node restartedSource = start("source"), restartedTarget = start("target");
+    awaitMembers(restartedSource); awaitMembers(restartedTarget);
+    assertTrue(command(restartedSource, "STATUS").contains("sourceEligible=false"));
+    assertTrue(command(restartedTarget, "STATUS").contains("sourceEligible=false"));
+    assertEquals("OK", command(restartedSource, "DISCOVER"));
+    assertEquals("OK", command(restartedTarget, "DISCOVER"));
+    assertTrue(command(restartedSource, "STATUS").contains("sourceEligible=false"));
+    assertEquals("OK", command(restartedTarget, "SYNC_SOURCE"));
+    assertTrue(command(restartedSource, "STATUS").contains("sourceEligible=true"));
+    assertTrue(command(restartedTarget, "STATUS").contains("sourceEligible=true"));
+    assertEquals("42,", command(restartedSource, "ROWS"));
+    assertEquals("42,", command(restartedTarget, "ROWS"));
+    stopNormally(restartedSource); stopNormally(restartedTarget);
+  }
+
+  private void stopNormally(Node node) throws Exception {
+    assertEquals("OK", command(node, "STOP"));
+    assertTrue(node.process.waitFor(10, TimeUnit.SECONDS));
+    assertEquals(0, node.process.exitValue());
+  }
+
+  private void installMixedHistory(Node node) throws Exception {
+    Path recovery = node.directory.resolve("recovery");
+    java.util.List<Path> stores = new ArrayList<>();
+    try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(recovery, "*.store")) {
+      for (Path path : stream) stores.add(path);
+    }
+    assertEquals(1, stores.size());
+    java.util.Properties catalog = new java.util.Properties();
+    try (java.io.InputStream input = Files.newInputStream(stores.get(0).resolve("catalog"))) { catalog.load(input); }
+    java.util.Map<String, String> identities = new java.util.LinkedHashMap<>();
+    for (String key : catalog.stringPropertyNames()) if (key.endsWith(".id")) {
+      String prefix = key.substring(0, key.length() - 3);
+      identities.put(catalog.getProperty(key), catalog.getProperty(prefix + ".identity"));
+    }
+    try (H2RecoveryStore store = new H2RecoveryStore(stores.get(0), "recovery-process-test", node.directory.getFileName().toString(), identities)) {
+      assertEquals(H2ActivationIntent.Decision.COMMIT, store.target("target").intent.snapshot().decision);
+      H2ActivationIntent intent = store.target("source").intent;
+      intent.prepare(1, "restart-source", "previous-source", "source", "previous-view", "",
+          new java.util.HashSet<>(java.util.Arrays.asList("previous-source", "previous-target")),
+          new java.util.HashSet<>(java.util.Arrays.asList("source", "target")));
+    }
+  }
+
   private Node start(String id) throws Exception {
     Path root = temporary.getRoot().toPath(), local = root.resolve(id); Files.createDirectories(local); Files.deleteIfExists(local.resolve("ready"));
     String executable = System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java";

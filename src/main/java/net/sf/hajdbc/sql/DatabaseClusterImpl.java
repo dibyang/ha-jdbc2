@@ -577,7 +577,8 @@ public class DatabaseClusterImpl<Z, D extends Database<Z>> implements DatabaseCl
 		while(this.localDbId==null) {
 			for (D db : this.configuration.getDatabaseMap().values()) {
 				if (LocalHost.getAllIp().contains(db.getIp())) {
-					db.setLocal(true);
+					// 初始化失败重试可能复用已经 local/active 的配置对象，识别不能变成重复改配。
+					if (!db.isLocal()) db.setLocal(true);
 					this.localDbId = db.getId();
 					break;
 				}
